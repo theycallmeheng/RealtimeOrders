@@ -1,6 +1,6 @@
 # RealtimeOrders
 
-Ứng dụng đặt hàng và điều phối bán hàng realtime · Nhóm 17 · Giảng viên Ngô Văn Quyền.
+Ứng dụng đặt hàng và điều phối bán hàng realtime · Nhóm 17 
 
 Khách xem giá theo nhóm, đặt nhiều món rồi chờ duyệt. Người bán kiểm tra kho,
 duyệt đơn, chuẩn bị và giao hàng. **Gửi đơn không giữ hàng; chỉ duyệt mới trừ kho.**
