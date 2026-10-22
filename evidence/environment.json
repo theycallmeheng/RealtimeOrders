@@ -1,0 +1,23 @@
+{
+  "os": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10",
+  "node": "v24.19.0",
+  "mysql": "8.0.46",
+  "migration": "0002",
+  "cpuLogical": 16,
+  "ramGiB": 15.64,
+  "applicationWorkers": 1,
+  "transport": "HTTPS/WSS local self-signed TLS; internal loopback TCP",
+  "libraries": {
+    "fastapi": "0.159.1",
+    "uvicorn": "0.54.0",
+    "SQLAlchemy": "2.1.6",
+    "asyncmy": "0.2.17",
+    "alembic": "1.20.1",
+    "argon2-cffi": "25.1.0",
+    "Pillow": "13.0.0",
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "tailwindcss": "4.3.3"
+  }
+}

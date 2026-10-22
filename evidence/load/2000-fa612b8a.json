@@ -1,0 +1,1304 @@
+{
+  "timestampUtc": "2026-10-22T05:25:31.396063Z",
+  "tag": "fa612b8a",
+  "variant": "batched-session-check",
+  "requestedDistinctCustomers": 2000,
+  "synchronizedConnections": 2000,
+  "activeAtEnd": 2000,
+  "rampSeconds": 156.82,
+  "measurementSeconds": 60,
+  "requestedCatalogRps": 10.0,
+  "successfulCatalogRequests": 345,
+  "businessOrderRps": 0,
+  "probeDeliveries": 58195,
+  "probeCount": 30,
+  "connectP50Ms": 2286.14,
+  "connectP95Ms": 3020.75,
+  "catalogP50Ms": 39.64,
+  "catalogP95Ms": 750.71,
+  "eventP50Ms": 507.12,
+  "eventP95Ms": 1137.86,
+  "receivedMessages": 84395,
+  "receivedUtf8Bytes": 25912885,
+  "errors": [],
+  "resourceSamples": [
+    {
+      "atSeconds": 157.12,
+      "availableRamMiB": 2481.5,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 15.7,
+          "rssMiB": 148.4
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 28.0,
+          "rssMiB": 358.7
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 45.6,
+          "rssMiB": 421.1
+        }
+      ]
+    },
+    {
+      "atSeconds": 159.11,
+      "availableRamMiB": 2477.3,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 32.0,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 15.6,
+          "rssMiB": 360.7
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 62.5,
+          "rssMiB": 423.2
+        }
+      ]
+    },
+    {
+      "atSeconds": 161.12,
+      "availableRamMiB": 2478.9,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 21.9,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 25.0,
+          "rssMiB": 359.5
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 52.3,
+          "rssMiB": 423.6
+        }
+      ]
+    },
+    {
+      "atSeconds": 163.13,
+      "availableRamMiB": 2476.2,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 25.8,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 18.0,
+          "rssMiB": 359.6
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 61.7,
+          "rssMiB": 423.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 165.14,
+      "availableRamMiB": 2469.1,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 27.1,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 16.3,
+          "rssMiB": 361.5
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 59.7,
+          "rssMiB": 423.8
+        }
+      ]
+    },
+    {
+      "atSeconds": 167.13,
+      "availableRamMiB": 2459.9,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 31.2,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 20.3,
+          "rssMiB": 362.8
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 75.8,
+          "rssMiB": 423.8
+        }
+      ]
+    },
+    {
+      "atSeconds": 169.13,
+      "availableRamMiB": 2461.2,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 27.3,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 19.5,
+          "rssMiB": 362.8
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 58.6,
+          "rssMiB": 423.8
+        }
+      ]
+    },
+    {
+      "atSeconds": 171.13,
+      "availableRamMiB": 2460.3,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 22.7,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 14.1,
+          "rssMiB": 362.8
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 64.8,
+          "rssMiB": 423.8
+        }
+      ]
+    },
+    {
+      "atSeconds": 173.13,
+      "availableRamMiB": 2460.2,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 28.1,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 17.2,
+          "rssMiB": 362.8
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 65.6,
+          "rssMiB": 423.8
+        }
+      ]
+    },
+    {
+      "atSeconds": 175.15,
+      "availableRamMiB": 2458.3,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 30.2,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 17.1,
+          "rssMiB": 364.7
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 62.0,
+          "rssMiB": 423.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 177.15,
+      "availableRamMiB": 2457.0,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 27.3,
+          "rssMiB": 148.9
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 21.9,
+          "rssMiB": 364.9
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 78.9,
+          "rssMiB": 423.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 179.14,
+      "availableRamMiB": 2471.9,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 25.8,
+          "rssMiB": 145.0
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 24.2,
+          "rssMiB": 363.2
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 60.9,
+          "rssMiB": 423.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 181.13,
+      "availableRamMiB": 2457.8,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 24.4,
+          "rssMiB": 145.0
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 24.4,
+          "rssMiB": 364.9
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 57.5,
+          "rssMiB": 423.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 183.15,
+      "availableRamMiB": 2449.1,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 30.2,
+          "rssMiB": 145.0
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 20.2,
+          "rssMiB": 364.7
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 62.8,
+          "rssMiB": 423.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 185.16,
+      "availableRamMiB": 2423.9,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 33.3,
+          "rssMiB": 145.4
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 19.4,
+          "rssMiB": 364.9
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 65.9,
+          "rssMiB": 430.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 187.16,
+      "availableRamMiB": 2451.0,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 21.1,
+          "rssMiB": 145.8
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 18.0,
+          "rssMiB": 359.6
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 85.2,
+          "rssMiB": 406.1
+        }
+      ]
+    },
+    {
+      "atSeconds": 189.18,
+      "availableRamMiB": 2438.8,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 42.6,
+          "rssMiB": 146.4
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 23.3,
+          "rssMiB": 361.6
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 80.6,
+          "rssMiB": 409.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 191.16,
+      "availableRamMiB": 2435.1,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 29.9,
+          "rssMiB": 146.4
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 24.4,
+          "rssMiB": 355.0
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 57.5,
+          "rssMiB": 409.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 193.16,
+      "availableRamMiB": 2417.5,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 29.7,
+          "rssMiB": 147.3
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 28.9,
+          "rssMiB": 357.0
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 97.7,
+          "rssMiB": 411.3
+        }
+      ]
+    },
+    {
+      "atSeconds": 195.16,
+      "availableRamMiB": 2430.7,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 43.0,
+          "rssMiB": 147.4
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 18.0,
+          "rssMiB": 357.8
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 88.3,
+          "rssMiB": 411.9
+        }
+      ]
+    },
+    {
+      "atSeconds": 197.17,
+      "availableRamMiB": 2374.5,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 38.3,
+          "rssMiB": 148.1
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 20.3,
+          "rssMiB": 358.3
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 85.9,
+          "rssMiB": 415.5
+        }
+      ]
+    },
+    {
+      "atSeconds": 199.16,
+      "availableRamMiB": 2317.9,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 29.7,
+          "rssMiB": 148.3
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 20.3,
+          "rssMiB": 360.1
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 72.7,
+          "rssMiB": 415.6
+        }
+      ]
+    },
+    {
+      "atSeconds": 201.17,
+      "availableRamMiB": 2283.3,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 18.0,
+          "rssMiB": 148.5
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 18.0,
+          "rssMiB": 361.6
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 73.4,
+          "rssMiB": 417.2
+        }
+      ]
+    },
+    {
+      "atSeconds": 203.18,
+      "availableRamMiB": 2243.2,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 33.3,
+          "rssMiB": 149.5
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 31.8,
+          "rssMiB": 363.6
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 70.6,
+          "rssMiB": 419.3
+        }
+      ]
+    },
+    {
+      "atSeconds": 205.17,
+      "availableRamMiB": 2231.1,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 38.6,
+          "rssMiB": 149.8
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 18.1,
+          "rssMiB": 361.9
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 80.3,
+          "rssMiB": 420.0
+        }
+      ]
+    },
+    {
+      "atSeconds": 207.17,
+      "availableRamMiB": 2026.7,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 35.2,
+          "rssMiB": 150.1
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 18.0,
+          "rssMiB": 362.9
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 71.1,
+          "rssMiB": 420.2
+        }
+      ]
+    },
+    {
+      "atSeconds": 209.16,
+      "availableRamMiB": 2010.4,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 22.7,
+          "rssMiB": 150.1
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 10.2,
+          "rssMiB": 362.9
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 70.3,
+          "rssMiB": 420.2
+        }
+      ]
+    },
+    {
+      "atSeconds": 211.16,
+      "availableRamMiB": 1946.0,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 33.6,
+          "rssMiB": 150.1
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 23.4,
+          "rssMiB": 363.0
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 68.8,
+          "rssMiB": 420.2
+        }
+      ]
+    },
+    {
+      "atSeconds": 213.16,
+      "availableRamMiB": 1895.3,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 12.5,
+          "rssMiB": 150.2
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 14.1,
+          "rssMiB": 364.9
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 46.9,
+          "rssMiB": 420.2
+        }
+      ]
+    },
+    {
+      "atSeconds": 215.16,
+      "availableRamMiB": 1913.1,
+      "processes": [
+        {
+          "pid": 5704,
+          "name": "mysqld.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 16.8
+        },
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 17.2,
+          "rssMiB": 150.2
+        },
+        {
+          "pid": 11400,
+          "name": "node.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 86.2
+        },
+        {
+          "pid": 16804,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 23560,
+          "name": "mysqld.exe",
+          "cpuPercent": 14.8,
+          "rssMiB": 364.7
+        },
+        {
+          "pid": 26688,
+          "name": "python.exe",
+          "cpuPercent": 39.1,
+          "rssMiB": 420.2
+        }
+      ]
+    }
+  ],
+  "drainSeconds": 3,
+  "totalHandshakes": 2200,
+  "reconnectFraction": 0.1,
+  "recoveredConnections": 200,
+  "recoveryP50Ms": 12358.52,
+  "recoveryP95Ms": 20294.1,
+  "environment": {
+    "platform": "win32",
+    "python": "3.12.10",
+    "cpuLogical": 16,
+    "ramGiB": 15.64,
+    "topology": "load generator, HTTPS proxy, FastAPI and MySQL on same Windows PC"
+  },
+  "limitations": [
+    "Read and realtime fanout scenario; not 2000 simultaneous approvals.",
+    "Loopback test, not proof of WAN/LAN multi-machine capacity.",
+    "CPU percent per process can exceed 100 on multicore."
+  ]
+}

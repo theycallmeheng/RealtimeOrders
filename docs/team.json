@@ -1,0 +1,11 @@
+{
+  "group": "17",
+  "instructor": "Ngô Văn Quyền",
+  "members": [
+    {"name": "Nguyễn Đức Hưng", "studentId": "B23DCCN368"},
+    {"name": "Đỗ Quang Thiệp", "studentId": "B23DCCN787"},
+    {"name": "Vũ Đức Mạnh", "studentId": "B23DCCN535"},
+    {"name": "Lê Nguyễn Hồng Quân", "studentId": "B23DCCN675"},
+    {"name": "Trịnh Văn Hào", "studentId": "B23DCCN284"}
+  ]
+}

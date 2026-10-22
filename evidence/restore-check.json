@@ -1,0 +1,263 @@
+{
+  "targetDatabase": "realtimeorders_restore_d0e80eb5",
+  "dumpBytes": 8844080,
+  "tables": [
+    {
+      "table": "addresses",
+      "sourceCount": 5,
+      "restoredCount": 5,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "alembic_version",
+      "sourceCount": 1,
+      "restoredCount": 1,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "audit_logs",
+      "sourceCount": 1317,
+      "restoredCount": 1317,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "auth_challenges",
+      "sourceCount": 11,
+      "restoredCount": 11,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "cancellation_requests",
+      "sourceCount": 6,
+      "restoredCount": 6,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "categories",
+      "sourceCount": 1,
+      "restoredCount": 1,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "conversations",
+      "sourceCount": 2,
+      "restoredCount": 2,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "customer_groups",
+      "sourceCount": 2,
+      "restoredCount": 2,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "delivery_policies",
+      "sourceCount": 3,
+      "restoredCount": 3,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "delivery_zones",
+      "sourceCount": 1,
+      "restoredCount": 1,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "idempotency_keys",
+      "sourceCount": 79,
+      "restoredCount": 79,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "inventory_movements",
+      "sourceCount": 270,
+      "restoredCount": 270,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "media_assets",
+      "sourceCount": 4,
+      "restoredCount": 4,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "message_attachments",
+      "sourceCount": 4,
+      "restoredCount": 4,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "messages",
+      "sourceCount": 10,
+      "restoredCount": 10,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "moderation_rules",
+      "sourceCount": 1,
+      "restoredCount": 1,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "moderation_violations",
+      "sourceCount": 3,
+      "restoredCount": 3,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "notification_jobs",
+      "sourceCount": 246,
+      "restoredCount": 246,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "notifications",
+      "sourceCount": 100,
+      "restoredCount": 100,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "offer_prices",
+      "sourceCount": 498,
+      "restoredCount": 498,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "offers",
+      "sourceCount": 249,
+      "restoredCount": 249,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "order_items",
+      "sourceCount": 38,
+      "restoredCount": 38,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "order_status_history",
+      "sourceCount": 71,
+      "restoredCount": 71,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "orders",
+      "sourceCount": 35,
+      "restoredCount": 35,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "outbox",
+      "sourceCount": 4416,
+      "restoredCount": 4416,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "pickup_slots",
+      "sourceCount": 1,
+      "restoredCount": 1,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "product_images",
+      "sourceCount": 0,
+      "restoredCount": 0,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "product_requests",
+      "sourceCount": 3,
+      "restoredCount": 3,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "product_subscriptions",
+      "sourceCount": 1,
+      "restoredCount": 1,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "products",
+      "sourceCount": 5,
+      "restoredCount": 5,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "rate_limit_buckets",
+      "sourceCount": 38,
+      "restoredCount": 38,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "request_quotes",
+      "sourceCount": 3,
+      "restoredCount": 3,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "request_status_history",
+      "sourceCount": 15,
+      "restoredCount": 15,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "sessions",
+      "sourceCount": 5926,
+      "restoredCount": 5926,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "stream_events",
+      "sourceCount": 4416,
+      "restoredCount": 4416,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "stream_heads",
+      "sourceCount": 7,
+      "restoredCount": 7,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "system_settings",
+      "sourceCount": 0,
+      "restoredCount": 0,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "units",
+      "sourceCount": 3,
+      "restoredCount": 3,
+      "identicalAtComparison": true
+    },
+    {
+      "table": "users",
+      "sourceCount": 5907,
+      "restoredCount": 5907,
+      "identicalAtComparison": true
+    }
+  ],
+  "mediaFiles": [
+    {
+      "file": "55dd59cf-4c0e-43aa-a92d-04fce5ea5694.jpg",
+      "sha256": "924553cdd74c363a07b2aea59a6eeda19a3006914903a0dccbcdb1e2920265ff",
+      "restoredHashMatches": true
+    },
+    {
+      "file": "605cd243-06fb-4f65-9532-9cfd7d2c646b.jpg",
+      "sha256": "924553cdd74c363a07b2aea59a6eeda19a3006914903a0dccbcdb1e2920265ff",
+      "restoredHashMatches": true
+    },
+    {
+      "file": "8e47ce89-a282-49b4-8699-527ee0eee46b.jpg",
+      "sha256": "7f3ac66417d203d00b2e3591764d432a94f1225e993c6e71debb6a77be6998b2",
+      "restoredHashMatches": true
+    },
+    {
+      "file": "e983e24a-81db-44f9-a6c9-fc444e90f226.jpg",
+      "sha256": "924553cdd74c363a07b2aea59a6eeda19a3006914903a0dccbcdb1e2920265ff",
+      "restoredHashMatches": true
+    }
+  ],
+  "note": "Domain table equality checked. Background stream/session/outbox may advance after consistent dump. Media file hashes recorded; copy with database backup."
+}

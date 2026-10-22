@@ -1,0 +1,13 @@
+{
+  "date": "2026-10-22",
+  "scope": "Static document/DDL-reference consistency only; not a SQL parser or runtime test",
+  "markdownFiles": 13,
+  "validJSONExamples": 4,
+  "referenceTables": 38,
+  "foreignKeysChecked": 52,
+  "functionalRequirements": 20,
+  "plannedTestCases": 28,
+  "issues": [],
+  "mysqlExecuted": false,
+  "applicationImplemented": false
+}

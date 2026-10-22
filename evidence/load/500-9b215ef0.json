@@ -1,0 +1,577 @@
+{
+  "timestampUtc": "2026-10-22T05:00:07.972064Z",
+  "tag": "9b215ef0",
+  "requestedDistinctCustomers": 500,
+  "synchronizedConnections": 500,
+  "activeAtEnd": 500,
+  "rampSeconds": 44.11,
+  "measurementSeconds": 30,
+  "requestedCatalogRps": 10.0,
+  "successfulCatalogRequests": 205,
+  "businessOrderRps": 0,
+  "probeDeliveries": 7500,
+  "probeCount": 15,
+  "connectP50Ms": 2551.16,
+  "connectP95Ms": 3094.27,
+  "catalogP50Ms": 55.16,
+  "catalogP95Ms": 359.13,
+  "eventP50Ms": 345.27,
+  "eventP95Ms": 629.74,
+  "receivedMessages": 12463,
+  "receivedUtf8Bytes": 9476113,
+  "errors": [],
+  "resourceSamples": [
+    {
+      "atSeconds": 44.58,
+      "availableRamMiB": 2557.2,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 13.5,
+          "rssMiB": 85.1
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 49.4,
+          "rssMiB": 196.6
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.8
+        }
+      ]
+    },
+    {
+      "atSeconds": 46.58,
+      "availableRamMiB": 2476.1,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 17.2,
+          "rssMiB": 86.8
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 63.3,
+          "rssMiB": 182.4
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.8
+        }
+      ]
+    },
+    {
+      "atSeconds": 48.58,
+      "availableRamMiB": 2451.1,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 21.1,
+          "rssMiB": 89.0
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 80.5,
+          "rssMiB": 188.4
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 50.57,
+      "availableRamMiB": 2424.8,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 22.7,
+          "rssMiB": 89.3
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 78.1,
+          "rssMiB": 180.4
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 52.55,
+      "availableRamMiB": 2392.1,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 8.7,
+          "rssMiB": 89.3
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 84.2,
+          "rssMiB": 181.0
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 54.56,
+      "availableRamMiB": 2352.2,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 19.5,
+          "rssMiB": 89.4
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 83.6,
+          "rssMiB": 187.4
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 56.55,
+      "availableRamMiB": 2363.8,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 10.9,
+          "rssMiB": 89.5
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 81.2,
+          "rssMiB": 181.3
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 58.56,
+      "availableRamMiB": 2420.5,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 17.2,
+          "rssMiB": 90.3
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 77.3,
+          "rssMiB": 182.7
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 60.57,
+      "availableRamMiB": 2480.2,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 13.3,
+          "rssMiB": 91.4
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 75.0,
+          "rssMiB": 182.9
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 62.56,
+      "availableRamMiB": 2456.3,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 16.4,
+          "rssMiB": 91.0
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 63.3,
+          "rssMiB": 183.0
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 64.56,
+      "availableRamMiB": 2433.6,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 14.8,
+          "rssMiB": 91.3
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 61.7,
+          "rssMiB": 181.1
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 66.57,
+      "availableRamMiB": 2437.5,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 11.6,
+          "rssMiB": 91.4
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 72.9,
+          "rssMiB": 187.6
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 68.55,
+      "availableRamMiB": 3054.0,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 7.1,
+          "rssMiB": 91.4
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 52.0,
+          "rssMiB": 181.7
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 70.56,
+      "availableRamMiB": 3063.3,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 9.4,
+          "rssMiB": 89.1
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 43.0,
+          "rssMiB": 183.9
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    },
+    {
+      "atSeconds": 72.55,
+      "availableRamMiB": 3067.4,
+      "processes": [
+        {
+          "pid": 7400,
+          "name": "node.exe",
+          "cpuPercent": 7.8,
+          "rssMiB": 89.1
+        },
+        {
+          "pid": 16332,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 78.0
+        },
+        {
+          "pid": 17212,
+          "name": "python.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 4.3
+        },
+        {
+          "pid": 20048,
+          "name": "python.exe",
+          "cpuPercent": 39.8,
+          "rssMiB": 184.5
+        },
+        {
+          "pid": 24316,
+          "name": "pwsh.exe",
+          "cpuPercent": 0.0,
+          "rssMiB": 80.7
+        }
+      ]
+    }
+  ],
+  "environment": {
+    "platform": "win32",
+    "python": "3.12.10",
+    "cpuLogical": 16,
+    "ramGiB": 15.64,
+    "topology": "load generator, HTTPS proxy, FastAPI and MySQL on same Windows PC"
+  },
+  "limitations": [
+    "Read and realtime fanout scenario; not 2000 simultaneous approvals.",
+    "Loopback test, not proof of WAN/LAN multi-machine capacity.",
+    "CPU percent per process can exceed 100 on multicore."
+  ]
+}

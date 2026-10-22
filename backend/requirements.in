@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncmy
+alembic
+argon2-cffi
+pydantic-settings
+python-multipart
+Pillow
+httpx
+pytest
+pytest-asyncio
+websockets
+cryptography
+psutil
