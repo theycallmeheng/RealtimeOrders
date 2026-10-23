@@ -4,17 +4,23 @@
 
 README mô tả setup/start/stop. `runtime/services.local.json` chỉ chứa PID, thời
 điểm tạo và dấu hiệu lệnh; script dừng chỉ những tiến trình còn khớp cả ba điều kiện.
-Không dừng dịch vụ MySQL của người dùng. Instance MySQL do setup tạo có thư mục
-riêng; root password nằm trong `runtime/root-password.local`, không đưa lên Git/Drive.
-Không tự xóa `runtime/mysql-data` hoặc chạy lại initialize trên thư mục cũ.
+Không dừng dịch vụ MySQL của người dùng. Từ 23/10, bản cài mặc định dùng MySQL
+sẵn có ở `127.0.0.1:3306`, database `realtimeorders`, user riêng giới hạn quyền
+trên database này. Mật khẩu quản trị dùng để tạo/chuyển DB nằm cục bộ tại
+`runtime/mysql-3306-admin-password.local`, không đưa lên Git/Drive.
 
-Trên máy bàn giao hiện tại, datadir hoạt động là
-`D:\Dev PTIT\RealtimeOrders-data\mysql-data` (ASCII), được ghi trong
-`runtime/mysql.local.json`. Binary MySQL 8.0.46 đã báo lỗi khi mở datadir có dấu.
-`runtime/mysql-data` trong project là bản sao lạnh lúc chuyển dữ liệu, không phải
-instance đang chạy. Bản gốc ở thư mục staging C cũng giữ để dự phòng; không dùng
-các bản sao này để chạy đồng thời cùng cổng. Backup thường xuyên phải lấy từ DB
-hoạt động qua `DATABASE_URL` và ảnh trong runtime/uploads của bản bàn giao.
+`runtime/mysql.local.json` có `managed: false`, host 127.0.0.1 và port 3306;
+Start/Stop chỉ quản lý ba tiến trình ứng dụng. Dịch vụ Windows `MySQL80` tự quản
+lý datadir của nó. Instance cũ 3307 đã dừng; datadir cũ
+`D:\Dev PTIT\RealtimeOrders-data\mysql-data` và `runtime/mysql-data` được giữ
+để dự phòng. Không chạy đồng thời các bản sao cùng một datadir. Backup mới phải
+lấy từ `DATABASE_URL` đang dùng và ảnh trong runtime/uploads của bản bàn giao.
+
+`scripts/migrate_mysql.py` chỉ nhận database đích chưa tồn tại, sao lưu cấu hình
+và SQL trong runtime/backups, dừng tiến trình ghi trong lúc chuyển, đối chiếu số
+dòng/hash mọi bảng trước khi đổi kết nối. Nếu chưa hoàn tất, khôi phục cấu hình
+nguồn và khởi động lại ứng dụng; không drop DB đích hoặc DB nguồn. Bằng chứng
+của lần chuyển thành công nằm tại `evidence/mysql-port-migration.json`.
 
 `seed.py` chỉ seed database chưa có user; không reset, thay mật khẩu hoặc ghi đè
 tài khoản hiện có. Mật khẩu demo được sinh ngẫu nhiên, chỉ lưu cục bộ trong tệp
@@ -57,7 +63,9 @@ vào nơi bảo vệ. Dump chứa dữ liệu cá nhân và hash mật khẩu, k
 
 Khôi phục vào **database mới**, cấp quyền user riêng, import dump, copy ảnh, đối
 chiếu số bản ghi/hash rồi mới chuyển cấu hình. `scripts/restore_check.py` là công
-cụ kiểm chứng cục bộ dùng root của instance riêng; không drop/overwrite database.
+cụ kiểm chứng cục bộ dùng root của server đang cấu hình; mật khẩu lấy theo
+cổng từ `runtime/mysql-PORT-admin-password.local` (bản cũ 3307 dùng
+`runtime/root-password.local`). Công cụ không drop/overwrite database.
 Các bảng nghiệp vụ phải giống; outbox/session/event có thể tiến triển sau lúc dump.
 
 ## Phục hồi và giới hạn

@@ -20,16 +20,21 @@ async def main():
     binary=Path(r'C:\Program Files\MySQL\MySQL Server 8.0\bin')
     dump=ROOT/'runtime/backups/restore-check.sql'
     size=backup(dump,str(binary/'mysqldump.exe'))
-    password_path=ROOT/'runtime/root-password.local'
-    if not password_path.exists():password_path=ROOT.parent/'RealtimeOrders-runtime/root-password.local'
+    source_url=make_url(settings.database_url)
+    source_port=source_url.port or 3306
+    password_path=ROOT/'runtime'/f'mysql-{source_port}-admin-password.local'
+    if not password_path.exists() and source_port==3307:
+        password_path=ROOT/'runtime/root-password.local'
+    if not password_path.exists():
+        raise RuntimeError('Save administrator credentials for this port in runtime/mysql-PORT-admin-password.local before restore checks')
     root_password=password_path.read_text().strip()
     import secrets
     target='realtimeorders_restore_'+secrets.token_hex(4)
-    conn=await asyncmy.connect(host='127.0.0.1',port=3307,user='root',password=root_password)
+    conn=await asyncmy.connect(host=source_url.host,port=source_port,user='root',password=root_password)
     async with conn.cursor() as c:await c.execute('CREATE DATABASE `'+target+'` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci')
     env={**os.environ,'MYSQL_PWD':root_password}
     with dump.open('rb') as file:
-        r=subprocess.run([str(binary/'mysql.exe'),'--host=127.0.0.1','--port=3307','--user=root','--default-character-set=utf8mb4',target],stdin=file,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)
+        r=subprocess.run([str(binary/'mysql.exe'),'--host='+source_url.host,'--port='+str(source_port),'--user=root','--default-character-set=utf8mb4',target],stdin=file,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)
     assert r.returncode==0,'Restore failed; credentials suppressed'
     source=make_url(settings.database_url).database
     results=[]

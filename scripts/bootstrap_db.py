@@ -1,30 +1,73 @@
-"""Creates a dedicated local project DB; never prints generated credentials."""
+"""Create only the project schema/user on an existing MySQL server."""
+import argparse
 import asyncio
+import getpass
+import json
+import re
 import secrets
 from pathlib import Path
+
 import asyncmy
+from sqlalchemy.engine import URL
 
 ROOT = Path(__file__).resolve().parents[1]
 
-async def main():
+
+async def create_project_database(connection, database):
+    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]{0,63}', database):
+        raise RuntimeError('Invalid database name')
+    async with connection.cursor() as cursor:
+        await cursor.execute('SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME=%s', (database,))
+        if (await cursor.fetchone())[0]:
+            raise RuntimeError('Target database already exists; no existing data was changed')
+        username = 'realtimeorders_' + secrets.token_hex(4)
+        password = secrets.token_hex(24)
+        await cursor.execute(f'CREATE DATABASE `{database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci')
+        await cursor.execute('CREATE USER %s@%s IDENTIFIED BY %s', (username, '127.0.0.1', password))
+        await cursor.execute(f'GRANT ALL ON `{database}`.* TO %s@%s', (username, '127.0.0.1'))
+    return username, password
+
+
+def database_url(host, port, database, username, password):
+    return URL.create('mysql+asyncmy', username=username, password=password, host=host,
+                      port=port, database=database, query={'charset': 'utf8mb4'}).render_as_string(hide_password=False)
+
+
+async def main(args):
     env = ROOT / '.env'
     if env.exists():
-        print('Đã có cấu hình; không ghi đè.')
+        print('Da co .env; khong ghi de. Dung migrate_mysql.py neu can chuyen database.')
         return
-    password = secrets.token_hex(24)
-    conn = await asyncmy.connect(host='127.0.0.1', port=3307, user='root')
-    async with conn.cursor() as c:
-        await c.execute('CREATE DATABASE realtimeorders CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci')
-        await c.execute("CREATE USER 'realtime'@'127.0.0.1' IDENTIFIED BY %s", (password,))
-        await c.execute("GRANT ALL ON realtimeorders.* TO 'realtime'@'127.0.0.1'")
-        # Secure the root of this newly initialized isolated instance as well.
-        root_password = secrets.token_hex(32)
-        await c.execute("ALTER USER 'root'@'localhost' IDENTIFIED BY %s", (root_password,))
-    conn.close()
+    password = (Path(args.admin_password_file).read_text(encoding='utf-8-sig').strip()
+                if args.admin_password_file else getpass.getpass('MySQL administrator password: '))
+    connection = await asyncmy.connect(host=args.host, port=args.port, user=args.admin_user,
+                                       password=password, connect_timeout=5)
+    try:
+        username, app_password = await create_project_database(connection, args.database)
+    finally:
+        await connection.ensure_closed()
+    url = database_url(args.host, args.port, args.database, username, app_password)
+    env.write_text(f'DATABASE_URL={url}\nAPP_SECRET={secrets.token_hex(32)}\nAPP_ORIGIN=https://localhost:3443\n'
+                   'COOKIE_SECURE=true\nDEMO_MODE=true\nSMS_PROVIDER=demo\nEMAIL_PROVIDER=demo\n', encoding='utf-8')
     runtime = ROOT / 'runtime'
     runtime.mkdir(exist_ok=True)
-    (runtime / 'root-password.local').write_text(root_password)
-    env.write_text(f'DATABASE_URL=mysql+asyncmy://realtime:{password}@127.0.0.1:3307/realtimeorders?charset=utf8mb4\nAPP_SECRET={secrets.token_hex(32)}\nAPP_ORIGIN=https://localhost:3443\nCOOKIE_SECURE=true\nDEMO_MODE=true\nSMS_PROVIDER=demo\nEMAIL_PROVIDER=demo\n', encoding='utf-8')
-    print('Đã tạo database riêng và cấu hình cục bộ (secrets được giữ kín).')
+    (runtime / 'mysql.local.json').write_text(json.dumps({'managed': False, 'host': args.host,
+                'port': args.port, 'database': args.database}, indent=2), encoding='utf-8')
+    print(f'Da tao {args.database} tren {args.host}:{args.port}. Mat khau quan tri MySQL khong thay doi.')
 
-asyncio.run(main())
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--host', default='127.0.0.1')
+    parser.add_argument('--port', type=int, default=3306)
+    parser.add_argument('--database', default='realtimeorders')
+    parser.add_argument('--admin-user', default='root')
+    parser.add_argument('--admin-password-file')
+    try:
+        asyncio.run(main(parser.parse_args()))
+    except Exception as error:
+        code = error.args[0] if isinstance(error, asyncmy.errors.MySQLError) and error.args else type(error).__name__
+        print(f'Khong tao duoc database (error {code}); khong in thong tin dang nhap.')
+        if type(error) is RuntimeError:
+            print(str(error))
+        raise SystemExit(1)

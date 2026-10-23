@@ -13,10 +13,11 @@ Dừng bằng `Stop.cmd`. Tài khoản và mật khẩu demo được sinh ngẫ
 `runtime/demo-accounts.local.json`. Tệp này chỉ có trên máy cài, không nằm trong gói source.
 Không có mật khẩu admin mặc định.
 
-Trên máy bàn giao, MySQL lưu tại `D:\Dev PTIT\RealtimeOrders-data\mysql-data` vì
-binary MySQL 8.0 Windows không mở được datadir có dấu. Mã nguồn và giao diện vẫn
-ở `D:\Dev PTIT\Lập trình mạng\RealtimeOrders`; `runtime/mysql.local.json` quản lý
-đường dẫn dữ liệu, nên Start/Stop không cần sửa tay.
+Từ 23/10/2026, bản cài dùng dịch vụ MySQL `MySQL80` sẵn có tại
+**`127.0.0.1:3306`**, database **`realtimeorders`**. Có thể xem bằng kết nối 3306
+trong MySQL Workbench. Mã nguồn ở `D:\Dev PTIT\Lập trình mạng\RealtimeOrders`.
+Start/Stop chỉ quản lý backend, frontend và proxy; không dừng MySQL của Windows.
+Dữ liệu instance cũ ở cổng 3307 được giữ làm bản dự phòng, không còn là DB hoạt động.
 
 Chứng thư localhost là chứng thư tự ký dành cho thử nghiệm. Trình duyệt có thể
 yêu cầu xác nhận trước khi mở lần đầu. Không dùng chứng thư này cho triển khai công khai.
@@ -69,17 +70,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\services.ps1 start
 ```
 
-`setup.ps1` tạo venv, cài dependency khóa phiên bản, khởi tạo **instance MySQL riêng**
-tại `runtime/mysql-data`, cổng 3307; tạo mật khẩu ngẫu nhiên, chạy Alembic/seed,
-tạo TLS thử và build giao diện. Nếu cổng 3307 đang dùng, script dừng để tránh sửa
-database khác. Có thể truyền `-MySQLBinary '...\mysqld.exe'` nếu cài ở vị trí khác.
-Nếu đường dẫn project có dấu, setup chọn thư mục `RealtimeOrders-data` tại phần
-đường dẫn cha chỉ có ASCII. Có thể chỉ định `-MySQLDataDirectory` riêng; không
-dùng thư mục của một database đang tồn tại.
+Khởi động MySQL trên máy trước khi setup. `setup.ps1` mặc định kết nối server
+đang có ở `127.0.0.1:3306`, hỏi mật khẩu quản trị trong terminal, tạo database
+`realtimeorders` mới và user riêng với mật khẩu ngẫu nhiên. Script không đổi mật
+khẩu root, không khởi tạo datadir và không ghi đè database đã tồn tại.
+Sau đó script chạy Alembic/seed, tạo TLS thử và build giao diện. Có thể truyền
+`-MySQLPort`, `-MySQLHost`, `-AdminUser` hoặc `-AdminPasswordFile` nếu cần.
 
 Nếu dùng MySQL đã quản trị sẵn: tự tạo **database và user riêng**, cấp quyền trên
 database đó, tạo `.env` theo `.env.example`, rồi chạy setup. Không dùng database của
 ứng dụng khác. Migration `0001` là schema 38 bảng; migration đầu phải chạy trên DB trống.
+
+Đổi bản cũ từ 3307 sang server 3306: lưu mật khẩu root của 3306 vào
+`runtime/mysql-3306-admin-password.local`, rồi chạy
+`.\.venv\Scripts\python.exe scripts\migrate_mysql.py`. Công cụ dừng ghi tạm thời,
+dump/nhập vào database mới, đối chiếu hash cả 39 bảng rồi mới chuyển `.env`;
+giữ nguyên dữ liệu nguồn và các database khác. Không chạy lại nếu đã chuyển xong.
 
 ```powershell
 # Chạy từng thành phần khi phát triển

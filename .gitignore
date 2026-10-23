@@ -22,3 +22,6 @@ dist/
 *.key
 *.p12
 *.pfx
+
+# Private MySQL data copied into the project
+RealtimeOrders-data/

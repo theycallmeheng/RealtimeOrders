@@ -1,4 +1,4 @@
-param([ValidateSet('start','stop','status')][string]$Action='start')
+param([ValidateSet('start','stop','stop-app','status')][string]$Action='start')
 $ErrorActionPreference='Stop'
 $projectRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $runtimePath=Join-Path $projectRoot 'runtime'
@@ -13,11 +13,16 @@ function Test-OwnedProcess($entry){
     return $process -and $process.CreationDate.ToUniversalTime().Ticks.ToString() -eq $entry.created -and $process.CommandLine -like "*$($entry.marker)*"
 }
 
-if($Action -eq 'stop'){
+if($Action -in @('stop','stop-app')){
+    $retained=@()
     if(Test-Path -LiteralPath $statePath){
         $entries=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
         $ordered=@($entries);[array]::Reverse($ordered)
         foreach($entry in $ordered){
+            if($Action -eq 'stop-app' -and $entry.name -eq 'mysql'){
+                if(Test-OwnedProcess $entry){$retained+= $entry}
+                continue
+            }
             if(Test-OwnedProcess $entry){
                 if($entry.name -eq 'mysql'){
                     $db=Get-Content -LiteralPath (Join-Path $runtimePath 'mysql.local.json') -Raw | ConvertFrom-Json
@@ -33,7 +38,8 @@ if($Action -eq 'stop'){
                 Stop-Process -Id $entry.pid -ErrorAction SilentlyContinue
             }
         }
-        Remove-Item -LiteralPath $statePath
+        if($retained.Count -gt 0){ConvertTo-Json -InputObject @($retained) | Set-Content -LiteralPath $statePath -Encoding utf8}
+        else{Remove-Item -LiteralPath $statePath}
     }
     Write-Host 'Da dung cac dich vu do project khoi tao.'
     exit
@@ -43,12 +49,21 @@ if($Action -eq 'status'){
     else{Write-Host 'Chua co dich vu duoc script quan ly.'}
     exit
 }
-if(Test-Path -LiteralPath $statePath){throw 'Da co trang thai dich vu. Chay services.ps1 status/stop truoc.'}
+$existingOwned=@()
+if(Test-Path -LiteralPath $statePath){
+    $oldEntries=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    $existingOwned=@(foreach($entry in $oldEntries){if(Test-OwnedProcess $entry){$entry}})
+    $appEntries=@($existingOwned | Where-Object { $_.name -ne 'mysql' })
+    if($appEntries.Count -eq 3){Write-Host 'RealtimeOrders dang chay: https://localhost:3443';exit}
+    if($appEntries.Count -gt 0){throw 'Mot so dich vu con chay. Chay services.ps1 stop truoc.'}
+    if($existingOwned.Count -eq 0){Remove-Item -LiteralPath $statePath}
+}
 if(-not(Test-Path -LiteralPath $pythonPath)){throw 'Chay scripts\setup.ps1 truoc.'}
 foreach($port in @(8000,3000,3443)){
     if(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue){throw "Cong $port dang duoc su dung. Kiem tra dich vu dang chay truoc khi start."}
 }
 $entries=[System.Collections.Generic.List[object]]::new()
+foreach($entry in $existingOwned){$entries.Add($entry)}
 function Start-Owned($name,$exe,$arguments,$directory,$marker){
     $process=Start-Process -FilePath $exe -ArgumentList $arguments -WorkingDirectory $directory -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $runtimePath "$name.log") -RedirectStandardError (Join-Path $runtimePath "$name-error.log")
     Start-Sleep -Milliseconds 400
@@ -62,7 +77,11 @@ $mysqlConfig=Join-Path $runtimePath 'mysql.local.json'
 if(Test-Path -LiteralPath $mysqlConfig){
     $db=Get-Content -LiteralPath $mysqlConfig -Raw | ConvertFrom-Json
     $listener=Get-NetTCPConnection -LocalPort $db.port -State Listen -ErrorAction SilentlyContinue
-    if(-not $listener){Start-Owned 'mysql' $db.binary @('--no-defaults',"--datadir=`"$($db.dataDir)`"",'--bind-address=127.0.0.1',"--port=$($db.port)",'--mysqlx=OFF','--console') (Split-Path $db.binary) $db.dataDir;Start-Sleep -Seconds 2}
+    if($db.managed -eq $false){
+        if(-not $listener){throw "MySQL co san chua chay tai cong $($db.port). Khoi dong dich vu MySQL trong Windows."}
+        Write-Host "Su dung MySQL co san tai 127.0.0.1:$($db.port); project khong dung dich vu nay."
+    }
+    elseif(-not $listener){Start-Owned 'mysql' $db.binary @('--no-defaults',"--datadir=`"$($db.dataDir)`"",'--bind-address=127.0.0.1',"--port=$($db.port)",'--mysqlx=OFF','--console') (Split-Path $db.binary) $db.dataDir;Start-Sleep -Seconds 2}
 }
 Start-Owned 'backend' $pythonPath @('-m','uvicorn','app.main:app','--host','127.0.0.1','--port','8000','--ws-max-size','65536','--ws-max-queue','16','--no-access-log','--log-level','warning') (Join-Path $projectRoot 'backend') 'uvicorn'
 $nodePath=(Get-Command node.exe).Source

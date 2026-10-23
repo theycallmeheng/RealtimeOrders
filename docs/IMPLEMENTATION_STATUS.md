@@ -6,6 +6,11 @@ sở thiết kế; bảng kết quả thực nằm trong VALIDATION và evidence
 
 ## Những khác biệt được ghi nhận
 
+- Cập nhật 23/10/2026: theo yêu cầu người dùng, mặc định setup dùng dịch vụ MySQL
+  có sẵn ở cổng 3306. Bản cài hiện tại được chuyển từ instance 3307 bằng dump và
+  đối chiếu đủ 39 bảng trước khi đổi cấu hình. Các số liệu tải ngày 22/10 vẫn là
+  số liệu lịch sử của cấu hình cũ, không tự coi là phép đo lại trên server 3306.
+
 - Dùng MySQL 8.0.46/InnoDB trên máy sẵn có để kiểm thử; đề xuất ban đầu là 8.4.
   DDL tương thích các tính năng InnoDB/JSON/CHECK của bản thử. Chưa tự khai đã
   chạy một lượt nghiệm thu riêng trên 8.4.
