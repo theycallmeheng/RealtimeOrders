@@ -1,6 +1,6 @@
 # RealtimeOrders
 
-Ứng dụng đặt hàng và điều phối bán hàng realtime · Nhóm 17 
+Ứng dụng đặt hàng và điều phối bán hàng realtime · Nhóm 17
 
 Khách xem giá theo nhóm, đặt nhiều món rồi chờ duyệt. Người bán kiểm tra kho,
 duyệt đơn, chuẩn bị và giao hàng. **Gửi đơn không giữ hàng; chỉ duyệt mới trừ kho.**
@@ -106,17 +106,18 @@ Không thêm `--workers` vì topic hub hiện chỉ ở một process. Xem
 
 ## Kiểm thử và thực nghiệm
 
-Khởi động ứng dụng, sau đó:
+Các test có ghi đơn, địa chỉ và trạng thái phiên. Cách chạy trên bản sao MySQL
+riêng (cần tệp quản trị cục bộ theo hướng dẫn trong
+[báo cáo kiểm thử 24/10](docs/AUDIT_2026-10-24.md)):
 
 ```powershell
-cd backend
-..\.venv\Scripts\python.exe -m pytest -q
-cd ..\frontend
-npm run build
-npx playwright test
-cd ..
-.\.venv\Scripts\python.exe scripts\load_test.py --clients 100 --seconds 30 --rps 10
-.\.venv\Scripts\python.exe scripts\backup.py
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\services.ps1 stop-app
+npm --prefix frontend run build
+.\.venv\Scripts\python.exe scripts\isolated_validation.py prepare
+.\.venv\Scripts\python.exe scripts\isolated_validation.py backend
+.\.venv\Scripts\python.exe scripts\isolated_validation.py browser
+.\.venv\Scripts\python.exe scripts\isolated_validation.py run -- "{python}" scripts\load_test.py --clients 100 --seconds 30 --rps 10 --reconnect-fraction 0.1
+.\.venv\Scripts\python.exe scripts\isolated_validation.py finish
 ```
 
 Browser test dùng Edge cài trên máy; có thể đổi `channel` trong
@@ -125,12 +126,24 @@ Browser test dùng Edge cài trên máy; có thể đổi `channel` trong
 Không gửi SMS thật trong kiểm thử/tạo tải. Giới hạn đăng nhập/OTP vẫn áp dụng khi
 chạy test nhiều lần; chờ cửa sổ giới hạn thay vì tắt bảo vệ trong môi trường thật.
 
+`prepare` từ chối chạy đè các cổng đang dùng, đối chiếu 39 bảng, dùng thư mục ảnh
+riêng và buộc SMS/email demo. `finish` kiểm tra dữ liệu nguồn rồi chạy lại bản
+demo chính; giữ DB audit để kiểm tra. Kết quả backend/browser có thư mục theo
+lượt chạy; phép tải giữ file riêng theo tag tại `evidence/load/`.
+
 Kết quả và giới hạn được cập nhật trong [VALIDATION.md](docs/VALIDATION.md),
 dữ liệu gốc ở `evidence/`. Các ca thử đề xuất chưa chạy vẫn được phân biệt trong
 [TEST_PLAN.md](docs/TEST_PLAN.md). Tải mô phỏng cùng máy không thay thế nghiệm thu
 trên hai thiết bị LAN hay thử với người mua thực tế.
 
 ## Đóng góp kỹ thuật
+
+Đợt [tối ưu độ trễ 25/10](docs/LATENCY_2026-10-25.md) có ba lượt đo lặp lại ở
+2.000 kết nối và kiểm thử hồi quy; giữ nguyên 5 phần công việc.
+
+Phạm vi làm việc giữ nguyên [5 phần đã chốt](docs/WORKSTREAMS.md).
+Đợt [tối ưu 24–25/10](docs/PERFORMANCE_2026-10-24.md) giảm truy vấn lặp và chi phí
+phát sự kiện, giữ API/luồng nghiệp vụ; có phép đo trước/sau và các giới hạn thực.
 
 1. Duyệt toàn bộ đơn trong giao dịch InnoDB, khóa theo thứ tự và ledger duy nhất;
    so với read-then-write không khóa có thể bán vượt kho.

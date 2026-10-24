@@ -7,6 +7,8 @@ from .events import emit
 
 async def addresses(s,user,method,id,body):
     user=await lock_user(s,user['id'])
+    if 'makeDefault' in body:
+        check(isinstance(body['makeDefault'],bool),'INVALID_BOOLEAN','Địa chỉ mặc định phải là giá trị đúng/sai')
     t=T['addresses']
     if method=='GET': return await rows(s,'addresses',t.c.user_id==user['id'],t.c.deleted_at==None)
     if id:

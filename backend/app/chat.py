@@ -41,8 +41,10 @@ async def send(s,user,body):
         return public(old)
     content=text(body.get('text',''),4000)
     assets=body.get('assetIds',[])
-    check(isinstance(assets,list) and len(set(assets))==len(assets) and len(assets)<=3 and (content or assets),
+    check(isinstance(assets,list) and len(assets)<=3 and (content or assets),
           'EMPTY_MESSAGE','Tin nhắn cần nội dung hoặc tối đa 3 ảnh')
+    assets=[uuid(asset) for asset in assets]
+    check(len(set(assets))==len(assets),'INVALID_IMAGES','Mỗi ảnh chỉ được chọn một lần')
     id=uid()
     clean=await sanitize(s,user,content,'chat.text',id)
     for asset in assets:

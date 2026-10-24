@@ -2,36 +2,66 @@
 import asyncio
 import json
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
-from sqlalchemy import select, update, or_, func
+from sqlalchemy import select, update, or_, func, event as sql_event
+from sqlalchemy.orm import Session as SyncSession
 from sqlalchemy.dialects.mysql import insert
 from .db import T, Session, now, uid, add, public
 
 log = logging.getLogger(__name__)
+outbox_ready = asyncio.Event()
+
+@sql_event.listens_for(SyncSession,'after_commit')
+def wake_committed_outbox(session):
+    if session.info.pop('committed_outbox_pending',False):
+        # A signal is only a hint. The worker still reads committed durable rows.
+        try:asyncio.get_running_loop()
+        except RuntimeError:return
+        outbox_ready.set()
+
+@sql_event.listens_for(SyncSession,'after_rollback')
+def forget_rolled_back_outbox(session):
+    session.info.pop('committed_outbox_pending',None)
 
 def emit(s, topic, kind, payload, entity=None, version=None):
     s.info.setdefault('events', []).append((topic, kind, public(payload), entity, version))
 
 async def flush_events(s):
     pending = s.info.pop('events', [])
+    if not pending: return
     heads = {}
     for topic in sorted({e[0] for e in pending}):
         t = T['stream_heads']
         await s.execute(insert(t).values(topic=topic, last_seq=0).on_duplicate_key_update(topic=topic))
         heads[topic] = (await s.execute(select(t.c.last_seq).where(t.c.topic == topic).with_for_update())).scalar_one()
+    event_rows=[];outbox_rows=[]
     for topic, kind, payload, entity, version in pending:
         heads[topic] += 1
         event = uid()
-        await add(s, 'stream_events', topic=topic, seq=heads[topic], event_id=event, event_type=kind,
-                  entity_id=entity, entity_version=version, payload=payload, created_at=now())
-        await add(s, 'outbox', event_id=event, state='PENDING', attempts=0, next_attempt_at=now(), created_at=now())
+        event_rows.append(dict(topic=topic, seq=heads[topic], event_id=event, event_type=kind,
+                  entity_id=entity, entity_version=version, payload=payload, created_at=now()))
+        outbox_rows.append(dict(event_id=event, state='PENDING', attempts=0, next_attempt_at=now(), created_at=now()))
+    await s.execute(T['stream_events'].insert(),event_rows)
+    await s.execute(T['outbox'].insert(),outbox_rows)
     for topic, seq in heads.items():
         await s.execute(update(T['stream_heads']).where(T['stream_heads'].c.topic == topic).values(last_seq=seq))
+    s.info['committed_outbox_pending']=True
 
 def event_wire(e):
     return {'v': 1, 'type': 'EVENT', 'topic': e['topic'], 'seq': str(e['seq']),
             'eventId': e['event_id'], 'eventType': e['event_type'], 'entityId': e['entity_id'],
             'entityVersion': str(e['entity_version']) if e['entity_version'] else None, 'payload': e['payload']}
+
+@dataclass(frozen=True,slots=True)
+class EncodedFrame:
+    message: dict
+    text: str
+    size: int
+
+def encode_frame(message,size=None):
+    text=json.dumps(message,ensure_ascii=False,separators=(',',':'))
+    return EncodedFrame(message,text,len(text.encode()) if size is None else size)
 
 class Subscriber:
     def __init__(self, topics, user_id, session_id=None):
@@ -42,25 +72,45 @@ class Subscriber:
         self.slow = False
 
     def put(self, message, size=None):
-        if size is None: size = len(json.dumps(message, ensure_ascii=False).encode())
-        if self.bytes + size > 512*1024 or self.queue.full():
+        self.put_frame(encode_frame(message,size))
+
+    def put_frame(self,frame):
+        if self.bytes + frame.size > 512*1024 or self.queue.full():
             self.slow = True
             return
-        self.bytes += size
-        self.queue.put_nowait((message, size))
+        self.bytes += frame.size
+        self.queue.put_nowait(frame)
+
+    async def get_frame(self):
+        frame=await self.queue.get()
+        self.bytes-=frame.size
+        return frame
 
     async def get(self):
-        message, size = await self.queue.get()
-        self.bytes -= size
-        return message
+        return (await self.get_frame()).message
 
 class Hub:
-    def __init__(self): self.clients = set()
+    def __init__(self):
+        self.clients=set()
+        self.by_topic={}
+
+    def register(self,client):
+        self.clients.add(client)
+        for topic in client.topics: self.by_topic.setdefault(topic,set()).add(client)
+
+    def unregister(self,client):
+        self.clients.discard(client)
+        for topic in client.topics:
+            subscribers=self.by_topic.get(topic)
+            if subscribers is not None:
+                subscribers.discard(client)
+                if not subscribers: self.by_topic.pop(topic,None)
+
     def publish(self, event):
-        wire=event_wire(event)
-        size=len(json.dumps(wire,ensure_ascii=False).encode())
-        for client in tuple(self.clients):
-            if event['topic'] in client.topics: client.put(wire,size)
+        subscribers=self.by_topic.get(event['topic'])
+        if not subscribers: return
+        frame=encode_frame(event_wire(event))
+        for client in tuple(subscribers): client.put_frame(frame)
 
 hub = Hub()
 
@@ -86,20 +136,33 @@ async def session_monitor():
 
 async def outbox_worker():
     while True:
+        pending=[]
+        failed=False
+        outbox_ready.clear()
         try:
             async with Session.begin() as s:
                 o, e = T['outbox'], T['stream_events']
                 pending = (await s.execute(select(e, o.c.id.label('outbox_id')).join(o, o.c.event_id == e.c.event_id)
                     .where(o.c.state != 'PUBLISHED', o.c.next_attempt_at <= now()).order_by(o.c.id).limit(200)
                     .with_for_update(skip_locked=True))).mappings().all()
-                for event in pending:
+                for index,event in enumerate(pending):
                     # Only committed events are visible here. Duplicate delivery after crash is safe by seq.
                     hub.publish(dict(event))
-                    await s.execute(update(o).where(o.c.id == event['outbox_id']).values(state='PUBLISHED', published_at=now()))
+                    if index%16==15: await asyncio.sleep(0)
+                if pending:
+                    await s.execute(update(o).where(o.c.id.in_([event['outbox_id'] for event in pending]))
+                                    .values(state='PUBLISHED',published_at=now()))
             await notification_batch()
         except asyncio.CancelledError: raise
-        except Exception: log.exception('outbox_worker_failed')
-        await asyncio.sleep(.05 if pending else .1)
+        except Exception:
+            failed=True
+            log.exception('outbox_worker_failed')
+        if failed:await asyncio.sleep(.1)
+        elif pending:await asyncio.sleep(0)
+        else:
+            # Poll also covers events committed by another process and lost hints.
+            try:await asyncio.wait_for(outbox_ready.wait(),.02)
+            except asyncio.TimeoutError:pass
 
 async def notify(s, user_id, kind, payload, fact=None):
     fact = fact or uid()

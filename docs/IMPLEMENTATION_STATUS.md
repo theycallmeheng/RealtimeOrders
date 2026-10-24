@@ -6,6 +6,22 @@ sở thiết kế; bảng kết quả thực nằm trong VALIDATION và evidence
 
 ## Những khác biệt được ghi nhận
 
+- Cập nhật 25/10: factory Winloop cho Windows và wake outbox sau commit, đọc
+  tiếp batch không chờ 50 ms, polling dự phòng 20 ms. Giữ 5 phần công việc;
+  kết quả ba lượt ở [LATENCY_2026-10-25.md](LATENCY_2026-10-25.md).
+
+- Tối ưu tiếp 24–25/10/2026: gộp truy vấn user/session, giá nhóm và chi tiết đơn
+  của snapshot; ghi event/outbox theo lô, chia sẻ frame JSON, giảm task/timer,
+  giới hạn lượt đồng bộ DB và hỗ trợ hai địa chỉ loopback ở proxy. Bản chạy LAN
+  tắt nén WebSocket để đánh đổi CPU/bộ nhớ với băng thông. Giữ nguyên
+  [5 phần](WORKSTREAMS.md), API v1 và schema;
+  kết quả thực ở [PERFORMANCE_2026-10-24.md](PERFORMANCE_2026-10-24.md).
+
+- Cập nhật 24/10/2026: bổ sung kiểm thử hồi quy, chống trùng khi gửi lại tạo địa
+  chỉ/yêu cầu hàng, kiểm tra cấu trúc dữ liệu/boolean, xử lý frame nhị phân và
+  phục hồi outbox khi lần đọc DB đầu tiên lỗi. Có công cụ test trên bản sao DB
+  và số liệu đo lại: xem [AUDIT_2026-10-24.md](AUDIT_2026-10-24.md).
+
 - Cập nhật 23/10/2026: theo yêu cầu người dùng, mặc định setup dùng dịch vụ MySQL
   có sẵn ở cổng 3306. Bản cài hiện tại được chuyển từ instance 3307 bằng dump và
   đối chiếu đủ 39 bảng trước khi đổi cấu hình. Các số liệu tải ngày 22/10 vẫn là

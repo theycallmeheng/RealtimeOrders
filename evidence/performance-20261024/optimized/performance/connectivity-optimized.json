@@ -1,0 +1,46 @@
+{
+  "observations": [
+    {
+      "host": "localhost",
+      "connectMs": 146.61,
+      "syncMs": 36.48
+    },
+    {
+      "host": "localhost",
+      "connectMs": 23.01,
+      "syncMs": 24.29
+    },
+    {
+      "host": "localhost",
+      "connectMs": 25.39,
+      "syncMs": 39.65
+    },
+    {
+      "host": "localhost",
+      "connectMs": 25.21,
+      "syncMs": 23.68
+    },
+    {
+      "host": "127.0.0.1",
+      "connectMs": 14.36,
+      "syncMs": 25.25
+    },
+    {
+      "host": "127.0.0.1",
+      "connectMs": 25.57,
+      "syncMs": 23.09
+    },
+    {
+      "host": "127.0.0.1",
+      "connectMs": 19.48,
+      "syncMs": 25.43
+    },
+    {
+      "host": "127.0.0.1",
+      "connectMs": 19.08,
+      "syncMs": 32.96
+    }
+  ],
+  "proxySha256": "6b4168bae3766ef4f00d483fda1a93e7a703754bf251cadfe8176fdd8f9a144a",
+  "note": "Fresh TLS/WebSocket sessions; same backend, client and origin for both hostnames."
+}

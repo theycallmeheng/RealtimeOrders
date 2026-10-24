@@ -2,6 +2,9 @@
 
 Read docs/SRS.md and docs/DECISIONS.md before implementation. Respect the
 distinction between teacher requirements, user-confirmed choices and proposals.
+Keep the five workstreams in docs/WORKSTREAMS.md. Optimize within their current
+boundaries; do not move features between them or assign members without a user
+request. Tests, documentation, integration and operations remain cross-cutting.
 Before frontend changes read DESIGN.md and reuse existing components.
 
 The user authorized full implementation on 22 October 2026. Keep the runnable

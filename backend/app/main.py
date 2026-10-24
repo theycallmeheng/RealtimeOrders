@@ -80,7 +80,7 @@ async def body_json(request):
     async for chunk in request.stream():
         raw.extend(chunk); check(len(raw)<=65536,'FRAME_TOO_LARGE','Dữ liệu vượt 64 KiB',413)
     try: body=json.loads(raw) if raw else {}
-    except (ValueError,UnicodeError): raise Fault('INVALID_JSON','JSON không hợp lệ')
+    except (ValueError,UnicodeError,RecursionError): raise Fault('INVALID_JSON','JSON không hợp lệ')
     check(isinstance(body,dict),'INVALID_JSON','Nội dung phải là JSON object')
     return body
 
@@ -93,7 +93,7 @@ def csrf_check(request):
     check(bool(raw) and hmac.compare_digest(request.headers.get('x-csrf-token',''),auth.csrf(raw)),
           'CSRF_REJECTED','Phiên xác nhận không hợp lệ; vui lòng tải lại',403)
 
-def route(method,path,anonymous=False):
+def route(method,path,anonymous=False,idempotent=False):
     def decorator(handler):
         async def endpoint(request:Request):
             body=await body_json(request) if method!='GET' else {}
@@ -104,7 +104,14 @@ def route(method,path,anonymous=False):
                 s.info['request_id']=request.state.request_id
                 user=None if anonymous else await auth.authenticate(s,request.cookies.get('ro_session'),activity=method!='GET')
                 if path.startswith('/admin'): auth.require_admin(user)
-                result=await handler(s,user,body,request)
+                key=request.headers.get('idempotency-key') if idempotent else None
+                scope='http:'+method+':'+path
+                prior=await commerce.idem(s,user,scope,key,body) if key is not None else None
+                if prior is not None:
+                    result=prior
+                else:
+                    result=await handler(s,user,body,request)
+                    if key is not None: await commerce.complete(s,user,scope,key,result)
                 await flush_events(s)
             return result if isinstance(result,(JSONResponse,FileResponse)) else JSONResponse(public(result))
         endpoint.__name__=handler.__name__
@@ -211,7 +218,7 @@ async def edit_profile(s,user,b,r):
 
 @route('GET','/me/addresses')
 async def list_addresses(s,u,b,r): return await accounts.addresses(s,u,'GET',None,b)
-@route('POST','/me/addresses')
+@route('POST','/me/addresses',idempotent=True)
 async def new_address(s,u,b,r): return await accounts.addresses(s,u,'POST',None,b)
 @route('PATCH','/me/addresses/{id}')
 async def edit_address(s,u,b,r): return await accounts.addresses(s,u,'PATCH',uuid(r.path_params['id']),b)
@@ -260,7 +267,7 @@ async def admin_order_action(s,u,b,r):
     check(r.path_params['action'] in ('approve','reject','transition','decide-cancel'),'NOT_FOUND','Thao tác không tồn tại',404)
     return await commerce.order_action(s,u,uuid(r.path_params['id']),r.path_params['action'],b,r.headers.get('idempotency-key'))
 
-@route('POST','/product-requests')
+@route('POST','/product-requests',idempotent=True)
 async def request_create(s,u,b,r): return await product_requests.create(s,u,b)
 @route('GET','/product-requests')
 async def request_list(s,u,b,r):

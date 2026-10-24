@@ -4,7 +4,10 @@ import path from "node:path";
 const data = JSON.parse(
   fs.readFileSync(path.resolve("../runtime/demo-accounts.local.json"), "utf8"),
 );
-const evidence = path.resolve("../evidence");
+const evidence = process.env.AUDIT_EVIDENCE_DIR
+  ? path.resolve(process.env.AUDIT_EVIDENCE_DIR, "screenshots")
+  : path.resolve("../evidence");
+fs.mkdirSync(evidence, { recursive: true });
 async function login(page: Page, index: number) {
   await page.goto("/");
   await page

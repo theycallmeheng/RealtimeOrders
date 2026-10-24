@@ -1,0 +1,5 @@
+{
+  "httpsHealth": 200,
+  "frontendHealth": 200,
+  "demoMode": true
+}

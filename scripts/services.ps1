@@ -83,7 +83,7 @@ if(Test-Path -LiteralPath $mysqlConfig){
     }
     elseif(-not $listener){Start-Owned 'mysql' $db.binary @('--no-defaults',"--datadir=`"$($db.dataDir)`"",'--bind-address=127.0.0.1',"--port=$($db.port)",'--mysqlx=OFF','--console') (Split-Path $db.binary) $db.dataDir;Start-Sleep -Seconds 2}
 }
-Start-Owned 'backend' $pythonPath @('-m','uvicorn','app.main:app','--host','127.0.0.1','--port','8000','--ws-max-size','65536','--ws-max-queue','16','--no-access-log','--log-level','warning') (Join-Path $projectRoot 'backend') 'uvicorn'
+Start-Owned 'backend' $pythonPath @('-m','uvicorn','app.main:app','--loop','app.event_loop:new_event_loop','--host','127.0.0.1','--port','8000','--ws-max-size','65536','--ws-max-queue','16','--ws-per-message-deflate','false','--no-access-log','--log-level','warning') (Join-Path $projectRoot 'backend') 'uvicorn'
 $nodePath=(Get-Command node.exe).Source
 $nextCli=Join-Path $projectRoot 'frontend\node_modules\next\dist\bin\next'
 Start-Owned 'frontend' $nodePath @("`"$nextCli`"",'start','--hostname','127.0.0.1','--port','3000') (Join-Path $projectRoot 'frontend') $nextCli

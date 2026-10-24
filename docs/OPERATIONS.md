@@ -89,3 +89,21 @@ event pending hoặc lịch sử idempotency/đơn chỉ để tiết kiệm dun
 giải mã, giới hạn pixel và re-encode, tên ngẫu nhiên. Nội dung bị che là bản
 canonical; raw vi phạm chỉ admin xem. Không lưu mật khẩu/OTP/session raw vào log.
 Log lỗi dùng requestId; production cần giới hạn quyền xem log và thời gian lưu.
+
+## Vòng lặp mạng trên Windows
+
+`scripts/services.ps1` dùng `app.event_loop:new_event_loop`. Windows có dependency
+`winloop==0.8.0`; Linux dùng vòng lặp asyncio sẵn có. Nếu thiếu Winloop, chế độ
+auto cảnh báo rồi chạy asyncio để app vẫn khởi động; không suy ra có cùng hiệu năng.
+Pin nằm trong `backend/requirements.txt`; cài bằng setup hoặc pip trong `.venv`.
+
+Để đối chiếu bằng asyncio, đặt biến trong PowerShell trước khi dừng/chạy lại app:
+
+```powershell
+$env:REALTIMEORDERS_EVENT_LOOP = 'asyncio'
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\services.ps1 stop-app
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\services.ps1 start
+```
+
+Xóa biến với `Remove-Item Env:REALTIMEORDERS_EVENT_LOOP` rồi dừng/chạy lại để về
+auto. Không đổi số worker. Kết quả đo và giới hạn ở [LATENCY_2026-10-25.md](LATENCY_2026-10-25.md).

@@ -1,0 +1,8 @@
+{
+  "preparedWithBackendStopped": true,
+  "orderId": "96a53927-3744-4c9d-b30a-a3378ec00a9d",
+  "orderHashUnchanged": true,
+  "outboxPublishedAfterRestart": true,
+  "replayedOnWss": true,
+  "verifiedUtc": "2026-10-24T16:10:48.020567Z"
+}

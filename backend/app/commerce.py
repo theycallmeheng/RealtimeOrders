@@ -45,22 +45,34 @@ async def catalog(s, user, admin=False, offer_ids=None):
                               o.c.opens_at <= now(), o.c.closes_at > now(), price.c.unit_price != None)
     if offer_ids is not None: q=q.where(o.c.id.in_(offer_ids))
     offers = [dict(r) for r in (await s.execute(q.order_by(o.c.sale_date.desc(), p.c.name).limit(200))).mappings()]
+    if not offers: return []
+    offer_ids=[offer['id'] for offer in offers]
+    product_ids=sorted({offer['product_id'] for offer in offers})
     i, order = T['order_items'], T['orders']
     counts = (await s.execute(select(i.c.offer_id, order.c.status, func.sum(i.c.quantity).label('qty'),
             func.count(func.distinct(order.c.customer_id)).label('customers'), func.count().label('orders'))
-            .join(order, i.c.order_id==order.c.id).where(i.c.offer_id.in_([o['id'] for o in offers]))
-            .group_by(i.c.offer_id, order.c.status))).mappings().all() if offers else []
-    images = await rows(s, 'product_images', limit=1000)
+            .join(order, i.c.order_id==order.c.id).where(i.c.offer_id.in_(offer_ids))
+            .group_by(i.c.offer_id, order.c.status))).mappings().all()
+    images = await rows(s, 'product_images', T['product_images'].c.product_id.in_(product_ids),
+                        limit=1000, order=T['product_images'].c.position)
     subscriptions = await rows(s, 'product_subscriptions', T['product_subscriptions'].c.user_id==user['id'], limit=500)
     followed = {r['product_id'] for r in subscriptions}
+    counts_by_offer={}
+    for count in counts: counts_by_offer.setdefault(count['offer_id'],[]).append(count)
+    images_by_product={}
+    for image in images: images_by_product.setdefault(image['product_id'],[]).append(image['asset_id'])
+    prices_by_offer={}
+    if admin:
+        for row in (await s.execute(select(price).where(price.c.offer_id.in_(offer_ids)))).mappings():
+            prices_by_offer.setdefault(row['offer_id'],[]).append(dict(row))
     for offer in offers:
-        count = [c for c in counts if c['offer_id']==offer['id']]
+        count = counts_by_offer.get(offer['id'],[])
         offer['pending_qty'] = sum((c['qty'] for c in count if c['status']=='PENDING'), Decimal(0))
         offer['pending_customers'] = sum(c['customers'] for c in count if c['status']=='PENDING')
         offer['approved_orders'] = sum(c['orders'] for c in count if c['status'] in ('APPROVED','PREPARING','SHIPPING','DELIVERED'))
-        offer['images'] = [x['asset_id'] for x in sorted(images, key=lambda x: x['position']) if x['product_id']==offer['product_id']]
+        offer['images'] = images_by_product.get(offer['product_id'],[])
         offer['subscribed'] = offer['product_id'] in followed
-        if admin: offer['prices'] = await rows(s, 'offer_prices', price.c.offer_id==offer['id'])
+        if admin: offer['prices'] = prices_by_offer.get(offer['id'],[])[:100]
     return public(offers)
 
 async def catalog_event(s, ids):
@@ -90,6 +102,25 @@ async def get_order(s, user, id):
                                  order=T['order_status_history'].c.order_version)
     order['cancellation_requests'] = await rows(s, 'cancellation_requests', T['cancellation_requests'].c.order_id==id)
     return public(order)
+
+async def get_orders(s,user,ids):
+    """Load authorized snapshot orders with a fixed number of child queries."""
+    if not ids: return []
+    orders=[dict(row) for row in (await s.execute(select(T['orders']).where(T['orders'].c.id.in_(ids)))).mappings()]
+    by_id={order['id']:order for order in orders}
+    check(all(id in by_id for id in ids),'NOT_FOUND','Không tìm thấy dữ liệu',404)
+    check(user['role']=='ADMIN' or all(order['customer_id']==user['id'] for order in orders),
+          'FORBIDDEN','Không có quyền xem đơn',403)
+    for order in orders:
+        order.pop('request_hash',None)
+        order.update(items=[],history=[],cancellation_requests=[])
+    for table,key in (('order_items','items'),('order_status_history','history'),('cancellation_requests','cancellation_requests')):
+        query=select(T[table]).where(T[table].c.order_id.in_(ids))
+        if key=='history':query=query.order_by(T[table].c.order_version)
+        for row in (await s.execute(query)).mappings():
+            values=by_id[row['order_id']][key]
+            if len(values)<100: values.append(dict(row))
+    return public([by_id[id] for id in ids])
 
 async def delivery(s, user, body, subtotal):
     address = await one(s, 'addresses', T['addresses'].c.id==uuid(body.get('addressId')),
@@ -124,7 +155,8 @@ async def create_order(s, user, body, key, quote=None):
         check(old['request_hash']==digest(body),'IDEMPOTENCY_CONFLICT','Mã đơn đã dùng cho nội dung khác',409)
         return await complete(s,user,scope,key,await get_order(s,user,old['id']))
     lines=body.get('items',[])
-    check(isinstance(lines,list) and 1<=len(lines)<=20,'INVALID_ITEMS','Đơn cần từ 1 đến 20 mặt hàng')
+    check(isinstance(lines,list) and 1<=len(lines)<=20 and all(isinstance(line,dict) for line in lines),
+          'INVALID_ITEMS','Đơn cần từ 1 đến 20 mặt hàng hợp lệ')
     ids=[uuid(line.get('offerId')) for line in lines]
     check(len(set(ids))==len(ids),'DUPLICATE_ITEM','Mỗi mặt hàng chỉ xuất hiện một lần')
     locked={id:await one(s,'offers',T['offers'].c.id==id,lock=True) for id in sorted(ids)}
@@ -226,6 +258,7 @@ async def order_action(s,user,id,action,body,key):
         target=status
     elif action=='decide-cancel':
         require_admin(user)
+        check(isinstance(body.get('accept'),bool),'INVALID_BOOLEAN','Quyết định hủy phải là giá trị đúng/sai')
         cancellation=await one(s,'cancellation_requests',T['cancellation_requests'].c.order_id==id,
                                T['cancellation_requests'].c.state=='OPEN',lock=True)
         check(status in ('APPROVED','PREPARING'),'INVALID_STATE','Không thể hủy sau bàn giao',409)

@@ -11,7 +11,9 @@ export default defineConfig({
   },
   reporter: [
     ["list"],
-    ["json", { outputFile: "../evidence/browser-results.json" }],
+    ["json", { outputFile: process.env.AUDIT_EVIDENCE_DIR
+      ? `${process.env.AUDIT_EVIDENCE_DIR}/browser-results.json`
+      : "../evidence/browser-results.json" }],
   ],
   outputDir: "../runtime/browser-test-results",
 });

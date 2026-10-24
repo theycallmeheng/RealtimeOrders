@@ -1,0 +1,8 @@
+{
+  "backend/app/auth.py": "33c32e1ec0838784e802910f5c9556be2bf528a42d600d932b18ebbb16124166",
+  "backend/app/commerce.py": "d6687782367c651387a5ff88e49d918981bd7a4cd5051c263c13803354e0d345",
+  "backend/app/events.py": "c9494fc41fe6594272eabac0710d3f1644b827e7713b551e69106f95d57835cc",
+  "backend/app/realtime.py": "88434a1991d60490061d0933c502bc38ad63bb1a6831d4ad31dc5c889b87b9dc",
+  "scripts/proxy.mjs": "e1d235b7bbcc27aca153353f8b4fa61c3ad28205d96e35f6cf96d2d789a6d08f",
+  "scripts/load_test.py": "bc3928ae1dfd0c66af8dfd8f3e968474674ab2ef4caf966dedbe65642036d5e8"
+}

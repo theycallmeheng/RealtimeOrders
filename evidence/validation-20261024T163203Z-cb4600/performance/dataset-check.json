@@ -1,0 +1,18 @@
+{
+  "activeCatalogsMatch": true,
+  "closedAdditionalIntegrationOffers": 0,
+  "groups": [
+    {
+      "groupId": "79dde227-c749-4933-a77f-77b00094b4b8",
+      "offers": 5,
+      "baselineSha256": "98c2bc46406732ce782e23bc34751a7de2d445c85b0cc59ff616269ab6cd32bb",
+      "optimizedSha256": "98c2bc46406732ce782e23bc34751a7de2d445c85b0cc59ff616269ab6cd32bb"
+    },
+    {
+      "groupId": "b9a997aa-b498-4b35-9640-16424451a772",
+      "offers": 5,
+      "baselineSha256": "00e0867e940140cdc0e51a7e14c8efccca819e5b2bc5ba7d255a0aaea7f6b168",
+      "optimizedSha256": "00e0867e940140cdc0e51a7e14c8efccca819e5b2bc5ba7d255a0aaea7f6b168"
+    }
+  ]
+}

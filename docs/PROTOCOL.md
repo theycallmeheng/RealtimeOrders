@@ -190,6 +190,14 @@ private. Các giới hạn phải áp dụng cả proxy và ứng dụng, không
 
 ## 6. Hợp đồng bản thực hiện
 
+Bổ sung 24/10/2026: `POST /me/addresses` và `POST /product-requests` nhận
+`Idempotency-Key` để chống tạo trùng khi mất xác nhận; cùng actor/scope/key và
+body trả lại cùng kết quả, body khác trả 409 `IDEMPOTENCY_CONFLICT`. Header này
+chưa bắt buộc trên hai route để giữ tương thích client cũ; frontend luôn gửi.
+`processingLocked`, `makeDefault` và quyết định `accept` chỉ nhận JSON boolean.
+Socket chỉ nhận JSON dạng text; frame nhị phân trả `INVALID_MESSAGE` rồi đóng
+với mã 1008. Danh sách dòng đơn/giá nhóm và ID ảnh sai kiểu trả HTTP 400.
+
 OpenAPI thực tại `/api/openapi.json`, giao diện đọc tại `/api/docs` qua proxy.
 Đây là nguồn route chính xác; body JSON của các thao tác ở dưới và trong mã test.
 Đơn vị số lượng và tiền là chuỗi thập phân, version/seq là chuỗi số nguyên.

@@ -9,6 +9,20 @@ from .db import T, Session, engine, now, one, rows, public, check, Fault
 from . import auth, commerce, chat
 from .events import hub, Subscriber, event_wire, flush_events
 
+# Leave DB capacity available for live operations during a reconnect wave.
+sync_slots=asyncio.Semaphore(8)
+
+async def receive_text_frame(ws):
+    frame=await ws.receive()
+    if frame['type']=='websocket.disconnect':
+        raise WebSocketDisconnect(frame.get('code',1000))
+    check(frame.get('text') is not None,'INVALID_MESSAGE','Chỉ nhận thông điệp JSON dạng văn bản')
+    return frame['text']
+
+class SocketClosing(Exception):
+    def __init__(self,code,reason=''):
+        self.code,self.reason=code,reason
+
 async def topics_for(s,user):
     return ['user:'+user['id'],'admin:ops'] if user['role']=='ADMIN' else ['user:'+user['id'],'catalog:'+user['group_id']]
 
@@ -17,35 +31,38 @@ async def snapshot(s,user):
     t=T['orders']
     q=select(t.c.id).order_by(t.c.created_at.desc(),t.c.id.desc()).limit(50)
     if user['role']!='ADMIN': q=q.where(t.c.customer_id==user['id'])
-    data['orders']=[await commerce.get_order(s,user,id) for id in (await s.execute(q)).scalars()]
+    data['orders']=await commerce.get_orders(s,user,list((await s.execute(q)).scalars()))
     data['notifications']=await rows(s,'notifications',T['notifications'].c.user_id==user['id'],limit=50,
                                      order=T['notifications'].c.created_at.desc())
     data['subscriptions']=await rows(s,'product_subscriptions',T['product_subscriptions'].c.user_id==user['id'],limit=500)
     return public(data)
 
 async def synchronize(ws,user,sub,hello):
-    # Register live first, then read data AND heads from a repeatable-read snapshot.
-    async with engine.connect() as conn:
-        conn=await conn.execution_options(isolation_level='REPEATABLE READ')
-        async with Session(bind=conn) as s:
-            async with s.begin():
-                # First consistent SELECT establishes the snapshot. Never use FOR UPDATE here.
-                heads={r['topic']:int(r['last_seq']) for r in await rows(s,'stream_heads',T['stream_heads'].c.topic.in_(sub.topics))}
-                heads={t:heads.get(t,0) for t in sub.topics}
-                cursors=hello.get('lastSeq',{})
-                replay=hello.get('hasModel') is True and isinstance(cursors,dict)
-                events=[]
-                if replay:
-                    for topic in sorted(sub.topics):
-                        try: seq=int(cursors.get(topic,-1))
-                        except (ValueError,TypeError): replay=False; break
-                        if not 0<=seq<=heads[topic] or heads[topic]-seq>500: replay=False; break
-                        data=await rows(s,'stream_events',T['stream_events'].c.topic==topic,T['stream_events'].c.seq>seq,
-                                        T['stream_events'].c.seq<=heads[topic],limit=501,order=T['stream_events'].c.seq)
-                        if len(data)!=heads[topic]-seq: replay=False; break
-                        events.extend(event_wire(e) for e in data)
-                    if len(events)>500 or len(json.dumps(events).encode())>256*1024: replay=False
-                model=None if replay else await snapshot(s,user)
+    # Register live first. Bound DB sync work, then release the slot before socket I/O.
+    async with sync_slots:
+        async with engine.connect() as conn:
+            conn=await conn.execution_options(isolation_level='REPEATABLE READ')
+            async with Session(bind=conn) as s:
+                async with s.begin():
+                    # Revalidate after admission; this first SELECT establishes the RR snapshot.
+                    user=await auth.authenticate(s,ws.cookies.get('ro_session'))
+                    check(set(await topics_for(s,user))==sub.topics,'SESSION_EXPIRED','Quyền phiên đã thay đổi',401)
+                    heads={r['topic']:int(r['last_seq']) for r in await rows(s,'stream_heads',T['stream_heads'].c.topic.in_(sub.topics))}
+                    heads={t:heads.get(t,0) for t in sub.topics}
+                    cursors=hello.get('lastSeq',{})
+                    replay=hello.get('hasModel') is True and isinstance(cursors,dict)
+                    events=[]
+                    if replay:
+                        for topic in sorted(sub.topics):
+                            try: seq=int(cursors.get(topic,-1))
+                            except (ValueError,TypeError): replay=False; break
+                            if not 0<=seq<=heads[topic] or heads[topic]-seq>500: replay=False; break
+                            data=await rows(s,'stream_events',T['stream_events'].c.topic==topic,T['stream_events'].c.seq>seq,
+                                            T['stream_events'].c.seq<=heads[topic],limit=501,order=T['stream_events'].c.seq)
+                            if len(data)!=heads[topic]-seq: replay=False; break
+                            events.extend(event_wire(e) for e in data)
+                        if len(events)>500 or len(json.dumps(events).encode())>256*1024: replay=False
+                    model=None if replay else await snapshot(s,user)
     await ws.send_json({'v':1,'type':'SYNC_BEGIN','mode':'REPLAY' if replay else 'SNAPSHOT'})
     if replay:
         for event in events: await ws.send_json(event)
@@ -70,50 +87,58 @@ async def serve_socket(ws:WebSocket):
     except Fault:
         await ws.close(code=1008); return
     await ws.accept()
-    sub=Subscriber(topics,user['id'],session_id); hub.clients.add(sub)
-    receive=None; get=None
+    sub=Subscriber(topics,user['id'],session_id); hub.register(sub)
+    tasks=[]
     try:
-        first=await asyncio.wait_for(ws.receive_text(),10)
+        first=await asyncio.wait_for(receive_text_frame(ws),10)
         if len(first.encode())>65536: await ws.close(code=1009); return
         try: hello=json.loads(first)
-        except ValueError: raise Fault('INVALID_JSON','Thông điệp JSON không hợp lệ')
+        except (ValueError,RecursionError): raise Fault('INVALID_JSON','Thông điệp JSON không hợp lệ')
         check(isinstance(hello,dict) and hello.get('type')=='HELLO' and hello.get('v')==1,
               'PROTOCOL_VERSION','Yêu cầu giao thức phiên bản 1')
         await ws.send_json({'v':1,'type':'WELCOME','topics':topics,'heartbeatSeconds':15})
         heads=await synchronize(ws,user,sub,hello)
-        receive=asyncio.create_task(ws.receive_text()); get=asyncio.create_task(sub.get())
-        last_seen=time.monotonic(); next_heartbeat=last_seen+15
-        while True:
-            if sub.slow: await ws.close(code=1013,reason='Client nhận chậm; kết nối lại để đồng bộ.'); return
-            done,_=await asyncio.wait([receive,get],timeout=max(.01,next_heartbeat-time.monotonic()),return_when=asyncio.FIRST_COMPLETED)
-            if time.monotonic()>=next_heartbeat:
-                if time.monotonic()-last_seen>45: await ws.close(code=1001); return
-                await ws.send_json({'v':1,'type':'PING'}); next_heartbeat=time.monotonic()+15
-            if get in done:
-                event=get.result(); get=asyncio.create_task(sub.get())
-                if event.get('type')=='SESSION_REVOKED':
-                    await ws.send_json(event);await ws.close(code=1008);return
-                if event.get('eventType')=='SESSION_REVOKED':
-                    await ws.send_json({'v':1,'type':'SESSION_REVOKED',**event['payload']}); await ws.close(code=1008); return
-                topic=event['topic']; seq=int(event['seq'])
-                if seq<=heads.get(topic,0): continue
-                if seq!=heads.get(topic,0)+1:
-                    heads=await synchronize(ws,user,sub,{'hasModel':False})
-                    continue
-                heads[topic]=seq; await ws.send_json(event)
-            if receive in done:
-                raw_message=receive.result(); receive=asyncio.create_task(ws.receive_text()); last_seen=time.monotonic()
-                if len(raw_message.encode())>65536: await ws.close(code=1009); return
+        send_lock=asyncio.Lock()
+        last_seen=time.monotonic()
+
+        async def control(message):
+            async with send_lock: await ws.send_json(message)
+
+        async def send_events():
+            nonlocal heads
+            while True:
+                frame=await sub.get_frame(); event=frame.message
+                if sub.slow: raise SocketClosing(1013,'Client nhận chậm; kết nối lại để đồng bộ.')
+                # Keep a complete sync batch and live events on one serialized wire.
+                async with send_lock:
+                    if event.get('type')=='SESSION_REVOKED':
+                        await ws.send_json(event);raise SocketClosing(1008)
+                    if event.get('eventType')=='SESSION_REVOKED':
+                        await ws.send_json({'v':1,'type':'SESSION_REVOKED',**event['payload']});raise SocketClosing(1008)
+                    topic=event['topic']; seq=int(event['seq'])
+                    if seq<=heads.get(topic,0): continue
+                    if seq!=heads.get(topic,0)+1:
+                        heads=await synchronize(ws,user,sub,{'hasModel':False})
+                        continue
+                    heads[topic]=seq
+                    await ws.send_text(frame.text)
+
+        async def receive_commands():
+            nonlocal heads,last_seen
+            while True:
+                raw_message=await receive_text_frame(ws);last_seen=time.monotonic()
+                if len(raw_message.encode())>65536: raise SocketClosing(1009)
                 try:
                     message=json.loads(raw_message)
                     check(isinstance(message,dict) and message.get('v')==1,'INVALID_MESSAGE','Thông điệp không hợp lệ')
                     kind=message.get('type')
                     if kind=='PONG': continue
-                    if kind=='PING': await ws.send_json({'v':1,'type':'PONG'}); continue
+                    if kind=='PING': await control({'v':1,'type':'PONG'}); continue
                     if kind=='RESYNC_REQUEST':
                         await auth.rate('resync:'+user['id'],10,60)
                         async with Session.begin() as s:await auth.authenticate(s,raw)
-                        heads=await synchronize(ws,user,sub,message); continue
+                        async with send_lock: heads=await synchronize(ws,user,sub,message)
+                        continue
                     if kind=='SESSION_ACTIVITY':
                         await auth.rate('activity:'+user['id'],10,60)
                         async with Session.begin() as s: await auth.authenticate(s,raw,activity=True)
@@ -124,17 +149,31 @@ async def serve_socket(ws:WebSocket):
                         current=await auth.authenticate(s,raw,activity=True)
                         result=await chat.send(s,current,message.get('payload',{}))
                         await flush_events(s)
-                    await ws.send_json({'v':1,'type':'ACK','clientMessageId':result['client_message_id'],'payload':result})
-                except (ValueError,Fault) as exc:
-                    await ws.send_json({'v':1,'type':'ERROR','code':getattr(exc,'code','INVALID_JSON'),
-                                        'message':getattr(exc,'message','Thông điệp không hợp lệ')})
+                    await control({'v':1,'type':'ACK','clientMessageId':result['client_message_id'],'payload':result})
+                except (ValueError,RecursionError,Fault) as exc:
+                    await control({'v':1,'type':'ERROR','code':getattr(exc,'code','INVALID_JSON'),
+                                   'message':getattr(exc,'message','Thông điệp không hợp lệ')})
+
+        async def heartbeat():
+            while True:
+                await asyncio.sleep(15)
+                if sub.slow: raise SocketClosing(1013,'Client nhận chậm; kết nối lại để đồng bộ.')
+                if time.monotonic()-last_seen>45: raise SocketClosing(1001)
+                await control({'v':1,'type':'PING'})
+
+        tasks=[asyncio.create_task(receive_commands()),asyncio.create_task(send_events()),asyncio.create_task(heartbeat())]
+        try:
+            done,_=await asyncio.wait(tasks,return_when=asyncio.FIRST_COMPLETED)
+            for task in tasks:
+                if task in done: task.result()
+        finally:
+            for task in tasks: task.cancel()
+            await asyncio.gather(*tasks,return_exceptions=True)
+    except SocketClosing as exc:
+        with suppress(Exception): await ws.close(code=exc.code,reason=exc.reason)
     except Fault as exc:
         with suppress(Exception):
             await ws.send_json({'v':1,'type':'ERROR','code':exc.code,'message':exc.message}); await ws.close(code=1008)
     except (WebSocketDisconnect,asyncio.TimeoutError,RuntimeError): pass
     finally:
-        hub.clients.discard(sub)
-        for task in (receive,get):
-            if task:
-                task.cancel()
-                with suppress(asyncio.CancelledError,Exception): await task
+        hub.unregister(sub)

@@ -1,5 +1,38 @@
 # Kết quả kiểm chứng RealtimeOrders
 
+## Độ trễ realtime ngày 25/10/2026
+
+Đạt dưới 500 ms trong cả ba lượt cuối. Backend 97/97, Edge 5/5, restart đạt; đủ 39 bảng
+nguồn không đổi. Số liệu từng lượt và giới hạn ở [LATENCY_2026-10-25.md](LATENCY_2026-10-25.md).
+
+## Tối ưu bổ sung ngày 24–25/10/2026
+
+Giữ nguyên [năm phần công việc](WORKSTREAMS.md). Các tối ưu xác thực, catalog,
+ghi/phát event và proxy được mô tả ở
+[PERFORMANCE_2026-10-24.md](PERFORMANCE_2026-10-24.md). Bằng chứng đợt này nằm
+trong `evidence/performance-20261024/`; các lượt chưa tốt vẫn được giữ, không
+thay số liệu của đợt audit trước.
+
+Bộ cuối có **92/92 ca Python/MySQL và 5/5 ca Edge**, thêm kiểm tra outbox sau
+restart. Dữ liệu gốc đủ 39 bảng giữ nguyên; mã frontend sản phẩm không đổi.
+Catalog quản trị giảm từ 204 xuống 5 query; ghi 100 event giảm từ 209 xuống 11
+query. Ở lượt cuối 2.000 kết nối, đủ 200/200 client phục hồi, không lỗi; p95 API
+421,71 ms, p95 event 1.007,80 ms. Độ trễ event p95 cao hơn baseline 730,75 ms;
+chưa đạt mục tiêu 500 ms và 10 GET/s. Xem báo cáo để đọc các lượt trung gian
+chậm hơn cùng giới hạn của phép đo trên một máy.
+
+## Kiểm tra bổ sung ngày 24/10/2026
+
+Bản MySQL 3306 được kiểm tra trên database sao chép riêng. Bộ Python hiện có
+**81 ca đạt**, gồm 50 ca gốc và 31 ca bổ sung; đã sửa lỗi dữ liệu sai kiểu,
+boolean, WebSocket nhị phân, phục hồi outbox và tạo trùng khi gửi lại.
+Phép tranh kho 20 khách/10 đơn vị giữ đúng tồn kho và ledger. Báo cáo đầy đủ,
+build/browser/restart, các lượt tải đạt/chưa đạt và hướng nâng cấp nằm trong
+[AUDIT_2026-10-24.md](AUDIT_2026-10-24.md), dữ liệu ở
+`evidence/audit-20261024/`. Các số liệu phía dưới vẫn là lịch sử ngày 22/10.
+
+## Kết quả lịch sử ngày 22/10/2026
+
 Ngày 22/10/2026. Tất cả số liệu dưới đây thuộc dự án này, không dùng kết quả BoardLAN/game.
 
 - Python: **50 ca, 0 lỗi**; nguồn `evidence/integration.xml`.

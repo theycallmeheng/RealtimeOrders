@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import json
+import os
 import secrets
 import ssl
 import sys
@@ -52,7 +53,9 @@ async def run(mode):
             if msg['type']=='SYNC_END':break
         await ws.close();assert published and found
         result={'preparedWithBackendStopped':True,'orderId':state['orderId'],'orderHashUnchanged':True,'outboxPublishedAfterRestart':published,'replayedOnWss':found,'verifiedUtc':now().isoformat()+'Z'}
-        (ROOT/'evidence/restart-probe.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
+        folder=Path(os.environ.get('AUDIT_EVIDENCE_DIR',ROOT/'evidence'))
+        folder.mkdir(parents=True,exist_ok=True)
+        (folder/'restart-probe.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
         print('Restart verified: order unchanged, pending outbox published, event replayed over WSS.')
     await engine.dispose()
 

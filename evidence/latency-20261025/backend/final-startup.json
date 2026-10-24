@@ -1,0 +1,7 @@
+{
+  "httpsHealth": 200,
+  "frontendHealth": 200,
+  "demoMode": true,
+  "sourceDatabaseUnchanged": true,
+  "testDatabaseRetained": "realtimeorders_audit_20261024T174407Z_4f7674"
+}

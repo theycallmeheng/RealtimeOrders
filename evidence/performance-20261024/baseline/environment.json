@@ -1,0 +1,13 @@
+{
+  "runId": "20261024T162306Z-ad1d83",
+  "sourceDatabase": "realtimeorders",
+  "testDatabase": "realtimeorders_audit_20261024T162306Z_ad1d83",
+  "mysqlPort": 3306,
+  "python": "3.12.10",
+  "platform": "win32",
+  "commit": "8fc70891d0e1e8e42696a01222ef7895f222caea",
+  "backupBytes": 9749292,
+  "copiedTables": 39,
+  "allInitialTableHashesMatch": true,
+  "topology": "Single Windows machine, loopback HTTPS/WSS and MySQL/InnoDB; no external SMS/email."
+}

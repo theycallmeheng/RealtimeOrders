@@ -89,7 +89,9 @@ async def product(s,user,id,body,method='POST'):
         check(all(k in values for k in ('name','sku','category_id','unit_id','quantity_step')),'MISSING_FIELD','Thiếu thông tin sản phẩm')
         id=uid(); await add(s,'products',id=id,version=1,created_at=now(),**values)
     if 'assetIds' in body:
-        assets=body['assetIds']; check(isinstance(assets,list) and len(set(assets))==len(assets)<=5,'INVALID_IMAGES','Tối đa 5 ảnh')
+        assets=body['assetIds']; check(isinstance(assets,list) and len(assets)<=5,'INVALID_IMAGES','Tối đa 5 ảnh')
+        assets=[uuid(asset) for asset in assets]
+        check(len(set(assets))==len(assets),'INVALID_IMAGES','Mỗi ảnh chỉ được chọn một lần')
         for asset in assets: await one(s,'media_assets',T['media_assets'].c.id==uuid(asset),T['media_assets'].c.owner_id==user['id'],
                                       T['media_assets'].c.purpose=='PRODUCT',T['media_assets'].c.state=='READY')
         await s.execute(T['product_images'].delete().where(T['product_images'].c.product_id==id))
@@ -101,6 +103,11 @@ async def product(s,user,id,body,method='POST'):
 async def offer(s,user,id,body):
     old=await one(s,'offers',T['offers'].c.id==id,lock=True) if id else None
     if old: version(old,body)
+    prices=body.get('prices',[])
+    check(isinstance(prices,list) and all(isinstance(price,dict) for price in prices),
+          'INVALID_PRICES','Giá nhóm phải là danh sách các mức giá hợp lệ')
+    if 'processingLocked' in body:
+        check(isinstance(body['processingLocked'],bool),'INVALID_BOOLEAN','Khóa xử lý phải là giá trị đúng/sai')
     values={'updated_at':now()}
     if not old:
         for external,column in {'productId':'product_id','batchCode':'batch_code','opensAt':'opens_at','closesAt':'closes_at'}.items():
@@ -120,7 +127,7 @@ async def offer(s,user,id,body):
         if values['available_qty']:
             await add(s,'inventory_movements',id=uid(),offer_id=id,actor_id=user['id'],kind='OPENING',reference_id=id,
                       quantity_delta=values['available_qty'],balance_after=values['available_qty'],created_at=now())
-    for p in body.get('prices',[]):
+    for p in prices:
         groupid=uuid(p.get('groupId')); amount=number(p.get('unitPrice'),places=0)
         previous=await one(s,'offer_prices',T['offer_prices'].c.offer_id==id,T['offer_prices'].c.group_id==groupid,required=False)
         if previous:

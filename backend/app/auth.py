@@ -66,16 +66,18 @@ async def rate(key, limit, seconds):
 async def authenticate(s, raw, activity=False):
     check(bool(raw), 'AUTH_REQUIRED', 'Vui lòng đăng nhập', 401)
     t, u = T['sessions'], T['users']
-    row = (await s.execute(select(t, u.c.status, u.c.security_version.label('current_security'))
-                           .join(u, t.c.user_id == u.c.id).where(t.c.token_hash == hashed(raw)))).mappings().first()
-    valid = row and not row['revoked_at'] and row['status'] == 'ACTIVE' and \
-        row['security_version'] == row['current_security'] and row['absolute_expires_at'] > now() and \
-        row['last_activity_at'] + timedelta(seconds=settings.idle_seconds) > now()
+    row = (await s.execute(select(u, t.c.id.label('_session_id'), t.c.revoked_at.label('_revoked_at'),
+                           t.c.security_version.label('_session_security'),
+                           t.c.absolute_expires_at.label('_absolute_expires_at'), t.c.last_activity_at.label('_last_activity_at'))
+                           .select_from(t).join(u, t.c.user_id == u.c.id).where(t.c.token_hash == hashed(raw)))).mappings().first()
+    valid = row and not row['_revoked_at'] and row['status'] == 'ACTIVE' and \
+        row['_session_security'] == row['security_version'] and row['_absolute_expires_at'] > now() and \
+        row['_last_activity_at'] + timedelta(seconds=settings.idle_seconds) > now()
     check(valid, 'SESSION_EXPIRED', 'Phiên đã hết hạn hoặc bị thu hồi. Vui lòng đăng nhập lại.', 401)
-    s.info['authenticated_session_id']=row['id']
+    s.info['authenticated_session_id']=row['_session_id']
     if activity:
-        await change(s, 'sessions', row['id'], last_activity_at=now())
-    return await one(s, 'users', u.c.id == row['user_id'])
+        await change(s, 'sessions', row['_session_id'], last_activity_at=now())
+    return {column.name: row[column.name] for column in u.c}
 
 def require_admin(user):
     check(user['role'] == 'ADMIN', 'FORBIDDEN', 'Thao tác dành cho quản trị viên', 403)

@@ -48,7 +48,7 @@ async def run(args):
         await s.execute(T['sessions'].insert(),sessions)
     context=ssl._create_unverified_context(); connected=[]; connect_ms=[];event_ms=[];api_ms=[];failures=[];received=0;bytes_in=0;messages_in=0
     semaphore=asyncio.Semaphore(args.ramp_concurrency)
-    stop=asyncio.Event();sent={};monitor=[]
+    stop=asyncio.Event();sent={};monitor=[];planned_disconnects=set()
     processes=[p for p in psutil.process_iter(['pid','name','cmdline']) if p.info['name'].lower() in ('python.exe','node.exe','mysqld.exe') and any(x in ' '.join(p.info['cmdline'] or []) for x in ['uvicorn app.main','proxy.mjs','next start','RealtimeOrders-runtime'])]
     for p in processes:
         try:p.cpu_percent()
@@ -63,11 +63,13 @@ async def run(args):
                     probe=m['payload']['probe'];start=sent.get(probe)
                     if start is not None:event_ms.append((time.perf_counter()-start)*1000);received+=1
         except Exception as exc:
-            if not stop.is_set():failures.append({'phase':'receive','type':type(exc).__name__})
+            if not stop.is_set() and index not in planned_disconnects:
+                failures.append({'phase':'receive','type':type(exc).__name__})
     async def connect(index,identity):
         nonlocal bytes_in,messages_in
         async with semaphore:
             start=time.perf_counter()
+            ws=None
             try:
                 ws=await websockets.connect(args.url.replace('https:','wss:')+'/ws',origin=settings.app_origin,
                     additional_headers={'Cookie':'ro_session='+identity[1]},ssl=context,open_timeout=60,max_size=65536,ping_interval=None)
@@ -77,13 +79,20 @@ async def run(args):
                     if m['type']=='SYNC_END':break
                     if m['type']=='ERROR':raise RuntimeError(m['code'])
                 connect_ms.append((time.perf_counter()-start)*1000)
-                connected.append((ws,asyncio.create_task(read_loop(ws,index))))
-            except Exception as exc:failures.append({'phase':'connect','type':type(exc).__name__})
+                connected.append((index,ws,asyncio.create_task(read_loop(ws,index))))
+                return True
+            except asyncio.CancelledError:
+                if ws is not None:await ws.close()
+                raise
+            except Exception as exc:
+                failures.append({'phase':'connect','type':type(exc).__name__})
+                if ws is not None:await ws.close()
+                return False
     started=time.perf_counter()
     await asyncio.gather(*(connect(i,identity) for i,identity in enumerate(identities)))
     ready_seconds=time.perf_counter()-started
     initial_count=len(connected)
-    recovery_ms=[]
+    recovery_ms=[];recovery_indices=[]
     print(f'Connected and synchronized: {len(connected)}/{args.clients}; active phase {args.seconds}s',flush=True)
     from app.events import emit,flush_events
     async with httpx.AsyncClient(base_url=args.url,verify=False,timeout=20) as client:
@@ -115,11 +124,16 @@ async def run(args):
             await asyncio.sleep(20)
             count=int(initial_count*args.reconnect_fraction)
             chosen=connected[:count]
-            await asyncio.gather(*(ws.close() for ws,_ in chosen),return_exceptions=True)
+            planned_disconnects.update(index for index,_,_ in chosen)
+            await asyncio.gather(*(ws.close() for _,ws,_ in chosen),return_exceptions=True)
+            await asyncio.gather(*(task for _,_,task in chosen),return_exceptions=True)
             await asyncio.sleep(5)
             async def resume(index):
-                start=time.perf_counter();await connect(index,identities[index]);recovery_ms.append((time.perf_counter()-start)*1000)
-            await asyncio.gather(*(resume(i) for i in range(count)))
+                planned_disconnects.discard(index)
+                start=time.perf_counter()
+                if await connect(index,identities[index]):
+                    recovery_ms.append((time.perf_counter()-start)*1000);recovery_indices.append(index)
+            await asyncio.gather(*(resume(index) for index,_,_ in chosen))
         tasks=[asyncio.create_task(f()) for f in (requests,probes,samples)]
         recovery_task=asyncio.create_task(recovery())
         await asyncio.sleep(args.seconds);stop.set()
@@ -129,17 +143,20 @@ async def run(args):
             failures.append({'phase':'recovery','type':'INCOMPLETE_AT_DEADLINE'});recovery_task.cancel()
         await asyncio.gather(recovery_task,return_exceptions=True)
         await asyncio.sleep(3)
-    active_before_close=sum(not t.done() for _,t in connected)
-    await asyncio.gather(*(ws.close() for ws,_ in connected),return_exceptions=True)
-    await asyncio.gather(*(t for _,t in connected),return_exceptions=True)
+    active_before_close=sum(not t.done() for _,_,t in connected)
+    active_identities={index for index,_,task in connected if not task.done()}
+    await asyncio.gather(*(ws.close() for _,ws,_ in connected),return_exceptions=True)
+    await asyncio.gather(*(t for _,_,t in connected),return_exceptions=True)
     result={'timestampUtc':now().isoformat()+'Z','tag':tag,'variant':args.label,'requestedDistinctCustomers':args.clients,'synchronizedConnections':initial_count,
-        'activeAtEnd':active_before_close,'rampSeconds':round(ready_seconds,2),'measurementSeconds':args.seconds,'requestedCatalogRps':args.rps,
+        'activeAtEnd':active_before_close,'distinctActiveCustomersAtEnd':len(active_identities),
+        'rampSeconds':round(ready_seconds,2),'measurementSeconds':args.seconds,'requestedCatalogRps':args.rps,
         'successfulCatalogRequests':len(api_ms),'businessOrderRps':0,'probeDeliveries':received,'probeCount':len(sent),
         'connectP50Ms':percentile(connect_ms,.5),'connectP95Ms':percentile(connect_ms,.95),
         'catalogP50Ms':percentile(api_ms,.5),'catalogP95Ms':percentile(api_ms,.95),
         'eventP50Ms':percentile(event_ms,.5),'eventP95Ms':percentile(event_ms,.95),
         'receivedMessages':messages_in,'receivedUtf8Bytes':bytes_in,'errors':failures,'resourceSamples':monitor,
         'drainSeconds':3,'totalHandshakes':len(connected),'reconnectFraction':args.reconnect_fraction,'recoveredConnections':len(recovery_ms),
+        'recoveryIdentityIndices':recovery_indices,
         'recoveryP50Ms':percentile(recovery_ms,.5),'recoveryP95Ms':percentile(recovery_ms,.95),
         'environment':{'platform':sys.platform,'python':sys.version.split()[0],'cpuLogical':psutil.cpu_count(),
             'ramGiB':round(psutil.virtual_memory().total/1073741824,2),'topology':'load generator, HTTPS proxy, FastAPI and MySQL on same Windows PC'},
