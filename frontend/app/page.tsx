@@ -28,6 +28,11 @@ import {
   faTrash,
   faUser,
   faClipboardList,
+  faMinus,
+  faCartShopping,
+  faBars,
+  faChevronLeft,
+  faTruck,
 } from "@fortawesome/free-solid-svg-icons";
 
 type Row = Record<string, any>;
@@ -220,6 +225,7 @@ type Context = {
   mutate: (path: string, body?: Row, method?: string) => Promise<any>;
   reload: () => void;
   setSession: React.Dispatch<React.SetStateAction<Session | null>>;
+  setTab: (tab: string) => void;
 };
 const AppContext = createContext<Context>(null!);
 const useApp = () => useContext(AppContext);
@@ -228,6 +234,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null),
     [loading, setLoading] = useState(true),
     [tab, setTab] = useState("catalog"),
+    [sidebarCollapsed, setSidebarCollapsed] = useState(false),
     [online, setOnline] = useState(false),
     [refresh, setRefresh] = useState(0),
     [toast, setToast] = useState<{ message: string; error: boolean } | null>(
@@ -614,6 +621,7 @@ export default function App() {
       ]
     : [
         ["catalog", "Hàng trong ngày", faBasketShopping],
+        ["checkout", "Thanh toán & Đặt hàng", faCartShopping],
         ["orders", "Đơn của tôi", faListCheck],
         ["requests", "Yêu cầu hàng", faClipboardList],
         ["chat", "Nhắn người bán", faCommentDots],
@@ -630,14 +638,25 @@ export default function App() {
         mutate,
         reload,
         setSession,
+        setTab,
       }}
     >
       <header className="app-header">
-        <div className="brand">
-          <span className="brand-mark">
-            <Icon icon={faBasketShopping} />
-          </span>
-          RealtimeOrders
+        <div className="brand-group">
+          <button
+            className="ghost toggle-sidebar-btn"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            aria-label={sidebarCollapsed ? "Mở menu" : "Thu gọn menu"}
+            title={sidebarCollapsed ? "Mở rộng menu" : "Thu gọn menu"}
+          >
+            <Icon icon={faBars} />
+          </button>
+          <div className="brand" onClick={() => setTab(admin ? "orders" : "catalog")} style={{ cursor: "pointer" }}>
+            <span className="brand-mark">
+              <Icon icon={faBasketShopping} />
+            </span>
+            RealtimeOrders
+          </div>
         </div>
         <div className="header-meta">
           <span className="connection" role="status">
@@ -664,26 +683,29 @@ export default function App() {
           </button>
         </div>
       </header>
-      <div className="shell">
-        <aside className="nav">
+      <div className={"shell " + (sidebarCollapsed ? "sidebar-collapsed" : "")}>
+        <aside className={"nav " + (sidebarCollapsed ? "collapsed" : "")}>
           <div className="nav-label">
-            {admin ? "Điều hành bán hàng" : "Mua sắm & hỗ trợ"}
+            {sidebarCollapsed ? "•••" : (admin ? "Điều hành bán hàng" : "Mua sắm & hỗ trợ")}
           </div>
           {nav.map(([id, label, icon]) => (
             <button
               key={String(id)}
               className={tab === id ? "active" : ""}
               onClick={() => setTab(String(id))}
+              title={sidebarCollapsed ? String(label) : undefined}
             >
               <Icon icon={icon as any} />
-              {String(label)}
+              {!sidebarCollapsed && <span>{String(label)}</span>}
             </button>
           ))}
-          <div className="nav-foot">
-            Nhóm 17 · Lập trình mạng
-            <br />
-            Dữ liệu lưu trên máy chủ
-          </div>
+          {!sidebarCollapsed && (
+            <div className="nav-foot">
+              Nhóm 17 · Lập trình mạng
+              <br />
+              Dữ liệu lưu trên máy chủ
+            </div>
+          )}
         </aside>
         <main>
           {session.demo && (
@@ -707,6 +729,7 @@ export default function App() {
             </div>
           )}
           {tab === "catalog" && <Catalog />}
+          {tab === "checkout" && <CheckoutPage />}
           {tab === "orders" && <Orders admin={admin} />}{" "}
           {tab === "requests" && <Requests admin={admin} />}{" "}
           {tab === "chat" && <Chat admin={admin} />}{" "}
@@ -1027,77 +1050,41 @@ function Heading({
 }
 
 function Catalog() {
-  const { online, mutate, notify, session } = useApp();
-  const { data: offers } = useData("/catalog/offers"),
-    { data: addresses } = useData("/me/addresses"),
-    { data: delivery } = useData("/delivery/options");
+  const { online, mutate, notify, session, setTab } = useApp();
+  const { data: offers } = useData("/catalog/offers");
   const [cart, setCart] = useState<Row[]>(() => {
-      try {
-        return JSON.parse(
-          sessionStorage.getItem("ro-cart-" + session.user.id) ?? "[]",
-        );
-      } catch {
-        return [];
-      }
-    }),
-    [values, setValues] = useState<Record<string, string>>({}),
-    [address, setAddress] = useState(""),
-    [policy, setPolicy] = useState(""),
-    [slot, setSlot] = useState(""),
-    [note, setNote] = useState(""),
-    [busy, setBusy] = useState(false);
+    try {
+      return JSON.parse(
+        sessionStorage.getItem("ro-cart-" + session.user.id) ?? "[]",
+      );
+    } catch {
+      return [];
+    }
+  });
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState("ALL");
+
   useEffect(() => {
     sessionStorage.setItem("ro-cart-" + session.user.id, JSON.stringify(cart));
   }, [cart, session.user.id]);
-  const chosenAddress =
-    (addresses ?? []).find((a: Row) => a.id === address) ?? addresses?.[0];
+
   useEffect(() => {
     const resolved = (event: Event) => {
       if ((event as CustomEvent).detail.path === "/orders") {
         setCart([]);
-        setNote("");
       }
     };
     window.addEventListener("ro:operation-resolved", resolved);
     return () => window.removeEventListener("ro:operation-resolved", resolved);
   }, []);
-  const policies = (delivery?.policies ?? []).filter(
-      (p: Row) => p.zone_id === chosenAddress?.zone_id,
-    ),
-    selectedLive = policies.find((p: Row) => p.id === policy) ?? policies[0];
-  const slots = (delivery?.pickupSlots ?? []).filter(
-      (s: Row) => s.zone_id === chosenAddress?.zone_id,
-    ),
-    slotLive = slots.find((s: Row) => s.id === slot) ?? slots[0];
-  const [policyQuote, setPolicyQuote] = useState<Row | null>(null),
-    [slotQuote, setSlotQuote] = useState<Row | null>(null);
-  useEffect(() => {
-    if (selectedLive)
-      setPolicyQuote({ ...selectedLive, addressId: chosenAddress?.id });
-  }, [selectedLive?.id, chosenAddress?.id]);
-  useEffect(() => {
-    if (slotLive) setSlotQuote(slotLive);
-  }, [slotLive?.id]);
-  const selected =
-    policyQuote?.id === selectedLive?.id ? policyQuote : selectedLive;
-  const selectedSlot = slotQuote?.id === slotLive?.id ? slotQuote : slotLive;
-  const shippingStale =
-    !!selected &&
-    (String(selected.version) !== String(selectedLive?.version) ||
-      (selected.method === "COLLECTIVE" &&
-        String(selectedSlot?.version) !== String(slotLive?.version)));
-  const subtotal = cart.reduce(
-      (sum: bigint, c) => sum + lineMoney(c.unit_price, c.quantity),
-      BigInt(0),
-    ),
-    fee = BigInt(String(selected?.shipping_fee ?? 0)),
-    stale = cart.some(
-      (c) =>
-        offers &&
-        !offers.some(
-          (o: Row) => o.id === c.id && o.price_version === c.price_version,
-        ),
-    );
+
+  const totalCartCount = cart.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+  const totalCartMoney = cart.reduce(
+    (sum: bigint, c) => sum + lineMoney(c.unit_price, c.quantity),
+    BigInt(0),
+  );
+
   const addCart = (offer: Row) => {
     const quantity = values[offer.id] ?? offer.quantity_step;
     if (!/^\d+(\.\d{1,3})?$/.test(String(quantity)) || Number(quantity) <= 0) {
@@ -1108,8 +1095,301 @@ function Catalog() {
       ...old.filter((c) => c.id !== offer.id),
       { ...offer, quantity },
     ]);
-    notify("Đã cập nhật giỏ hàng");
+    notify("Đã thêm " + offer.name + " vào giỏ hàng");
   };
+
+  const adjustQty = (offer: Row, delta: number) => {
+    const step = Number(offer.quantity_step || 1);
+    const cur = Number(values[offer.id] ?? step);
+    let next = cur + delta * step;
+    if (next < step) next = step;
+    if (next > Number(offer.available_qty)) next = Number(offer.available_qty);
+    const valStr = step < 1 ? next.toFixed(1) : String(Math.round(next));
+    setValues({ ...values, [offer.id]: valStr });
+  };
+
+  const categories = Array.from(
+    new Set((offers ?? []).map((o: Row) => o.category_name).filter(Boolean)),
+  );
+
+  const filteredOffers = (offers ?? []).filter((o: Row) => {
+    const matchCat =
+      activeCategory === "ALL" || o.category_name === activeCategory;
+    const matchSearch =
+      !search ||
+      o.name.toLowerCase().includes(search.toLowerCase()) ||
+      (o.description && o.description.toLowerCase().includes(search.toLowerCase()));
+    return matchCat && matchSearch;
+  });
+
+  return (
+    <>
+      {/* Banner khuyến khích mua sắm */}
+      <div className="shopping-hero-banner">
+        <div className="hero-content">
+          <span className="hero-pill">⚡ Nông sản tươi sạch hôm nay</span>
+          <h2>Thực phẩm chất lượng cao, giá ưu đãi riêng cho bạn</h2>
+          <p>
+            Tồn kho cập nhật liên tục theo thời gian thực. Giao tập trung miễn phí hoặc giao tận nơi tiện lợi.
+          </p>
+        </div>
+      </div>
+
+      <div className="catalog-header-bar">
+        <div>
+          <Heading
+            title="Hàng trong ngày"
+            sub="Giá ưu đãi đã áp dụng theo nhóm của bạn. Chọn số lượng và thêm vào đơn mua."
+          />
+        </div>
+        <button
+          className={"cart-floating-btn " + (cart.length > 0 ? "has-items" : "")}
+          onClick={() => setTab("checkout")}
+          aria-label="Đến trang thanh toán"
+        >
+          <Icon icon={faCartShopping} />
+          <span>Giỏ hàng</span>
+          {cart.length > 0 && <span className="cart-badge">{cart.length}</span>}
+        </button>
+      </div>
+
+      <div className="catalog-filter-bar">
+        <div className="category-pills">
+          <button
+            className={"pill-btn " + (activeCategory === "ALL" ? "active" : "")}
+            onClick={() => setActiveCategory("ALL")}
+          >
+            Tất cả ({offers?.length ?? 0})
+          </button>
+          {categories.map((cat) => (
+            <button
+              key={String(cat)}
+              className={"pill-btn " + (activeCategory === cat ? "active" : "")}
+              onClick={() => setActiveCategory(String(cat))}
+            >
+              {String(cat)}
+            </button>
+          ))}
+        </div>
+        <div className="catalog-search">
+          <input
+            type="search"
+            placeholder="Tìm theo tên thực phẩm, mô tả..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="catalog-layout full-width">
+        <section className="catalog-items-section">
+          {!offers ? (
+            <div className="spinner">Đang tải danh sách hàng…</div>
+          ) : !filteredOffers.length ? (
+            <Empty title="Không tìm thấy mặt hàng phù hợp">
+              {search ? "Vui lòng thử lại với từ khóa tìm kiếm khác." : "Quay lại sau hoặc gửi yêu cầu đặt hàng mới."}
+            </Empty>
+          ) : (
+            <div className="product-cards-grid">
+              {filteredOffers.map((o: Row) => {
+                const inCart = cart.find((c) => c.id === o.id);
+                const step = Number(o.quantity_step || 1);
+                const currentQty = values[o.id] ?? (inCart ? inCart.quantity : step);
+                const outOfStock = Number(o.available_qty) <= 0;
+
+                return (
+                  <div
+                    key={o.id}
+                    className={"product-card " + (inCart ? "is-in-cart" : "")}
+                    data-offer-id={o.id}
+                  >
+                    <div className="product-card-media">
+                      {o.images?.[0] ? (
+                        <img
+                          className="product-card-img"
+                          src={"/api/v1/media/" + o.images[0]}
+                          alt={o.name}
+                        />
+                      ) : (
+                        <div className="product-card-placeholder">
+                          <Icon icon={faBoxOpen} />
+                        </div>
+                      )}
+                      {inCart && <div className="card-in-cart-badge">Đã trong giỏ</div>}
+                      <button
+                        className={"card-heart-btn " + (o.subscribed ? "active" : "")}
+                        title={o.subscribed ? "Bỏ quan tâm" : "Lưu quan tâm"}
+                        aria-label={
+                          (o.subscribed ? "Bỏ theo dõi " : "Theo dõi ") + o.name
+                        }
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          try {
+                            await mutate(
+                              "/subscriptions/products/" + o.product_id,
+                              {},
+                              o.subscribed ? "DELETE" : "POST",
+                            );
+                          } catch {}
+                        }}
+                      >
+                        <Icon icon={faHeart} />
+                      </button>
+                    </div>
+
+                    <div className="product-card-info">
+                      <div className="product-card-header">
+                        <h3 className="product-card-title">{o.name}</h3>
+                        {o.description && (
+                          <p className="product-card-desc">{o.description}</p>
+                        )}
+                      </div>
+
+                      <div className="product-price-row">
+                        <span className="price-tag">{money(o.unit_price)}</span>
+                        <span className="unit-tag">/ {o.unit}</span>
+                      </div>
+
+                      <div className="stock-status-pill">
+                        {outOfStock ? (
+                          <span className="stock-badge empty">Tạm hết hàng</span>
+                        ) : (
+                          <span className="stock-badge available">
+                            Còn {qty(o.available_qty)} {o.unit}
+                          </span>
+                        )}
+                        {Number(o.pending_qty) > 0 && (
+                          <span className="stock-badge pending" title={o.pending_customers + " khách đang chờ duyệt"}>
+                            {qty(o.pending_qty)} {o.unit} đang chờ
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="product-card-actions">
+                        <div className="stepper-box">
+                          <button
+                            type="button"
+                            className="step-btn"
+                            disabled={!online || outOfStock || Number(currentQty) <= step}
+                            onClick={() => adjustQty(o, -1)}
+                            aria-label="Giảm"
+                          >
+                            <Icon icon={faMinus} />
+                          </button>
+                          <input
+                            className="step-input"
+                            aria-label={"Số lượng " + o.name}
+                            type="number"
+                            min={o.quantity_step}
+                            step={o.quantity_step}
+                            max={o.available_qty}
+                            value={currentQty}
+                            onChange={(e) =>
+                              setValues({ ...values, [o.id]: e.target.value })
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="step-btn"
+                            disabled={!online || outOfStock || Number(currentQty) >= Number(o.available_qty)}
+                            onClick={() => adjustQty(o, 1)}
+                            aria-label="Tăng"
+                          >
+                            <Icon icon={faPlus} />
+                          </button>
+                        </div>
+
+                        <button
+                          className={"primary card-add-btn " + (inCart ? "is-update" : "")}
+                          disabled={!online || outOfStock}
+                          onClick={() => addCart(o)}
+                        >
+                          {inCart ? "Cập nhật" : "Thêm vào đơn"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
+function CheckoutPage() {
+  const { online, mutate, notify, session, setTab } = useApp();
+  const { data: offers } = useData("/catalog/offers"),
+    { data: addresses } = useData("/me/addresses"),
+    { data: delivery } = useData("/delivery/options");
+  const [cart, setCart] = useState<Row[]>(() => {
+    try {
+      return JSON.parse(
+        sessionStorage.getItem("ro-cart-" + session.user.id) ?? "[]",
+      );
+    } catch {
+      return [];
+    }
+  });
+  const [address, setAddress] = useState(""),
+    [policy, setPolicy] = useState(""),
+    [slot, setSlot] = useState(""),
+    [note, setNote] = useState(""),
+    [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    sessionStorage.setItem("ro-cart-" + session.user.id, JSON.stringify(cart));
+  }, [cart, session.user.id]);
+
+  const chosenAddress =
+    (addresses ?? []).find((a: Row) => a.id === address) ?? addresses?.[0];
+
+  const policies = (delivery?.policies ?? []).filter(
+      (p: Row) => p.zone_id === chosenAddress?.zone_id,
+    ),
+    selectedLive = policies.find((p: Row) => p.id === policy) ?? policies[0];
+  const slots = (delivery?.pickupSlots ?? []).filter(
+      (s: Row) => s.zone_id === chosenAddress?.zone_id,
+    ),
+    slotLive = slots.find((s: Row) => s.id === slot) ?? slots[0];
+
+  const [policyQuote, setPolicyQuote] = useState<Row | null>(null),
+    [slotQuote, setSlotQuote] = useState<Row | null>(null);
+
+  useEffect(() => {
+    if (selectedLive)
+      setPolicyQuote({ ...selectedLive, addressId: chosenAddress?.id });
+  }, [selectedLive?.id, chosenAddress?.id]);
+
+  useEffect(() => {
+    if (slotLive) setSlotQuote(slotLive);
+  }, [slotLive?.id]);
+
+  const selected =
+    policyQuote?.id === selectedLive?.id ? policyQuote : selectedLive;
+  const selectedSlot = slotQuote?.id === slotLive?.id ? slotQuote : slotLive;
+
+  const shippingStale =
+    !!selected &&
+    (String(selected.version) !== String(selectedLive?.version) ||
+      (selected.method === "COLLECTIVE" &&
+        String(selectedSlot?.version) !== String(slotLive?.version)));
+
+  const subtotal = cart.reduce(
+    (sum: bigint, c) => sum + lineMoney(c.unit_price, c.quantity),
+    BigInt(0),
+  );
+  const fee = BigInt(String(selected?.shipping_fee ?? 0));
+  const stale = cart.some(
+    (c) =>
+      offers &&
+      !offers.some(
+        (o: Row) => o.id === c.id && o.price_version === c.price_version,
+      ),
+  );
+
   const submit = async () => {
     if (!selected || !chosenAddress) return;
     setBusy(true);
@@ -1131,296 +1411,240 @@ function Catalog() {
       setCart([]);
       setNote("");
       notify("Đơn đã gửi và đang chờ người bán duyệt.");
+      setTab("orders");
     } catch {
     } finally {
       setBusy(false);
     }
   };
+
   return (
-    <>
+    <div className="checkout-page-container">
+      <div className="checkout-nav-back">
+        <button className="ghost" onClick={() => setTab("catalog")}>
+          <Icon icon={faChevronLeft} />
+          <span>Tiếp tục mua hàng</span>
+        </button>
+      </div>
+
       <Heading
-        title="Hàng trong ngày"
-        sub="Giá dành cho nhóm của bạn. Tồn kho cập nhật khi người bán duyệt đơn."
+        title="Thanh toán & Xác nhận đơn hàng"
+        sub="Kiểm tra lại mặt hàng đã chọn, địa chỉ nhận và phương thức giao trước khi gửi duyệt."
       />
-      <div className="split">
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Đang mở bán</h2>
-            <span className="muted">{offers?.length ?? 0} mặt hàng</span>
-          </div>
-          {!offers ? (
-            <div className="spinner">Đang lấy hàng…</div>
-          ) : !offers.length ? (
-            <Empty title="Chưa có đợt mở bán">
-              Quay lại sau hoặc gửi yêu cầu mặt hàng.
-            </Empty>
-          ) : (
-            <table className="catalog-table">
-              <thead>
-                <tr>
-                  <th>Mặt hàng</th>
-                  <th>Giá / đơn vị</th>
-                  <th>Còn kho</th>
-                  <th>Đang chờ</th>
-                  <th>Số lượng</th>
-                </tr>
-              </thead>
-              <tbody>
-                {offers.map((o: Row) => (
-                  <tr key={o.id} data-offer-id={o.id}>
-                    <td>
-                      <div className="product-cell">
-                        {o.images?.[0] ? (
-                          <img
-                            className="product-thumb"
-                            src={"/api/v1/media/" + o.images[0]}
-                            alt={o.name}
-                          />
-                        ) : (
-                          <div className="product-thumb">
-                            <Icon icon={faBoxOpen} />
-                          </div>
-                        )}
-                        <div className="product-title">
-                          {o.name}
-                          <div className="product-subtitle">
-                            {o.description}
-                          </div>
-                          <button
-                            className="ghost small"
-                            aria-label={
-                              (o.subscribed ? "Bỏ theo dõi " : "Theo dõi ") +
-                              o.name
-                            }
-                            onClick={async () => {
-                              try {
-                                await mutate(
-                                  "/subscriptions/products/" + o.product_id,
-                                  {},
-                                  o.subscribed ? "DELETE" : "POST",
-                                );
-                              } catch {}
-                            }}
-                          >
-                            <Icon icon={faHeart} />{" "}
-                            {o.subscribed ? "Đang quan tâm" : "Quan tâm"}
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                    <td data-label={"Giá / " + o.unit} className="money">
-                      {money(o.unit_price)}
-                    </td>
-                    <td data-label="Còn trong kho">
-                      {qty(o.available_qty)} {o.unit}
-                    </td>
-                    <td>
-                      <span>
-                        {qty(o.pending_qty)} {o.unit}
-                      </span>
-                      <div className="product-subtitle">
-                        {o.pending_customers} khách chờ · {o.approved_orders}{" "}
-                        đơn đã duyệt
-                      </div>
-                    </td>
-                    <td>
-                      <div className="buy-controls">
-                        <input
-                          className="qty"
-                          aria-label={"Số lượng " + o.name}
-                          type="number"
-                          min={o.quantity_step}
-                          step={o.quantity_step}
-                          max={o.available_qty}
-                          value={values[o.id] ?? o.quantity_step}
-                          onChange={(e) =>
-                            setValues({ ...values, [o.id]: e.target.value })
-                          }
-                        />
-                        <button
-                          className="small"
-                          disabled={!online || Number(o.available_qty) <= 0}
-                          onClick={() => addCart(o)}
-                        >
-                          Thêm
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-        <section className="summary">
-          <div className="row-heading">
-            <h2>Đơn đang soạn</h2>
-            <span className="muted">{cart.length} món</span>
-          </div>
-          {!cart.length ? (
-            <p className="muted" style={{ margin: "18px 0" }}>
-              Chọn số lượng rồi thêm hàng vào đơn.
-            </p>
-          ) : (
-            <>
-              {cart.map((c) => (
-                <div className="cart-line" key={c.id}>
-                  <div>
-                    <strong>{c.name}</strong>
-                    <div className="muted">
-                      {qty(c.quantity)} {c.unit} × {money(c.unit_price)}
-                    </div>
-                  </div>
-                  <button
-                    className="ghost small"
-                    aria-label={"Bỏ " + c.name}
-                    onClick={() => setCart(cart.filter((x) => x.id !== c.id))}
-                  >
-                    <Icon icon={faTrash} />
-                  </button>
-                </div>
-              ))}
-            </>
-          )}
-          {stale && (
-            <div className="notice warn">
-              Giá hoặc đợt bán đã thay đổi.{" "}
+
+      {!cart.length ? (
+        <div className="empty-checkout-card">
+          <Icon icon={faCartShopping} className="empty-cart-large-icon" />
+          <h2>Giỏ hàng của bạn đang trống</h2>
+          <p>Hãy quay lại trang Hàng trong ngày để chọn những món bạn ưng ý nhất.</p>
+          <button className="primary" onClick={() => setTab("catalog")}>
+            Khám phá hàng hôm nay
+          </button>
+        </div>
+      ) : (
+        <div className="checkout-grid">
+          {/* Cột trái: Chi tiết món hàng trong giỏ */}
+          <div className="checkout-items-panel">
+            <div className="panel-header-clean">
+              <h2>Danh sách món đã chọn ({cart.length})</h2>
               <button
-                className="small"
-                onClick={() =>
-                  setCart(
-                    cart
-                      .map((c) => ({
-                        ...offers.find((o: Row) => o.id === c.id),
-                        quantity: c.quantity,
-                      }))
-                      .filter((c) => c.id),
-                  )
-                }
+                className="ghost small danger"
+                onClick={() => setCart([])}
               >
-                Cập nhật và xem lại tổng
+                Xóa tất cả
               </button>
             </div>
-          )}
-          <div className="form" style={{ marginTop: 18 }}>
-            <Field label="Địa chỉ nhận">
-              <select
-                value={chosenAddress?.id ?? ""}
-                onChange={(e) => {
-                  setAddress(e.target.value);
-                  setPolicy("");
-                }}
-              >
-                <option value="" disabled>
-                  Chọn địa chỉ
-                </option>
-                {addresses?.map((a: Row) => (
-                  <option key={a.id} value={a.id}>
-                    {a.recipient_name} · {a.address_line}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {!addresses?.length && (
-              <small>Thêm địa chỉ trong Hồ sơ & địa chỉ trước khi đặt.</small>
-            )}
-            {shippingStale && (
-              <div className="notice warn">
-                Phí hoặc điều kiện giao đã thay đổi. Tổng hiện tại vẫn giữ báo
-                giá trước.{" "}
+
+            {stale && (
+              <div className="notice warn" style={{ marginBottom: 16 }}>
+                Giá hoặc đợt bán của một số món đã được cập nhật.{" "}
                 <button
                   className="small"
-                  onClick={() => {
-                    setPolicyQuote(selectedLive);
-                    setSlotQuote(slotLive);
-                  }}
+                  onClick={() =>
+                    setCart(
+                      cart
+                        .map((c) => ({
+                          ...offers.find((o: Row) => o.id === c.id),
+                          quantity: c.quantity,
+                        }))
+                        .filter((c) => c.id),
+                    )
+                  }
                 >
-                  Cập nhật phí và xem lại tổng
+                  Cập nhật lại giá
                 </button>
               </div>
             )}
-            <Field label="Cách giao">
-              <select
-                value={selected?.id ?? ""}
-                onChange={(e) => setPolicy(e.target.value)}
-              >
-                <option value="" disabled>
-                  Chọn cách giao
-                </option>
-                {policies.map((p: Row) => (
-                  <option key={p.id} value={p.id}>
-                    {p.method === "COLLECTIVE"
-                      ? "Giao tập trung · miễn phí"
-                      : "Giao riêng · " + money(p.shipping_fee)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {selected?.method === "COLLECTIVE" && (
-              <Field label="Điểm và giờ nhận">
+
+            <div className="checkout-items-list">
+              {cart.map((c) => (
+                <div className="checkout-item-card" key={c.id}>
+                  <div className="checkout-item-left">
+                    <span className="item-name">{c.name}</span>
+                    <span className="item-unit-calc">
+                      {qty(c.quantity)} {c.unit} × {money(c.unit_price)}
+                    </span>
+                  </div>
+                  <div className="checkout-item-right">
+                    <span className="item-line-total">
+                      {money(lineMoney(c.unit_price, c.quantity))}
+                    </span>
+                    <button
+                      className="ghost small danger"
+                      onClick={() => setCart(cart.filter((x) => x.id !== c.id))}
+                      aria-label={"Xóa " + c.name}
+                    >
+                      <Icon icon={faTrash} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="checkout-note-box">
+              <Field label="Ghi chú thêm cho người bán">
+                <textarea
+                  placeholder="Ví dụ: Giao ngoài giờ hành chính, gọi trước khi giao, đóng gói cẩn thận..."
+                  maxLength={1000}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  style={{ minHeight: "75px" }}
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* Cột phải: Thông tin giao hàng & Tóm tắt chi phí */}
+          <div className="checkout-delivery-panel">
+            <div className="panel-header-clean">
+              <h2>Thông tin giao hàng</h2>
+            </div>
+
+            <div className="delivery-form">
+              <Field label="Địa chỉ nhận hàng">
                 <select
-                  value={selectedSlot?.id ?? ""}
-                  onChange={(e) => setSlot(e.target.value)}
+                  value={chosenAddress?.id ?? ""}
+                  onChange={(e) => {
+                    setAddress(e.target.value);
+                    setPolicy("");
+                  }}
                 >
-                  {slots.map((s: Row) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
+                  <option value="" disabled>
+                    Chọn địa chỉ
+                  </option>
+                  {addresses?.map((a: Row) => (
+                    <option key={a.id} value={a.id}>
+                      {a.recipient_name} · {a.address_line}
                     </option>
                   ))}
                 </select>
               </Field>
+
+              {!addresses?.length && (
+                <div className="notice error">
+                  Bạn chưa có địa chỉ nhận. Vui lòng vào mục <strong>Hồ sơ & địa chỉ</strong> để thêm địa chỉ trước.
+                </div>
+              )}
+
+              {shippingStale && (
+                <div className="notice warn">
+                  Chính sách hoặc phí giao đã thay đổi.{" "}
+                  <button
+                    className="small"
+                    onClick={() => {
+                      setPolicyQuote(selectedLive);
+                      setSlotQuote(slotLive);
+                    }}
+                  >
+                    Xem lại
+                  </button>
+                </div>
+              )}
+
+              <Field label="Phương thức vận chuyển">
+                <select
+                  value={selected?.id ?? ""}
+                  onChange={(e) => setPolicy(e.target.value)}
+                >
+                  <option value="" disabled>
+                    Chọn cách giao
+                  </option>
+                  {policies.map((p: Row) => (
+                    <option key={p.id} value={p.id}>
+                      {p.method === "COLLECTIVE"
+                        ? "Giao tập trung (Miễn phí vận chuyển)"
+                        : "Giao riêng tận nơi (" + money(p.shipping_fee) + ")"}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              {selected?.method === "COLLECTIVE" && (
+                <Field label="Điểm hẹn & Khung giờ nhận hàng">
+                  <select
+                    value={selectedSlot?.id ?? ""}
+                    onChange={(e) => setSlot(e.target.value)}
+                  >
+                    {slots.map((s: Row) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+            </div>
+
+            <div className="checkout-bill-card">
+              <div className="bill-row">
+                <span>Tiền hàng</span>
+                <span className="money">{money(subtotal)}</span>
+              </div>
+              <div className="bill-row">
+                <span>Phí vận chuyển</span>
+                <span className="money">{fee === BigInt(0) ? "Miễn phí" : money(fee)}</span>
+              </div>
+              <div className="bill-divider" />
+              <div className="bill-row total">
+                <span>Tổng thanh toán</span>
+                <span className="bill-grand-total">{money(subtotal + fee)}</span>
+              </div>
+              <small className="payment-method-tag">Hình thức: Thanh toán khi nhận hàng (COD)</small>
+            </div>
+
+            {selected && subtotal < Number(selected.minimum_subtotal) && (
+              <p className="notice warn">
+                Giao riêng tận nơi yêu cầu đơn hàng đạt tối thiểu {money(selected.minimum_subtotal)}.
+              </p>
             )}
-            <Field label="Ghi chú cho người bán">
-              <textarea
-                maxLength={1000}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </Field>
+
+            <button
+              className="primary submit-final-order-btn"
+              disabled={
+                !online ||
+                busy ||
+                !cart.length ||
+                stale ||
+                shippingStale ||
+                !selected ||
+                !chosenAddress ||
+                subtotal < Number(selected?.minimum_subtotal) ||
+                (selected?.method === "COLLECTIVE" && !selectedSlot)
+              }
+              onClick={submit}
+            >
+              {busy ? "Đang gửi đơn hàng…" : "Xác nhận gửi đơn chờ duyệt"}
+            </button>
+
+            <div className="order-policy-notice">
+              <p>
+                <strong>Cam kết bảo vệ đơn hàng:</strong> Khi bạn gửi đơn, hệ thống ghi nhận giao dịch an toàn. Người bán sẽ đối soát kho hàng và duyệt đơn trước khi đóng gói vận chuyển.
+              </p>
+            </div>
           </div>
-          <div className="summary-row">
-            <span>Tiền hàng</span>
-            <span>{money(subtotal)}</span>
-          </div>
-          <div className="summary-row">
-            <span>Phí giao</span>
-            <span>{money(fee)}</span>
-          </div>
-          <div className="summary-row total">
-            <span>Tổng cộng</span>
-            <span>{money(subtotal + fee)}</span>
-          </div>
-          {selected && subtotal < Number(selected.minimum_subtotal) && (
-            <p className="notice warn">
-              Giao riêng cần tối thiểu {money(selected.minimum_subtotal)} tiền
-              hàng.
-            </p>
-          )}
-          <button
-            className="primary"
-            style={{ width: "100%" }}
-            disabled={
-              !online ||
-              busy ||
-              !cart.length ||
-              stale ||
-              shippingStale ||
-              !selected ||
-              !chosenAddress ||
-              subtotal < Number(selected?.minimum_subtotal) ||
-              (selected?.method === "COLLECTIVE" && !selectedSlot)
-            }
-            onClick={submit}
-          >
-            {busy ? "Đang gửi…" : "Gửi đơn chờ duyệt"}
-          </button>
-          <p className="footer-note">
-            Gửi đơn chưa giữ hàng và chưa trừ kho. Người bán sẽ kiểm tra và xác
-            nhận sau.
-          </p>
-        </section>
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }
 
