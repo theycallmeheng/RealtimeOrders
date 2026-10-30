@@ -12,15 +12,15 @@ trên database này. Mật khẩu quản trị dùng để tạo/chuyển DB n�
 `runtime/mysql.local.json` có `managed: false`, host 127.0.0.1 và port 3306;
 Start/Stop chỉ quản lý ba tiến trình ứng dụng. Dịch vụ Windows `MySQL80` tự quản
 lý datadir của nó. Instance cũ 3307 đã dừng; datadir cũ
-`D:\Dev PTIT\RealtimeOrders-data\mysql-data` và `runtime/mysql-data` được giữ
+MySQL datadir cũ nằm ngoài repository và `runtime/mysql-data` được giữ
 để dự phòng. Không chạy đồng thời các bản sao cùng một datadir. Backup mới phải
 lấy từ `DATABASE_URL` đang dùng và ảnh trong runtime/uploads của bản bàn giao.
 
 `scripts/migrate_mysql.py` chỉ nhận database đích chưa tồn tại, sao lưu cấu hình
 và SQL trong runtime/backups, dừng tiến trình ghi trong lúc chuyển, đối chiếu số
 dòng/hash mọi bảng trước khi đổi kết nối. Nếu chưa hoàn tất, khôi phục cấu hình
-nguồn và khởi động lại ứng dụng; không drop DB đích hoặc DB nguồn. Bằng chứng
-của lần chuyển thành công nằm tại `evidence/mysql-port-migration.json`.
+nguồn và khởi động lại ứng dụng; không drop DB đích hoặc DB nguồn. Script in ra
+kết quả đối chiếu; tệp audit nếu được tạo chỉ lưu cục bộ và không commit lên Git.
 
 `seed.py` chỉ seed database chưa có user; không reset, thay mật khẩu hoặc ghi đè
 tài khoản hiện có. Mật khẩu demo được sinh ngẫu nhiên, chỉ lưu cục bộ trong tệp
@@ -122,4 +122,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\services.ps1 start
 ```
 
 Xóa biến với `Remove-Item Env:REALTIMEORDERS_EVENT_LOOP` rồi dừng/chạy lại để về
-auto. Không đổi số worker. Kết quả đo và giới hạn ở [LATENCY_2026-10-25.md](LATENCY_2026-10-25.md).
+auto. Không đổi số worker. Hãy đo lại trên đúng môi trường nếu cần so sánh hiệu
+năng; không dùng số đo cũ làm cam kết cho lần triển khai mới.

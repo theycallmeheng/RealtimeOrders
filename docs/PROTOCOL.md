@@ -1,7 +1,10 @@
 # Hợp đồng HTTP và WebSocket v1
 
-Đây là hợp đồng đề xuất trước triển khai. Một origin, prefix `/api/v1`, socket
-`/ws`. HTTPS/WSS là cấu hình demo triển khai; HTTP/WS chỉ dùng phát triển
+Giao thức WebSocket JSON v1 tại `/ws` đang được triển khai.
+Bảng endpoint bên dưới là thiết kế ban đầu, không phải danh mục API hiện hành; hãy đối chiếu [OpenAPI hiện tại](openapi.json) hoặc `/api/docs`.
+Các route product-request cũ trả HTTP 410 vì chức năng này đã rút khỏi phạm vi.
+
+Một origin, prefix `/api/v1`, socket `/ws`. HTTPS/WSS là cấu hình demo triển khai; HTTP/WS chỉ dùng phát triển
 loopback có nhãn rõ, không được trình bày như kiểm thử TLS.
 
 ## 1. Quy ước chung

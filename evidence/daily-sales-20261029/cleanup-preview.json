@@ -1,8 +1,0 @@
-{
-  "database": "realtimeorders",
-  "cutoff": "2026-10-28",
-  "previewHash": "30ba56f7532ef7011fa75c2e2bc2ca0da958d5ecc814e8fd4edd507bd102ae58",
-  "ordersToDelete": 65,
-  "offersToDelete": 271,
-  "offersToArchive": 14
-}

@@ -1,7 +1,8 @@
 # Mô hình dữ liệu MySQL
 
-Tham chiếu [schema.sql](../db/schema.sql) cho revision 0001. Alembic là nguồn
-migration thực thi, đã áp dụng trên MySQL 8.0.46. Revision 0002 bổ sung
+Tham chiếu [schema.sql](../db/schema.sql) cho revision 0001. Alembic là nguồn migration thực thi.
+Bản phát triển đã được kiểm tra trên MySQL 8.0.46; repository hiện có các revision 0001–0008.
+Revision 0002 bổ sung
 `request_quotes.item_snapshot` để giữ tên sản phẩm và đơn vị đã báo giá;
 không sửa tại chỗ schema ban đầu để tránh lệch bản đã cài. Các quy tắc nhiều
 dòng vẫn phải được bảo vệ bằng transaction và test,
@@ -21,9 +22,13 @@ Revision 0006 bổ sung `auth_challenges.delivery_channel`,
 kênh OTP đăng ký và cho phép chuyển một lần từ Zalo sang SMS; không lưu mã OTP
 thô. Các challenge email cũ được gán kênh EMAIL khi migration.
 
+Revision 0007 bổ sung URL HTTPS cho ảnh sản phẩm.
+Revision 0008 cho phép nhiều menu/đợt bán trong cùng ngày.
+Luôn chạy Alembic đến head, không chỉ áp dụng revision 0001.
+
 ## 1. Quy ước
 
-- MySQL 8.4, InnoDB, utf8mb4. ID UUID chuẩn hóa; timestamp DATETIME(6) UTC.
+- MySQL 8.0 trở lên, InnoDB, utf8mb4. ID UUID chuẩn hóa; timestamp DATETIME(6) UTC.
   `sale_date` và báo cáo nhóm theo Asia/Ho_Chi_Minh.
 - Số lượng DECIMAL(12,3), tiền VND DECIMAL(18,0); unit price theo đơn vị VND.
   API/DTO dùng chuỗi; tính tiền bằng Decimal, làm tròn từng dòng rồi cộng.

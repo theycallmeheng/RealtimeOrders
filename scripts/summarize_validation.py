@@ -67,7 +67,7 @@ def main():
         '', '## Trước khi nộp','',
         'Nhóm xác nhận đóng góp cá nhân, hiểu code, thử hai thiết bị, điền dữ liệu bán hàng thực tế, '
         'kiểm tra Compilatio và tự nộp theo hướng dẫn. Adapter có mã chưa đồng nghĩa đã gửi SMS/email thật.']
-    (ROOT/'docs/VALIDATION.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
+    (ROOT/'evidence/validation-summary.md').write_text('\n'.join(lines)+'\n',encoding='utf-8')
     result={'pythonTests':tests,'pythonFailures':failed,'browser':browser,'loadRuns':len(loads),'comparisonSource':comp['file'],
         'comparisonPayloadReductionPercent':round(reduction,2),'backupRestoreEvidence':'restore-check.json',
         'restartEvidence':'restart-probe.json','realSmsVerified':False,'twoDeviceLanVerified':False,'compilatioVerified':False}

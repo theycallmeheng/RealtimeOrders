@@ -126,4 +126,4 @@ lỗi trust hệ điều hành, còn probe Python xác minh chứng thư bằng 
 Kết quả ghi rõ cùng máy hay hai máy. Finish kiểm tra database nguồn rồi khởi động
 lại ứng dụng thường theo cấu hình LAN hiện tại.
 
-Kết quả kiểm tra ngày 28/10/2026: [bằng chứng JSON](../evidence/lan-20261028/summary.json).
+Các bước trên là quy trình để nhóm tự nghiệm thu với cấu hình mạng và thiết bị đang dùng.

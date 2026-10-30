@@ -17,7 +17,7 @@ flowchart LR
   F --> S[Adapter SMS / email]
 ```
 
-Đề xuất một origin: `/` tới Next.js, `/api/v1/*` và `/ws/v1` tới FastAPI.
+Đề xuất một origin: `/` tới Next.js, `/api/v1/*` và `/ws` tới FastAPI.
 Reverse proxy kết thúc TLS, chuyển tiếp nâng cấp WebSocket và giới hạn upload.
 Next.js khuyến nghị reverse proxy khi tự host; xem [tài liệu chính thức](https://nextjs.org/docs/app/guides/self-hosting).
 Không expose MySQL ra trình duyệt; không dùng route Next.js làm backend nghiệp

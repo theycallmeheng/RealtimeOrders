@@ -1,183 +1,234 @@
-# RealtimeOrders
+# RealtimeOrders — Hệ thống đặt và điều phối bán hàng thời gian thực
 
-Ứng dụng đặt hàng và điều phối bán hàng realtime · Nhóm 17
+Đồ án môn **Lập trình mạng**, Nhóm **17** · Giảng viên: **Ngô Văn Quyền**.
 
-Khách xem giá theo nhóm, đặt nhiều món rồi chờ duyệt. Người bán kiểm tra kho,
-duyệt đơn, chuẩn bị và giao hàng. **Gửi đơn không giữ hàng; chỉ duyệt mới trừ kho.**
-Chat riêng, thông báo lưu bền và lịch sử đơn giúp giảm trao đổi thủ công.
+RealtimeOrders là ứng dụng web client–server giúp khách hàng xem menu theo ngày, đặt nhiều mặt hàng và theo dõi đơn; người bán quản lý sản phẩm, tồn kho, đơn và giao hàng. Backend là nơi quyết định quyền, giá, phí và trạng thái. **Đơn đang chờ không giữ hàng; chỉ khi quản trị duyệt, server mới trừ tồn.**
 
-## Chạy bản đã cài trên máy này
+## Bài toán và mục tiêu
 
-Mở `Start.cmd`, dùng URL mà script in ra (mặc định **https://localhost:3443**).
-Để máy khác cùng LAN truy cập, làm theo [hướng dẫn hai máy](docs/LAN.md).
-Chế độ LAN dùng IP trong tệp local, proxy cổng 3443 và chứng thư CA riêng cho demo.
-Dừng bằng `Stop.cmd`. Tài khoản và mật khẩu demo được sinh ngẫu nhiên, xem tại
-`runtime/demo-accounts.local.json`. Tệp này chỉ có trên máy cài, không nằm trong gói source.
-Không có mật khẩu admin mặc định.
+Khi nhiều khách đặt hàng cùng lúc, xử lý thủ công dễ gây bán vượt tồn, nhầm giá giữa các nhóm và chậm cập nhật trạng thái. Dự án tập trung giải quyết ba vấn đề có thể kiểm tra trong mô hình client–server:
 
-Từ 23/10/2026, bản cài dùng dịch vụ MySQL `MySQL80` sẵn có tại
-**`127.0.0.1:3306`**, database **`realtimeorders`**. Có thể xem bằng kết nối 3306
-trong MySQL Workbench. Mã nguồn ở `D:\Dev PTIT\Lập trình mạng\RealtimeOrders`.
-Start/Stop chỉ quản lý backend, frontend và proxy; không dừng MySQL của Windows.
-Dữ liệu instance cũ ở cổng 3307 được giữ làm bản dự phòng, không còn là DB hoạt động.
+- Giữ tồn kho đúng khi nhiều đơn cạnh tranh một lượng hàng hữu hạn.
+- Phát thay đổi về đơn hàng và danh mục tới đúng người dùng theo thời gian thực.
+- Đồng bộ lại client sau khi tải lại trang hoặc mất kết nối.
 
-Chứng thư localhost là chứng thư tự ký dành cho thử nghiệm. Trình duyệt có thể
-yêu cầu xác nhận trước khi mở lần đầu. Không dùng chứng thư này cho triển khai công khai.
+Phạm vi là ứng dụng hỗ trợ một người bán, gồm hai vai trò chính: khách hàng và quản trị. Hệ thống chưa có thanh toán trực tuyến, kết nối đơn vị vận chuyển, đổi trả sau khi giao thành công hoặc nhiều máy chủ ứng dụng.
 
-## Chức năng đã triển khai
+## Thành viên
 
-- Đăng ký SĐT qua OTP Zalo, SMS dự phòng do người dùng chọn; đăng nhập mật khẩu, OTP khôi phục qua cấu hình SMS, xác minh email tùy chọn.
-- Hai nhóm giá sinh viên/người đi làm; tối đa ba địa chỉ và một mặc định.
-- Danh mục, đơn vị, sản phẩm/ảnh (tải tệp hoặc lưu URL HTTPS trong MySQL), đợt hàng và giá nhóm; giao tập trung/giao riêng có điều kiện.
-- Đơn nhiều dòng, kiểm tra giá/phiên bản/phí; duyệt nguyên đơn, kho không âm.
-- Hủy đơn chờ; xin hủy sau duyệt, quản trị quyết định và hoàn kho đúng một lần.
-- Menu theo ngày có nhiều sản phẩm và nhiều đợt cùng ngày; tồn kho, giá và nhóm được phép mua được kiểm soát riêng.
-- Giao riêng tính quãng đường bằng Goong; cần `GOONG_API_KEY` và vị trí kho/địa chỉ đã xác nhận.
-- Chức năng yêu cầu hàng/báo giá đã rút khỏi phạm vi; các API cũ trả HTTP 410.
-- Chat text/ảnh, lịch sử, kiểm duyệt từ cấm, thông báo lưu bền và quan tâm sản phẩm.
-- Quản lý tài khoản, thu hồi phiên, báo cáo doanh thu COD khi DELIVERED, audit/ledger.
-- HTTPS/WSS, topic riêng theo quyền, seq, snapshot/replay, reconnect, outbox và retry cùng mã.
+| Họ tên | MSSV |
+| --- | --- |
+| Nguyễn Đức Hưng | B23DCCN368 |
+| Đỗ Quang Thiệp | B23DCCN787 |
+| Vũ Đức Mạnh | B23DCCN535 |
+| Lê Nguyễn Hồng Quân | B23DCCN675 |
+| Trịnh Văn Hào | B23DCCN284 |
 
-**OTP chỉ chạy demo nếu chưa cấu hình nhà cung cấp**: ở `DEMO_MODE`, mã thử được hiển thị rõ trên giao diện. Để đăng ký thật cần OA/ZBS, access token và template OTP đã duyệt; SMS dự phòng và khôi phục mật khẩu cần cấu hình Twilio. Email tùy chọn cần SMTP. Không có thông tin xác thực Zalo/Twilio trong môi trường hiện tại nên chưa xác minh gửi tin thật. Đừng đưa khách thật vào chế độ demo. Không có thanh toán online, vận chuyển bên thứ ba hay đổi trả sau giao.
+Phân công chi tiết được trình bày trong báo cáo của nhóm.
 
-## Kiến trúc và công nghệ
+## Chức năng
+
+**Khách hàng**
+
+- Đăng ký bằng số điện thoại và OTP; email là tùy chọn. Môi trường demo có thể trả mã thử để kiểm tra luồng.
+- Xem menu đang mở theo nhóm khách hàng; tìm/lọc mặt hàng, xem đơn vị, giá và lượng còn.
+- Thêm món vào giỏ, chọn địa chỉ/cách nhận hàng, xem tổng tiền và gửi đơn.
+- Theo dõi trạng thái đơn, thông báo, hội thoại riêng và mặt hàng quan tâm.
+- Hủy đơn đang chờ; gửi yêu cầu hủy đơn đã duyệt hoặc đang chuẩn bị để quản trị quyết định.
+
+**Quản trị**
+
+- Quản lý danh mục, đơn vị, SKU tự cấp, ảnh sản phẩm, giá và nhóm được phép mua.
+- Tạo menu theo ngày với nhiều sản phẩm; có thể mở nhiều đợt trong ngày và cấu hình thời gian đóng.
+- Quản lý chính sách giao, nhóm khách hàng, tài khoản, đơn, hội thoại, kiểm duyệt và báo cáo.
+- Duyệt, từ chối, chuẩn bị, bàn giao và xác nhận giao đơn. Đơn đã duyệt chỉ hoàn kho khi quản trị chấp thuận yêu cầu hủy.
+
+**Tính năng cần cấu hình dịch vụ ngoài**
+
+- Tính phí giao riêng theo tuyến đường cần `GOONG_API_KEY` trên server và vị trí kho đã xác nhận. Khi thiếu key hoặc không tìm được tuyến, hệ thống không dùng khoảng cách ước lượng.
+- Gửi OTP Zalo/SMS và email thật cần thông tin nhà cung cấp hợp lệ. Cấu hình mẫu bật chế độ demo; chưa có cấu hình không đồng nghĩa với đã kiểm chứng gửi tin thật.
+- Chức năng yêu cầu hàng/báo giá đã được gỡ khỏi phạm vi; API cũ trả HTTP 410.
+
+## Kiến trúc
 
 ```mermaid
 flowchart LR
-  C[Trình duyệt Next.js] <-->|HTTPS REST và WSS| P[Proxy TLS]
-  P --> F[FastAPI một worker]
-  P --> N[Next.js]
+  C[Trình duyệt khách hàng] <-->|HTTPS REST / WSS| P[Proxy TLS :3443]
+  A[Trình duyệt quản trị] <-->|HTTPS REST / WSS| P
+  P -->|/api/* và /ws| F[FastAPI :8000]
+  P -->|Trang web| N[Next.js :3000]
   F --> D[(MySQL InnoDB)]
-  D --> O[Durable outbox]
-  O --> H[Topic hub có giới hạn hàng đợi]
-  H --> C
+  D --> O[Event và outbox bền vững]
+  O --> H[WebSocket hub trong tiến trình]
+  H --> P
 ```
 
-Python 3.12; FastAPI, SQLAlchemy asyncio, asyncmy, Alembic; MySQL/InnoDB;
-Next.js 16.4.2, React, TypeScript, Tailwind và Font Awesome. Phiên bản chính xác:
-`backend/requirements.txt`, `frontend/package-lock.json`.
-Máy thử dùng MySQL **8.0.46** đã có sẵn thay cho đề xuất 8.4; không dùng SQLite.
+- **Client:** trình duyệt chạy giao diện Next.js; khách và quản trị dùng chung ứng dụng nhưng có quyền khác nhau.
+- **Proxy:** Node.js kết thúc TLS tại cổng 3443; chuyển `/api/*` và `/ws` đến backend, các yêu cầu trang đến Next.js.
+- **Backend:** FastAPI/Python xử lý xác thực, phân quyền và nghiệp vụ. Trình duyệt không kết nối MySQL trực tiếp.
+- **Database:** MySQL/InnoDB là nguồn dữ liệu chính; Alembic quản lý schema. Ảnh tải lên nằm trong thư mục riêng trên server.
+- **Realtime:** backend lưu sự kiện/outbox cùng giao dịch nghiệp vụ; sau commit, hub phát theo topic tới các kết nối có quyền.
 
-TCP/TLS và framing WebSocket do thư viện xử lý. Nhóm tự triển khai xác thực,
-giao thức JSON v1, phân quyền topic, thứ tự sự kiện, snapshot/replay, hàng đợi giới hạn,
-giao dịch kho và chống thao tác trùng. Trình duyệt không truy cập MySQL trực tiếp.
+Cấu hình mặc định chỉ nghe trên máy cục bộ: mở `https://localhost:3443`; backend và frontend nội bộ lần lượt ở cổng 8000 và 3000; MySQL mặc định ở `127.0.0.1:3306`. Có hướng dẫn tùy chọn cho LAN tại [docs/LAN.md](docs/LAN.md), nhưng cần nghiệm thu bằng thiết bị thứ hai trước khi khẳng định đã chạy LAN. Không mở MySQL, cổng 8000 hoặc 3000 cho máy khách.
 
-## Cài mới trên Windows
+## Giao tiếp mạng và giao thức
 
-Cần Python 3.12, Node.js 24 LTS, MySQL Server 8.0.46+ hoặc 8.4.
-Giải nén vào một thư mục riêng, mở PowerShell tại thư mục đó:
+Ứng dụng dùng **HTTPS/REST và WebSocket bảo mật (WSS), đều truyền qua TCP/TLS**. TLS và framing WebSocket do Node.js, Uvicorn và thư viện giao thức xử lý; dự án không tự định nghĩa framing TCP thô. Giao thức ứng dụng được mô tả trong [docs/PROTOCOL.md](docs/PROTOCOL.md), còn các route hiện hành có trong [docs/openapi.json](docs/openapi.json) và `/api/docs` khi server chạy.
+
+- REST dùng prefix `/api/v1` và JSON cho đăng nhập, menu, địa chỉ, báo phí, đơn và thao tác quản trị. Health check là `/api/health`.
+- WebSocket dùng `/ws` và thông điệp JSON phiên bản `v: 1`. Client xác thực qua cookie phiên và `Origin`, gửi `HELLO`; server trả `WELCOME` rồi đồng bộ bằng replay hoặc snapshot (`SYNC_BEGIN`, `SNAPSHOT_CHUNK`, `SYNC_END`).
+- Sau đồng bộ, hai phía trao đổi `PING`/`PONG`, `CHAT_SEND`, `ACK`, `ERROR` và sự kiện gồm `topic`, `seq`, `eventId`, `eventType`, `payload`.
+- Thứ tự được giữ trong từng topic. Client có model/cursor hợp lệ được phát lại sự kiện còn thiếu; khi cursor không còn dùng được, server gửi snapshot. Client mất đồng bộ hoặc nhận quá chậm phải đồng bộ lại hoặc kết nối lại.
+- REST trả mã lỗi và thông điệp; WebSocket gửi `ERROR` hoặc đóng kết nối khi phiên, quyền, dữ liệu đầu vào hay giới hạn kết nối không hợp lệ. Retry một thao tác phải giữ nguyên khóa idempotency để tránh tạo đơn hoặc trừ kho trùng.
+
+Luồng cập nhật realtime: client gửi yêu cầu → backend xác thực và kiểm tra nghiệp vụ → MySQL commit thay đổi cùng event/outbox → dispatcher phát sau commit → client trong topic áp dụng event theo `seq`. Khi duyệt đơn, server khóa và kiểm tra các dòng hàng trong transaction; nếu một dòng thiếu tồn thì rollback toàn bộ. Nếu đủ, server cập nhật tồn, ledger, lịch sử, idempotency và event trong cùng transaction.
+
+## Đóng góp kỹ thuật và baseline
+
+1. **Giao dịch tồn kho:** duyệt đơn khóa/kiểm tra toàn bộ dòng hàng, ghi tồn, ledger và trạng thái trong cùng transaction; retry dùng idempotency.
+2. **Phát thay đổi:** lưu event/outbox rồi gửi WSS theo topic/seq sau commit; baseline trong phép đo là client polling định kỳ.
+3. **Phục hồi:** client có thể replay các sự kiện còn thiếu hoặc nhận snapshot khi cursor không dùng được.
+
+Đây là đóng góp tích hợp và triển khai trong phạm vi đồ án, không tuyên bố thuật toán mới.
+
+## Đồng thời và tính đúng đắn
+
+FastAPI xử lý nhiều yêu cầu bất đồng bộ. Mỗi WebSocket có hàng đợi riêng, giới hạn kích thước để client chậm không chặn toàn bộ kết nối. Hiện ứng dụng chạy **một FastAPI worker**, vì danh sách socket đang hoạt động nằm trong bộ nhớ của tiến trình. Chạy nhiều worker cần event bus dùng chung và kiểm thử liên tiến trình.
+
+Tính nhất quán nghiệp vụ dựa trên transaction/khóa MySQL InnoDB thay vì khóa trong bộ nhớ Python. Duyệt đơn dùng version và idempotency để chống xử lý lặp; ledger ghi biến động tồn. Luồng đồng bộ dùng `seq`, snapshot/replay và outbox để client bắt kịp sau reconnect. Đây là cách triển khai của nhóm, không tuyên bố thuật toán mới.
+
+## Công nghệ
+
+| Thành phần | Công nghệ |
+| --- | --- |
+| Giao diện | Next.js, React, TypeScript, Tailwind CSS |
+| Backend và API | Python 3.12, FastAPI, SQLAlchemy asyncio, Uvicorn |
+| Cơ sở dữ liệu | MySQL 8 / InnoDB, asyncmy, Alembic |
+| Giao tiếp thời gian thực | WebSocket/WSS, JSON protocol v1 |
+| Proxy và TLS | Node.js HTTPS proxy |
+| Kiểm thử giao diện | Playwright, Microsoft Edge |
+| Ảnh | Pillow và thư mục media riêng trên server |
+
+Dependency backend được khóa trong [backend/requirements.txt](backend/requirements.txt); dependency giao diện nằm trong [frontend/package-lock.json](frontend/package-lock.json).
+
+## Cài đặt và chạy trên Windows
+
+### Yêu cầu
+
+- Windows 10/11.
+- Python 3.12.
+- Node.js tương thích Next.js 16 (khuyến nghị Node.js 24 LTS) và npm.
+- MySQL Server 8.0 trở lên đang chạy tại `127.0.0.1:3306`; tài khoản quản trị có quyền tạo database và user ứng dụng.
+
+### Cài lần đầu
 
 ```powershell
+git clone https://github.com/theycallmeheng/RealtimeOrders.git
+cd RealtimeOrders
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+Script cài dependency, tạo database `realtimeorders` và user riêng nếu chưa có `.env`, chạy migration đến Alembic `head`, seed dữ liệu mẫu khi database chưa có tài khoản, tạo chứng thư thử cho localhost và build giao diện. Script hỏi mật khẩu quản trị MySQL trong terminal; không thay mật khẩu root và từ chối ghi đè database đã tồn tại. Nếu đã có `.env` hoặc database cũ, đọc [docs/OPERATIONS.md](docs/OPERATIONS.md) trước khi chạy setup.
+
+### Khởi động server
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\services.ps1 start
 ```
 
-Khởi động MySQL trên máy trước khi setup. `setup.ps1` mặc định kết nối server
-đang có ở `127.0.0.1:3306`, hỏi mật khẩu quản trị trong terminal, tạo database
-`realtimeorders` mới và user riêng với mật khẩu ngẫu nhiên. Script không đổi mật
-khẩu root, không khởi tạo datadir và không ghi đè database đã tồn tại.
-Sau đó script chạy Alembic/seed, tạo TLS thử và build giao diện. Có thể truyền
-`-MySQLPort`, `-MySQLHost`, `-AdminUser` hoặc `-AdminPasswordFile` nếu cần.
-Migration `0007` thêm `product_images.source_url`; database mới tạo cũng có thể
-lưu URL ảnh sau khi `setup.ps1` chạy `alembic upgrade head`.
+### Chạy client
 
-Nếu dùng MySQL đã quản trị sẵn: tự tạo **database và user riêng**, cấp quyền trên
-database đó, tạo `.env` theo `.env.example`, rồi chạy setup. Không dùng database của
-ứng dụng khác. Migration `0001` là schema 38 bảng; migration đầu phải chạy trên DB trống.
-
-Đổi bản cũ từ 3307 sang server 3306: lưu mật khẩu root của 3306 vào
-`runtime/mysql-3306-admin-password.local`, rồi chạy
-`.\.venv\Scripts\python.exe scripts\migrate_mysql.py`. Công cụ dừng ghi tạm thời,
-dump/nhập vào database mới, đối chiếu hash cả 39 bảng rồi mới chuyển `.env`;
-giữ nguyên dữ liệu nguồn và các database khác. Không chạy lại nếu đã chuyển xong.
-
-```powershell
-# Chạy từng thành phần khi phát triển
-cd backend
-..\.venv\Scripts\python.exe -m alembic upgrade head
-..\.venv\Scripts\python.exe seed.py
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --ws-max-size 65536
-# Cửa sổ khác, thư mục frontend
-npm ci
-npm run dev
-# Cửa sổ khác, thư mục project
-node scripts\proxy.mjs
-```
-
-Frontend 3000 và backend 8000 chỉ nghe loopback. Người dùng vào proxy 3443.
-Không thêm `--workers` vì topic hub hiện chỉ ở một process. Xem
-[vận hành và bảo mật](docs/OPERATIONS.md) trước khi triển khai LAN hoặc Internet.
-
-## Kiểm thử và thực nghiệm
-
-Các test có ghi đơn, địa chỉ và trạng thái phiên. Cách chạy trên bản sao MySQL
-riêng (cần tệp quản trị cục bộ theo hướng dẫn trong
-[báo cáo kiểm thử 24/10](docs/AUDIT_2026-10-24.md)):
+Mở `https://localhost:3443`. Chứng thư localhost là chứng thư thử nghiệm; trình duyệt có thể hiện cảnh báo nếu chưa tin cậy chứng thư. Tài khoản demo được sinh ngẫu nhiên, lưu tại `runtime/demo-accounts.local.json` khi seed trên database trống. Nếu database đã có tài khoản, seed không tạo lại hoặc đổi mật khẩu.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\services.ps1 stop-app
-npm --prefix frontend run build
+```
+
+`stop-app` dừng các dịch vụ ứng dụng nhưng không dừng dịch vụ MySQL có sẵn của Windows. Xem thêm [hướng dẫn vận hành](docs/OPERATIONS.md).
+
+### Cấu hình dịch vụ ngoài
+
+Dùng [.env.example](.env.example) làm danh sách biến; lưu giá trị cục bộ trong `.env` ở thư mục gốc. Không commit tệp này hoặc đưa bí mật vào log/chat.
+
+- Demo: `DEMO_MODE=true`, `SMS_PROVIDER=demo`, `EMAIL_PROVIDER=demo`; mã thử được đánh dấu là demo.
+- OTP Zalo: `ZALO_ACCESS_TOKEN`, `ZALO_OTP_TEMPLATE_ID`, `ZALO_OTP_CODE_FIELD`; cần OA/ZBS, quyền gửi và template được duyệt.
+- SMS: `SMS_PROVIDER=twilio` cùng `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`.
+- Email: `EMAIL_PROVIDER=smtp` cùng cấu hình SMTP.
+- Bản đồ: `GOONG_API_KEY`; chỉ đặt key trên server và xác nhận vị trí kho trong cấu hình quản trị.
+
+Các key là tùy chọn cho demo cục bộ. Tích hợp tương ứng chỉ được xác minh trực tiếp sau khi có cấu hình hợp lệ và chạy thử với nhà cung cấp.
+
+## Kiểm thử và thực nghiệm
+
+Ca kiểm thử, điều kiện chạy và ma trận đo nằm trong [docs/TEST_PLAN.md](docs/TEST_PLAN.md); đối chiếu yêu cầu với thiết kế/test nằm trong [docs/TRACEABILITY.md](docs/TRACEABILITY.md). Test nghiệp vụ cần database MySQL audit riêng; không chạy trên database có dữ liệu thật.
+
+Quy trình cô lập mẫu trên Windows; cần chuẩn bị thông tin quản trị MySQL theo [docs/OPERATIONS.md](docs/OPERATIONS.md):
+
+```powershell
 .\.venv\Scripts\python.exe scripts\isolated_validation.py prepare
 .\.venv\Scripts\python.exe scripts\isolated_validation.py backend
 .\.venv\Scripts\python.exe scripts\isolated_validation.py browser
-.\.venv\Scripts\python.exe scripts\isolated_validation.py run -- "{python}" scripts\load_test.py --clients 100 --seconds 30 --rps 10 --reconnect-fraction 0.1
 .\.venv\Scripts\python.exe scripts\isolated_validation.py finish
 ```
 
-Browser test dùng Edge cài trên máy; có thể đổi `channel` trong
-`frontend/playwright.config.ts` nếu dùng trình duyệt khác. Test tạo dữ liệu `TEST-*`,
-đóng đợt sau khi chạy, giữ lịch sử để truy vết; chỉ chạy trên DB thử.
-Không gửi SMS hoặc Zalo thật trong kiểm thử/tạo tải. Giới hạn đăng nhập/OTP vẫn áp dụng khi
-chạy test nhiều lần; chờ cửa sổ giới hạn thay vì tắt bảo vệ trong môi trường thật.
+`backend` chạy pytest trên database audit; `browser` chạy Playwright với Edge. Kiểm tra type và build giao diện:
 
-`prepare` từ chối chạy đè các cổng đang dùng, đối chiếu 39 bảng, dùng thư mục ảnh
-riêng, buộc SMS/email demo và xóa cấu hình Zalo/Twilio/SMTP khỏi tiến trình test. `finish` kiểm tra dữ liệu nguồn rồi chạy lại bản
-demo chính; giữ DB audit để kiểm tra. Kết quả backend/browser có thư mục theo
-lượt chạy; phép tải giữ file riêng theo tag tại `evidence/load/`.
-
-Kết quả và giới hạn được cập nhật trong [VALIDATION.md](docs/VALIDATION.md),
-dữ liệu gốc ở `evidence/`. Các ca thử đề xuất chưa chạy vẫn được phân biệt trong
-[TEST_PLAN.md](docs/TEST_PLAN.md). Tải mô phỏng cùng máy không thay thế nghiệm thu
-trên hai thiết bị LAN hay thử với người mua thực tế.
-
-## Đóng góp kỹ thuật
-
-Đợt [tối ưu độ trễ 25/10](docs/LATENCY_2026-10-25.md) có ba lượt đo lặp lại ở
-2.000 kết nối và kiểm thử hồi quy; giữ nguyên 5 phần công việc.
-
-Phạm vi làm việc giữ nguyên [5 phần đã chốt](docs/WORKSTREAMS.md).
-Đợt [tối ưu 24–25/10](docs/PERFORMANCE_2026-10-24.md) giảm truy vấn lặp và chi phí
-phát sự kiện, giữ API/luồng nghiệp vụ; có phép đo trước/sau và các giới hạn thực.
-
-1. Duyệt toàn bộ đơn trong giao dịch InnoDB, khóa theo thứ tự và ledger duy nhất;
-   so với read-then-write không khóa có thể bán vượt kho.
-2. Phát phần thay đổi đúng nhóm giá qua WSS, không phát giá/đơn/chat riêng sang nhóm khác;
-   có công cụ so sánh baseline polling.
-3. Dữ liệu, lịch sử, idempotency và event commit cùng giao dịch; outbox phục hồi
-   sau restart, client replay/snapshot và gửi lại không tạo bản sao.
-
-Đây là cải tiến của ứng dụng so với baseline tự xây, không tuyên bố thuật toán mới.
-
-## Cấu trúc và tài liệu
-
-```text
-backend/app/           API, auth, commerce, requests, chat, realtime, outbox
-backend/alembic/       migration thực thi
-backend/tests/         kiểm thử MySQL + HTTPS/WSS
-frontend/app/          giao diện khách hàng và quản trị
-frontend/tests/        browser test
-scripts/              cài/chạy/dừng, đo tải, backup/restore, đóng gói
-db/schema.sql         schema đầu vào của migration 0001
-docs/                 SRS, thiết kế, vận hành, giao thức, báo cáo
-evidence/             kết quả kiểm thử và số liệu thực
-runtime/              dữ liệu cục bộ và secrets, không nộp
+```powershell
+npm --prefix frontend run check
+npm --prefix frontend run build
 ```
 
-[SRS](docs/SRS.md) · [quyết định](docs/DECISIONS.md) · [kiến trúc](docs/ARCHITECTURE.md) ·
-[giao thức](docs/PROTOCOL.md) · [nguồn tham khảo](docs/SOURCES.md) · [nhóm](docs/team.json).
-Các tài liệu thiết kế gốc ghi mục tiêu; [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md)
-ghi rõ cách bản thực hiện khác đề xuất ban đầu và các việc cần người dùng/nhà cung cấp.
+Một lệnh đo tải mẫu trong môi trường audit:
 
-Trước nộp: nhóm xác nhận đóng góp cá nhân, chạy thử ít nhất hai thiết bị, kiểm tra
-Compilatio theo yêu cầu môn học và tự nộp bản cuối. Không có kết quả Compilatio
-hoặc xác nhận người dùng thật nào được tự khai trong project này.
+```powershell
+.\.venv\Scripts\python.exe scripts\isolated_validation.py run -- "{python}" scripts\load_test.py --clients 100 --seconds 30 --rps 10 --reconnect-fraction 0.1
+```
+
+Đầu ra lần chạy mới được ghi cục bộ trong `evidence/` và không nằm trong gói source. Khi báo cáo, ghi commit, cấu hình máy, cách tạo tải, số lần lặp và phạm vi phép đo; không dùng số kết nối mô phỏng để khẳng định số người mua đồng thời.
+
+### Kết quả đo tham khảo
+
+Báo cáo [Nhom17_RealtimeOrders_Report.docx](report/Nhom17_RealtimeOrders_Report.docx) ghi phép đo trên **một máy, loopback**, tại revision `dfa2bc0` ngày 25/10/2026, trước các thay đổi menu ngày/nhóm khách của revision hiện tại `c9c92e4`. Trong workload chỉ đọc catalog với 2.000 kết nối mô phỏng, ba lượt cuối có event p95 249,58–265,49 ms và phục hồi 200/200 socket bị ngắt; workload không tạo đơn (0 đơn/giây). So sánh WSS với polling dùng 100 client và ghi nhận payload JSON trung bình giảm 92,2% trong cấu hình đó.
+
+Đây là kết quả lịch sử của revision/workload được nêu, **không phải kết quả nghiệm thu hiệu năng cho mã hiện tại**. Nó không chứng minh 2.000 người đặt hàng đồng thời, độ trễ trên LAN hay khả năng chạy nhiều worker. Hãy chạy lại phép đo trên phiên bản nộp và lưu dữ liệu gốc theo yêu cầu báo cáo.
+
+## Kịch bản demo
+
+1. Quản trị tạo hoặc mở menu hôm nay, cấu hình sản phẩm, giá, lượng và nhóm được mua.
+2. Khách dùng tài khoản demo, chọn mặt hàng, thêm vào giỏ và gửi đơn.
+3. Quản trị duyệt; kiểm tra tồn chỉ giảm sau khi duyệt và hai màn hình nhận cập nhật.
+4. Thử chat/thông báo; ngắt rồi nối lại client để quan sát đồng bộ.
+5. Nếu trình bày LAN, làm theo [docs/LAN.md](docs/LAN.md) và kiểm tra với hai thiết bị thật.
+
+## Giới hạn và hướng phát triển
+
+- Một server ứng dụng và một worker; hub WebSocket không chia sẻ trạng thái giữa nhiều tiến trình.
+- Cấu hình mặc định chỉ dùng localhost; LAN cần chứng thư tin cậy, firewall và kiểm tra trên thiết bị khác. Chưa tuyên bố triển khai Internet công khai.
+- Gửi OTP Zalo/SMS/email và tính tuyến Goong phụ thuộc dịch vụ bên ngoài; chưa thể coi là chạy thật khi thiếu cấu hình.
+- Chưa có thanh toán trực tuyến, tích hợp đơn vị vận chuyển hoặc đổi trả sau khi giao thành công.
+- Cần đo lại workload có đặt/duyệt đơn, thử mạng chậm và phục hồi lỗi trên revision bàn giao; kết quả mô phỏng chỉ áp dụng cho cấu hình đã mô tả.
+
+## Cấu trúc repository
+
+```text
+backend/       FastAPI, nghiệp vụ, migration và kiểm thử backend
+frontend/      giao diện Next.js và kiểm thử trình duyệt
+db/            schema đầu vào cho migration đầu tiên
+scripts/       setup, chạy/dừng, kiểm thử cô lập, đo tải, backup/restore
+docs/          yêu cầu, kiến trúc, giao thức, vận hành, kiểm thử
+report/        báo cáo tổng kết; nộp theo hướng dẫn của học phần
+runtime/       cấu hình, tài khoản demo, log và dữ liệu cục bộ; không commit
+evidence/      kết quả kiểm thử/đo cục bộ; không commit
+```
+
+## Tài liệu và nguồn tham khảo
+
+- [Đặc tả yêu cầu](docs/SRS.md) · [quyết định dự án](docs/DECISIONS.md) · [luồng trải nghiệm](docs/UX_FLOWS.md)
+- [Kiến trúc](docs/ARCHITECTURE.md) · [giao thức](docs/PROTOCOL.md) · [OpenAPI](docs/openapi.json) · [menu, nhóm khách và Goong](docs/DAILY_SALES.md)
+- [Mô hình database](docs/DATABASE.md) · [vận hành](docs/OPERATIONS.md) · [cấu hình LAN](docs/LAN.md) · [kế hoạch kiểm thử](docs/TEST_PLAN.md) · [đối chiếu yêu cầu](docs/TRACEABILITY.md)
+- [Nguồn tham khảo](docs/SOURCES.md) · [thông tin nhóm](docs/team.json)
+- [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) · [MDN WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API) · [MySQL InnoDB locking reads](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html) · [Next.js self-hosting](https://nextjs.org/docs/app/guides/self-hosting)
+
+---
+
+README hướng dẫn cài đặt, chạy và kiểm tra nhanh. Báo cáo môn học trình bày chi tiết phương pháp, kết quả thực nghiệm, hạn chế và minh chứng theo mẫu nộp.

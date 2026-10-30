@@ -12,8 +12,7 @@ cho agent đang làm việc.
    giao riêng sinh viên theo cấu hình khu/mức tối thiểu/phí.
 3. `Instruction.md` và `Submission.md` môn Lập trình mạng 2026–2027 do người dùng
    cung cấp: network core, concurrency, experiment, contributions và technical
-   report; định dạng tên file, đóng góp cá nhân và Compilatio. Bản gốc hiện có ở
-   `D:\Dev PTIT\Lập trình mạng\báo cáo\final-project (1)\final-project`.
+   report; định dạng tên file, đóng góp cá nhân và Compilatio. Bản gốc do nhóm lưu riêng theo hướng dẫn môn học; không phải dependency của repository.
 4. [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/): API WSS
    và giới hạn của manager trong RAM một process; không lấy ví dụ broadcast
    tối giản làm chứng minh đủ 2.000 người.

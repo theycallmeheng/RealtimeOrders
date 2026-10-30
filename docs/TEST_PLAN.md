@@ -1,8 +1,9 @@
 # Kế hoạch kiểm thử và thực nghiệm
 
-**Đây là kế hoạch thiết kế. Kết quả đã chạy nằm ở VALIDATION.md và evidence/.**
+**Đây là kế hoạch kiểm thử; repository không lưu báo cáo kết quả hay dữ liệu đo.**
 Không coi mọi biến thể trong TC01–TC28 hoặc toàn bộ ma trận E1–E3 là đã thực thi
-chỉ vì có test liên quan. Các lượt đo thực có cấu hình và thời lượng riêng.
+chỉ vì có test liên quan. Chạy kiểm thử trước khi kết luận đạt; output sinh ra ở
+`evidence/` chỉ được giữ cục bộ.
 Không dùng ảnh/log/số liệu của project khác. Các ngưỡng dưới đây là mục tiêu
 đề xuất, không phải kết quả hoặc cam kết đã đạt.
 
@@ -95,7 +96,7 @@ hai máy trừ nhau tùy ý. Thời gian từ server commit có thể đo riêng
 không đánh đồng với thời gian pixel được vẽ trên browser. Báo median hoặc mean
 theo run phải ghi rõ; trung bình p95 không phải p95 gộp.
 
-## 6. Mẫu dữ liệu và bằng chứng
+## 6. Mẫu dữ liệu và bằng chứng cục bộ
 
 Seed giả có nhãn: 2 nhóm, 2 admin, tối đa 2.000 khách, mỗi khách 1–3 địa chỉ,
 100 SKU/offer, đơn đủ các trạng thái, hội thoại/ảnh tự tạo. Không dùng dữ liệu

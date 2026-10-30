@@ -5,8 +5,8 @@ import os
 import zipfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-ALLOWED_DIRS={'backend','frontend','db','docs','scripts','evidence'}
-ALLOWED_ROOT={'README.md','AGENTS.md','DESIGN.md','.gitignore','.env.example','Start.cmd','Stop.cmd'}
+ALLOWED_DIRS={'backend','frontend','db','docs','scripts'}
+ALLOWED_ROOT={'README.md','.gitignore','.env.example','Start.cmd','Stop.cmd'}
 EXCLUDED={'node_modules','.next','__pycache__','.pytest_cache','runtime','.git','test-results','playwright-report'}
 
 def source_files():

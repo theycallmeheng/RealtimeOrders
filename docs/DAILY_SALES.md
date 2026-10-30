@@ -108,6 +108,9 @@ trên HTTPS/WSS thật. Test phí/adapter dùng route tổng hợp có nhãn tes
 đây không phải bằng chứng Goong thực hoặc địa chỉ kho đã được xác minh. Nghiệm thu
 Goong thực cần key và xác nhận vị trí; nghiệm thu hai máy cần thiết bị thứ hai trong LAN.
 
-## Kết quả triển khai 29/10/2026
+## Nghiệm thu tích hợp thật
 
-118/118 backend và 6/6 browser, build Next.js đạt. Đã dọn database chính sau sao lưu; hai đơn từ 28/10 giữ nguyên. Xem [bằng chứng](../evidence/daily-sales-20261029/summary.json). Goong thực chưa nghiệm thu vì chưa có key; người dùng đã chọn giữ Wi-Fi Public và chỉ chạy localhost, không bật truy cập LAN.
+Tính phí theo tuyến Goong cần API key hợp lệ và tọa độ kho đã xác nhận. Kiểm tra
+hoạt động trên hai máy cần thiết bị thứ hai trong LAN; làm theo [hướng dẫn LAN](LAN.md).
+Kết quả các lần chạy không được lưu trong repository. Nếu môn học yêu cầu, nhóm
+tự lưu bằng chứng mới riêng cho buổi nghiệm thu.
