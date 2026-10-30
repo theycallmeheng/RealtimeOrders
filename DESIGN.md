@@ -12,6 +12,11 @@ screen; an order processing table is the administrator's main screen.
 - Font Awesome icons improve recognition only; keep text on important actions.
 - Desktop stock table and compact mobile list share one data model. Each row
   shows name, unit, price for this customer, remaining quantity and order action.
+- Product photos are large enough to identify on the customer catalog, never
+  crop the main image, and can be switched from thumbnails or opened at full size.
+  Show a clear placeholder when an item has no photo; keep a compact photo in cart.
+- Admin can add a product photo by uploading a file or pasting a public HTTPS URL;
+  the first photo remains the catalog cover.
 - Distinguish “còn trong kho”, “đang chờ duyệt” and “đã được duyệt”. Never imply
   that submitting an order reserves stock.
 - Mobile target width 360px; touch controls at least 44px; visible keyboard

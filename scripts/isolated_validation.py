@@ -48,12 +48,33 @@ async def fingerprints(connection, database):
     return result
 
 
+def network_values(mode='configured'):
+    if mode == 'local':
+        return {'networkMode': 'local', 'origin': 'https://localhost:3443'}
+    config_path = ROOT / 'runtime/network.local.json'
+    if not config_path.exists():
+        return {'networkMode': 'configured', 'origin': 'https://localhost:3443'}
+    config = json.loads(config_path.read_text(encoding='utf-8-sig'))
+    if config.get('mode') == 'local':
+        return {'networkMode': 'configured', 'origin': 'https://localhost:3443'}
+    from configure_lan import validate_address
+    address = str(validate_address(config.get('address')))
+    require(config.get('mode') == 'lan' and config.get('origin') == 'https://' + address + ':3443',
+            'Invalid configured LAN origin')
+    return {'networkMode': 'configured', 'origin': config['origin']}
+
+
 def context_env(context):
     return {**os.environ, 'PYTHONUTF8': '1', 'NEXT_TELEMETRY_DISABLED': '1',
             'DATABASE_URL': context['databaseUrl'], 'UPLOAD_DIR': context['uploadDir'],
             'AUDIT_EVIDENCE_DIR': context['evidence'], 'DEMO_MODE': 'true',
-            'SMS_PROVIDER': 'demo', 'EMAIL_PROVIDER': 'demo', 'APP_SECRET': context['appSecret'],
-            'APP_ORIGIN': 'https://localhost:3443'}
+            'SMS_PROVIDER': 'demo', 'EMAIL_PROVIDER': 'demo',
+            'ZALO_ACCESS_TOKEN': '', 'ZALO_OTP_TEMPLATE_ID': '',
+            'TWILIO_ACCOUNT_SID': '', 'TWILIO_AUTH_TOKEN': '', 'TWILIO_FROM': '',
+            'SMTP_HOST': '', 'SMTP_USER': '', 'SMTP_PASSWORD': '', 'SMTP_FROM': '',
+            'APP_SECRET': context['appSecret'],
+            'REALTIMEORDERS_NETWORK_MODE': context.get('networkMode', 'local'),
+            'APP_ORIGIN': context.get('origin', 'https://localhost:3443')}
 
 
 def save_running(context):
@@ -87,14 +108,14 @@ def services(action, context=None):
     print(f'Services {action} completed', flush=True)
 
 
-def wait_ready():
+def wait_ready(origin='https://localhost:3443'):
     import httpx
     deadline = time.monotonic() + 45
-    with httpx.Client(verify=False, timeout=3) as client:
+    with httpx.Client(verify=False, timeout=3, trust_env=False) as client:
         while time.monotonic() < deadline:
             try:
-                health = client.get('https://localhost:3443/api/health')
-                page = client.get('https://localhost:3443')
+                health = client.get(origin + '/api/health')
+                page = client.get(origin)
                 if health.status_code == page.status_code == 200:
                     return {'httpsHealth': 200, 'frontendHealth': 200, 'demoMode': health.json()['demo']}
             except httpx.HTTPError:
@@ -103,7 +124,7 @@ def wait_ready():
     raise RuntimeError('Application did not become ready')
 
 
-async def prepare():
+async def prepare(network_mode='local'):
     import asyncmy
     from sqlalchemy.engine import make_url
     from app.config import settings
@@ -154,7 +175,8 @@ async def prepare():
         context = {'tag': tag, 'sourceDatabase': source.database, 'database': database,
                    'databaseUrl': source.set(username=username, password=password, database=database).render_as_string(hide_password=False),
                    'uploadDir': str(upload_dir), 'runtime': str(folder), 'evidence': str(evidence), 'baseline': baseline,
-                   'appSecret': secrets.token_urlsafe(48), 'state': 'PREPARED'}
+                   'appSecret': secrets.token_urlsafe(48), 'state': 'PREPARED',
+                   **network_values(network_mode)}
         dump_json(CONTEXT, context)
         try:
             revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
@@ -168,7 +190,7 @@ async def prepare():
     finally:
         await connection.ensure_closed()
     services('start', context)
-    ready = wait_ready()
+    ready = wait_ready(context['origin'])
     save_running(context)
     dump_json(evidence / 'startup.json', ready)
     print(json.dumps({'testDatabase': database, 'copiedTables': len(restored), **ready}), flush=True)
@@ -188,7 +210,7 @@ async def finish(context):
     finally:
         await connection.ensure_closed()
     services('start')
-    result = {**wait_ready(), 'sourceDatabaseUnchanged': unchanged, 'testDatabaseRetained': context['database']}
+    result = {**wait_ready(network_values()['origin']), 'sourceDatabaseUnchanged': unchanged, 'testDatabaseRetained': context['database']}
     dump_json(Path(context['evidence']) / 'final-startup.json', result)
     context['state'] = 'FINISHED'
     dump_json(CONTEXT, context)
@@ -199,12 +221,13 @@ async def finish(context):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--network-mode', choices=['local', 'configured'], default=None)
     parser.add_argument('action', choices=['prepare', 'backend', 'browser', 'run', 'restart', 'stop', 'finish'])
     parser.add_argument('--cwd', choices=['root', 'backend', 'frontend'], default='root')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if args.action == 'prepare':
-        asyncio.run(prepare())
+        asyncio.run(prepare(args.network_mode or 'local'))
         return
     context = json.loads(CONTEXT.read_text(encoding='utf-8'))
     check_context(context, args.action)
@@ -226,9 +249,14 @@ def main():
     elif args.action == 'restart':
         if context['state'] == 'RUNNING':
             services('stop-app')
+            context['state'] = 'STOPPED'
+            dump_json(CONTEXT, context)
+        if args.network_mode is not None:
+            context.update(network_values(args.network_mode))
+            dump_json(CONTEXT, context)
         services('start', context)
         save_running(context)
-        print(json.dumps(wait_ready()), flush=True)
+        print(json.dumps(wait_ready(context.get('origin', 'https://localhost:3443'))), flush=True)
     elif args.action == 'stop':
         services('stop-app')
         context['state'] = 'STOPPED'

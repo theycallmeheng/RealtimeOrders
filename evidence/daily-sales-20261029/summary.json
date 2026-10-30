@@ -1,0 +1,119 @@
+{
+  "implementationDate": "2026-10-29",
+  "generatedAtUtc": "2026-10-28T18:54:44.810135+00:00",
+  "backend": {
+    "passed": 118,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 25.404
+  },
+  "browser": {
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 14.935737999999999
+  },
+  "frontendBuildPassed": true,
+  "cleanup": {
+    "ordersDeleted": 65,
+    "offersDeleted": 271,
+    "offersArchived": 14,
+    "preservedOrders": 2,
+    "preservedHash": "dac9487497277b105042d2705ce4350d5b57817e7e7fbd3a04e7c56687afb1bb",
+    "snapshotRequired": true
+  },
+  "preservation": {
+    "sourceUnchangedDuringTests": true,
+    "sourceTablesComparedBeforeRollout": 39,
+    "preservedRecentOrders": 2,
+    "recentOrderValuesAndHistoryUnchangedAcrossMigrationAndCleanup": true,
+    "unrelatedDataUnchanged": [
+      "auth_challenges",
+      "categories",
+      "conversations",
+      "customer_groups",
+      "delivery_zones",
+      "media_assets",
+      "message_attachments",
+      "messages",
+      "moderation_rules",
+      "moderation_violations",
+      "notification_jobs",
+      "pickup_slots",
+      "product_images",
+      "product_requests",
+      "product_subscriptions",
+      "rate_limit_buckets",
+      "request_quotes",
+      "request_status_history",
+      "sessions",
+      "units",
+      "users",
+      "products (existing columns)",
+      "addresses (existing columns)",
+      "delivery_policies (existing columns)"
+    ],
+    "migration": "0003",
+    "goongLiveVerified": false,
+    "twoPhysicalMachinesVerified": false
+  },
+  "primarySmoke": {
+    "origin": "https://localhost:3443",
+    "readOnlyBusinessSmoke": true,
+    "roles": [
+      {
+        "role": "ADMIN",
+        "pageErrors": 0
+      },
+      {
+        "role": "CUSTOMER",
+        "pageErrors": 0
+      }
+    ],
+    "twoPhysicalMachinesVerified": false,
+    "todayOffers": 0,
+    "health": 200
+  },
+  "network": {
+    "mode": "local",
+    "origin": "https://localhost:3443",
+    "currentLanIp": "192.168.1.11",
+    "privateNetworkApprovalPending": false,
+    "userDecision": "Keep Public network; localhost only",
+    "localOnlyConfirmed": true
+  },
+  "goong": {
+    "integrationImplemented": true,
+    "keyConfigured": false,
+    "liveProviderVerified": false,
+    "userRequestedFinishIntegrationBeforeKey": true
+  },
+  "sourceSha256": {
+    "backend/alembic/versions/0003_daily_sales.py": "51b093997a6d8667fdfda40fb02bbea07894a1f66dbc0095a32fd60da41ae2f6",
+    "backend/app/menus.py": "43aecb7544d7a9698fb9557d39cd1a01c941a54e5ad327c8cae60a10ef7e5ecb",
+    "backend/app/shipping.py": "b4b29d4c5c0e31f3512a3d8111298f744bf8ae73efdcb865b9e9c9a64bb89088",
+    "backend/app/analytics.py": "2c6e181517e0f7cde780788802773dc2914675641d6c5db243f8baa2d229764e",
+    "backend/app/main.py": "f9df2b01508330b9ca9c0cb8f8adff19dd9ba68f93208231df266e047c5f1d45",
+    "backend/app/commerce.py": "06c77fd46bbfe50812f38d91a680e1e9e18606ec4291c42ed1f5a23328ede423",
+    "backend/app/admin.py": "8f99385bed6b790763a77a8134e5e3fb62fb8dda1698081e622c1a18026d5066",
+    "backend/app/accounts.py": "87d709a1546c277895faf783f63c800a1ef7914f930fbe077ac8a8a97cdaaea9",
+    "backend/app/config.py": "193732415b5175ab251d48aefaf214e75c2cfd6e54dade89369b47a9c7a6297e",
+    "backend/app/realtime.py": "814737c2d91886c67183753bc372044e08b8f9c577a35d74c15c39f46b5860ad",
+    "backend/app/events.py": "c5e4bfd5629d605ca0ed66b379087592455116a89ffc52682c19fe21360a83b7",
+    "backend/tests/conftest.py": "4dbdf04cb3e4d312c86d2eec06600c47003653dd6bfad579799e9b8bd3d1eae7",
+    "backend/tests/test_daily_sales.py": "e6f2d52dae5d335b47c9d35be5c5aa4b951b3515d96be2569a5d143be1d41b44",
+    "frontend/app/page.tsx": "f1538884c6d56f01569c5318f99a718aed878a2f228ebdae4218f1ee8c83442a",
+    "frontend/app/globals.css": "376ee823841658a71d89d9666d4869ab9aae0105bb0313351403b97aa636907a",
+    "frontend/tests/app.spec.ts": "02185dc80312ca48af351184d2fdc062ec52f10823965bc61cb1a3ef93db7a52",
+    "scripts/cleanup_sales.py": "dcaeb18226a856d23e352cc2d59b5d0b0a459efc4a961c5648439dce24b582c0",
+    "scripts/lan_probe.py": "50f80c5a301a4dcc4176341bcb04cf01de48613d4c001775648ef6db77983da4",
+    "scripts/isolated_validation.py": "b69992608391846a6f3cf6f1a3b3ea2bec6a10d419a082296219e4ff4fbef71a"
+  },
+  "limitations": [
+    "Goong live acceptance requires a valid key and warehouse/address confirmation.",
+    "Local-only deployment selected by the user; access from other machines is disabled.",
+    "Two physical machines have not been tested.",
+    "No new p95 realtime performance benchmark is claimed."
+  ]
+}

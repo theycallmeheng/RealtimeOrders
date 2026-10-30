@@ -4,7 +4,7 @@ export default defineConfig({
   timeout: 60000,
   workers: 1,
   use: {
-    baseURL: "https://localhost:3443",
+    baseURL: process.env.APP_ORIGIN ?? "https://localhost:3443",
     ignoreHTTPSErrors: true,
     channel: "msedge",
     headless: true,

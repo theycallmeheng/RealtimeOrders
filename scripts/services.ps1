@@ -49,12 +49,31 @@ if($Action -eq 'status'){
     else{Write-Host 'Chua co dich vu duoc script quan ly.'}
     exit
 }
+$networkOverride=$env:REALTIMEORDERS_NETWORK_MODE
+if($networkOverride -and $networkOverride -notin @('local','configured')){throw 'REALTIMEORDERS_NETWORK_MODE must be local or configured.'}
+$publicOrigin='https://localhost:3443'
+$activeMode='local'
+$networkPath=Join-Path $runtimePath 'network.local.json'
+if($networkOverride -ne 'local' -and (Test-Path -LiteralPath $networkPath)){
+    $network=Get-Content -LiteralPath $networkPath -Raw | ConvertFrom-Json
+    if($network.mode -eq 'lan'){
+        $ip=[Net.IPAddress]::Parse($network.address);$bytes=$ip.GetAddressBytes()
+        $private=$ip.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork -and ($bytes[0] -eq 10 -or ($bytes[0] -eq 172 -and $bytes[1] -ge 16 -and $bytes[1] -le 31) -or ($bytes[0] -eq 192 -and $bytes[1] -eq 168))
+        if(-not $private -or $network.origin -ne ('https://' + $network.address + ':3443') -or $network.tlsDirectory -ne 'runtime/tls-lan'){throw 'Invalid LAN configuration. Run scripts\configure-lan.ps1 again.'}
+        if(-not(Get-NetIPAddress -IPAddress $network.address -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.AddressState -eq 'Preferred'})){throw 'LAN IPv4 changed. Run scripts\configure-lan.ps1 with the current address, then restart.'}
+        $publicOrigin=$network.origin;$activeMode='lan'
+    }elseif($network.mode -ne 'local'){throw 'Invalid network mode.'}
+}
+$env:APP_ORIGIN=$publicOrigin
 $existingOwned=@()
 if(Test-Path -LiteralPath $statePath){
     $oldEntries=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
     $existingOwned=@(foreach($entry in $oldEntries){if(Test-OwnedProcess $entry){$entry}})
     $appEntries=@($existingOwned | Where-Object { $_.name -ne 'mysql' })
-    if($appEntries.Count -eq 3){Write-Host 'RealtimeOrders dang chay: https://localhost:3443';exit}
+    if($appEntries.Count -eq 3){
+        if(@($appEntries | Where-Object {$_.origin -ne $publicOrigin -or $_.networkMode -ne $activeMode}).Count -gt 0){throw 'Network profile changed. Run services.ps1 stop-app, then start.'}
+        Write-Host ('RealtimeOrders dang chay: ' + $publicOrigin);exit
+    }
     if($appEntries.Count -gt 0){throw 'Mot so dich vu con chay. Chay services.ps1 stop truoc.'}
     if($existingOwned.Count -eq 0){Remove-Item -LiteralPath $statePath}
 }
@@ -69,7 +88,7 @@ function Start-Owned($name,$exe,$arguments,$directory,$marker){
     Start-Sleep -Milliseconds 400
     $info=Get-CimInstance Win32_Process -Filter "ProcessId=$($process.Id)"
     if(-not $info){throw "Dich vu $name khong khoi dong. Xem runtime\$name-error.log"}
-    $entries.Add(@{name=$name;pid=$process.Id;created=$info.CreationDate.ToUniversalTime().Ticks.ToString();marker=$marker})
+    $entries.Add(@{name=$name;pid=$process.Id;created=$info.CreationDate.ToUniversalTime().Ticks.ToString();marker=$marker;origin=$publicOrigin;networkMode=$activeMode})
     $entries | ConvertTo-Json | Set-Content -LiteralPath $statePath -Encoding utf8
 }
 # MySQL may already be running from setup or Docker. Never stop a foreign service.
@@ -88,5 +107,5 @@ $nodePath=(Get-Command node.exe).Source
 $nextCli=Join-Path $projectRoot 'frontend\node_modules\next\dist\bin\next'
 Start-Owned 'frontend' $nodePath @("`"$nextCli`"",'start','--hostname','127.0.0.1','--port','3000') (Join-Path $projectRoot 'frontend') $nextCli
 Start-Owned 'proxy' $nodePath @("`"$(Join-Path $projectRoot 'scripts\proxy.mjs')`"") $projectRoot 'proxy.mjs'
-Write-Host 'RealtimeOrders: https://localhost:3443'
+Write-Host ('RealtimeOrders: ' + $publicOrigin)
 Write-Host 'Tai khoan demo: runtime\demo-accounts.local.json'

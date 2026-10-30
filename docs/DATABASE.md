@@ -7,6 +7,20 @@ không sửa tại chỗ schema ban đầu để tránh lệch bản đã cài. 
 dòng vẫn phải được bảo vệ bằng transaction và test,
 không coi một CHECK đơn giản thay thế được toàn bộ nghiệp vụ.
 
+Revision 0004 bổ sung `sku_sequences`. Mã mới được server cấp theo dạng
+`SKU-000001`; bộ đếm được khóa trong transaction nên các yêu cầu thêm sản phẩm
+đồng thời không nhận trùng SKU. Migration khởi tạo bộ đếm sau mã số lớn nhất đã
+có theo định dạng này; các SKU cũ khác định dạng vẫn được giữ nguyên.
+
+Revision 0005 bổ sung `offers.allowed_group_ids` để giới hạn từng sản phẩm trong
+menu ngày. Giá trị NULL không thêm giới hạn; quyền hiệu lực vẫn giao với quyền
+của sản phẩm, menu ngày và nhóm có giá bán.
+
+Revision 0006 bổ sung `auth_challenges.delivery_channel`,
+`delivery_accepted_at` và `sms_fallback_used_at`. Thông tin này dùng để xác định
+kênh OTP đăng ký và cho phép chuyển một lần từ Zalo sang SMS; không lưu mã OTP
+thô. Các challenge email cũ được gán kênh EMAIL khi migration.
+
 ## 1. Quy ước
 
 - MySQL 8.4, InnoDB, utf8mb4. ID UUID chuẩn hóa; timestamp DATETIME(6) UTC.
@@ -57,16 +71,16 @@ tạo hai hộp chat riêng cho cùng khách.
 | Nhóm | Bảng | Trách nhiệm |
 |---|---|---|
 | Tài khoản | customer_groups, users, addresses | Nhóm giá, định danh, tối đa 3 địa chỉ và mặc định |
-| Xác thực | auth_challenges, sessions, rate_limit_buckets | OTP/ticket/email, hash session và giới hạn dùng chung |
+| Xác thực | auth_challenges, sessions, rate_limit_buckets | OTP/ticket, kênh gửi, thời gian Zalo-accepted/fallback, hash session và giới hạn dùng chung |
 | Hàng | categories, units, products, product_images, media_assets | SKU/đơn vị/ảnh có ownership và vòng đời |
-| Bán theo đợt | offers, offer_prices | Số còn, cửa sổ bán/duyệt, phiên bản và giá nhóm |
+| Bán theo đợt | offers, offer_prices | Số còn, cửa sổ bán/duyệt, quyền theo dòng và giá nhóm |
 | Giao hàng | delivery_zones, delivery_policies, pickup_slots | Khu vực, phí/mức tối thiểu và điểm giao tập trung |
 | Đơn | orders, order_items, order_status_history | Snapshot thương mại, phiên bản và lịch sử |
 | Kho/hủy | inventory_movements, cancellation_requests | Sổ tăng/giảm, yêu cầu và quyết định hủy |
 | Yêu cầu hàng | product_requests, request_quotes, request_status_history | Báo giá được chấp thuận, liên kết đơn duy nhất |
 | Chat | conversations, messages, message_attachments | Một hộp chat/khách, text đã che và ảnh được phép |
 | Thông báo | notifications, product_subscriptions, notification_jobs | Lịch sử riêng, quan tâm và fan-out bền vững theo lô |
-| Quản trị | moderation_rules, moderation_violations, audit_logs, system_settings | Chính sách và nhật ký |
+| Quản trị | moderation_rules, moderation_violations, audit_logs, system_settings, sku_sequences | Chính sách, nhật ký và cấp SKU tăng dần |
 | Tin cậy | idempotency_keys, stream_heads, stream_events, outbox | Retry, cursor đúng commit và phát lại |
 
 ## 4. Ràng buộc quan trọng

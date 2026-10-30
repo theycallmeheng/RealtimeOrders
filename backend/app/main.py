@@ -17,7 +17,7 @@ from sqlalchemy import select, update, func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
 from .config import settings
 from .db import T, Session, engine, reflect, now, uid, uuid, one, rows, add, change, check, text, public, Fault
-from . import auth, commerce, accounts, requests as product_requests, admin, chat
+from . import auth, commerce, accounts, admin, chat, menus, shipping, analytics
 from .events import emit, flush_events, outbox_worker, session_monitor, hub, Subscriber, event_wire
 from .moderation import sanitize
 
@@ -28,11 +28,14 @@ async def lifespan(app):
     await reflect()
     task=asyncio.create_task(outbox_worker())
     monitor=asyncio.create_task(session_monitor())
+    schedule=asyncio.create_task(menus.boundary_monitor())
     yield
     task.cancel()
     monitor.cancel()
+    schedule.cancel()
     with suppress(asyncio.CancelledError): await task
     with suppress(asyncio.CancelledError): await monitor
+    with suppress(asyncio.CancelledError): await schedule
     await engine.dispose()
 
 app=FastAPI(title='RealtimeOrders API',version='1.0.0',lifespan=lifespan)
@@ -82,6 +85,12 @@ async def body_json(request):
     try: body=json.loads(raw) if raw else {}
     except (ValueError,UnicodeError,RecursionError): raise Fault('INVALID_JSON','JSON không hợp lệ')
     check(isinstance(body,dict),'INVALID_JSON','Nội dung phải là JSON object')
+    pending=[(body,0)]
+    while pending:
+        value,depth=pending.pop()
+        check(depth<=32,'INVALID_JSON','JSON lồng quá sâu')
+        if isinstance(value,dict):pending.extend((item,depth+1) for item in value.values())
+        elif isinstance(value,list):pending.extend((item,depth+1) for item in value)
     return body
 
 def origin_check(request):
@@ -97,6 +106,8 @@ def route(method,path,anonymous=False,idempotent=False):
     def decorator(handler):
         async def endpoint(request:Request):
             body=await body_json(request) if method!='GET' else {}
+            if '/product-requests' in path:
+                raise Fault('FEATURE_RETIRED','Chức năng yêu cầu hàng và báo giá đã ngừng hỗ trợ',410)
             if method!='GET':
                 if anonymous: origin_check(request)
                 else: csrf_check(request)
@@ -137,7 +148,14 @@ async def otp(kind:str,request:Request):
     if kind=='password-reset' and (not user or user['status']!='ACTIVE'):
         await auth.rate('otp-ip:'+request.client.host,20,3600)
         return {'challengeId':uid(),'expiresIn':300,'demo':settings.demo_mode}
-    return await auth.challenge(subject,'REGISTER_PHONE' if kind=='registration' else 'RESET_PASSWORD',request.client.host,user)
+    if kind=='registration':
+        return await auth.registration_challenge(subject,request.client.host)
+    return await auth.challenge(subject,'RESET_PASSWORD',request.client.host,user)
+
+@app.post('/api/v1/auth/registration/sms-fallback')
+async def registration_sms_fallback(request:Request):
+    origin_check(request); b=await body_json(request)
+    return await auth.sms_fallback(uuid(b.get('challengeId')),request.client.host)
 
 @app.post('/api/v1/auth/{kind}/verify')
 async def verify(kind:str,request:Request):
@@ -267,26 +285,14 @@ async def admin_order_action(s,u,b,r):
     check(r.path_params['action'] in ('approve','reject','transition','decide-cancel'),'NOT_FOUND','Thao tác không tồn tại',404)
     return await commerce.order_action(s,u,uuid(r.path_params['id']),r.path_params['action'],b,r.headers.get('idempotency-key'))
 
-@route('POST','/product-requests',idempotent=True)
-async def request_create(s,u,b,r): return await product_requests.create(s,u,b)
+@route('POST','/product-requests')
 @route('GET','/product-requests')
-async def request_list(s,u,b,r):
-    data=await rows(s,'product_requests',T['product_requests'].c.customer_id==u['id'],limit=50,order=T['product_requests'].c.created_at.desc())
-    return [await product_requests.detail(s,u,x['id']) for x in data]
 @route('GET','/product-requests/{id}')
-async def request_detail(s,u,b,r): return await product_requests.detail(s,u,uuid(r.path_params['id']))
 @route('POST','/product-requests/{id}/{action}')
-async def request_action(s,u,b,r):
-    check(r.path_params['action'] in ('accept-quote','convert','cancel'),'NOT_FOUND','Thao tác không tồn tại',404)
-    return await product_requests.action(s,u,uuid(r.path_params['id']),r.path_params['action'],b,r.headers.get('idempotency-key'))
 @route('GET','/admin/product-requests')
-async def admin_request_list(s,u,b,r):
-    q=select(T['product_requests'].c.id).order_by(T['product_requests'].c.created_at.desc()).limit(50).offset(page_offset(r))
-    return [await product_requests.detail(s,u,id) for id in (await s.execute(q)).scalars()]
 @route('POST','/admin/product-requests/{id}/{action}')
-async def admin_request_action(s,u,b,r):
-    check(r.path_params['action'] in ('receive','quote','reject'),'NOT_FOUND','Thao tác không tồn tại',404)
-    return await product_requests.action(s,u,uuid(r.path_params['id']),r.path_params['action'],b)
+async def retired_requests(s,u,b,r):
+    raise Fault('FEATURE_RETIRED','Chức năng yêu cầu hàng và báo giá đã ngừng hỗ trợ',410)
 
 @route('GET','/conversations/me')
 async def my_conversation(s,u,b,r): return await chat.conversation(s,u)
@@ -304,8 +310,7 @@ async def admin_conversations(s,u,b,r):
 
 @route('GET','/notifications')
 async def notifications(s,u,b,r):
-    t=T['notifications']; q=select(t).where(t.c.user_id==u['id']).order_by(t.c.created_at.desc(),t.c.id.desc()).limit(50).offset(page_offset(r))
-    return [dict(x) for x in (await s.execute(q)).mappings()]
+    return await menus.notification_feed(s,u,page_offset(r))
 @route('POST','/notifications/{id}/read')
 async def notification_read(s,u,b,r):
     n=await one(s,'notifications',T['notifications'].c.id==uuid(r.path_params['id']),T['notifications'].c.user_id==u['id'])
@@ -344,8 +349,12 @@ async def config_delete(s,u,b,r):
     return await admin.configuration(s,u,table,uuid(r.path_params['id']),b,'DELETE')
 @route('GET','/admin/products')
 async def products(s,u,b,r):
-    data=await rows(s,'products',limit=200,order=T['products'].c.name)
-    for p in data: p['images']=await rows(s,'product_images',T['product_images'].c.product_id==p['id'])
+    data=await rows(s,'products',limit=1000,order=[T['products'].c.active.desc(),T['products'].c.name])
+    images=await rows(s,'product_images',T['product_images'].c.product_id.in_([p['id'] for p in data]),
+                      limit=5000,order=T['product_images'].c.position)
+    by_product={}
+    for image in images:by_product.setdefault(image['product_id'],[]).append(image)
+    for p in data:p['images']=by_product.get(p['id'],[])
     return data
 @route('POST','/admin/products')
 async def product_create(s,u,b,r): return await admin.product(s,u,None,b)
@@ -386,6 +395,61 @@ async def movement_list(s,u,b,r): return await rows(s,'inventory_movements',limi
 async def report(s,u,b,r):
     return await admin.reports(s,admin.date_time(r.query_params.get('start',str(now().date())+'T00:00:00Z')),
                                admin.date_time(r.query_params.get('end',str((now()+timedelta(days=1)).date())+'T00:00:00Z')))
+
+@route('GET','/catalog/menu')
+async def daily_catalog(s,u,b,r): return await menus.current(s,u)
+
+@route('GET','/admin/menus')
+async def menu_list(s,u,b,r):
+    data=await rows(s,'daily_menus',limit=100,order=[T['daily_menus'].c.sale_date.desc(),T['daily_menus'].c.opens_at.desc()])
+    return public(data)
+
+@route('GET','/admin/menus/{id}')
+async def menu_detail(s,u,b,r): return await menus.detail(s,uuid(r.path_params['id']))
+
+@route('POST','/admin/menus',idempotent=True)
+async def menu_create(s,u,b,r): return await menus.save(s,u,None,b)
+
+@route('PATCH','/admin/menus/{id}',idempotent=True)
+async def menu_update(s,u,b,r): return await menus.save(s,u,uuid(r.path_params['id']),b)
+
+@route('POST','/admin/menus/{id}/copy',idempotent=True)
+async def menu_copy(s,u,b,r): return await menus.copy(s,u,uuid(r.path_params['id']),b)
+
+@route('GET','/admin/warehouse')
+async def warehouse_get(s,u,b,r): return await shipping.warehouse(s)
+
+@route('PATCH','/admin/warehouse')
+async def warehouse_save(s,u,b,r): return await shipping.save_warehouse(s,u,b)
+
+@route('GET','/admin/reports/daily')
+async def daily_report(s,u,b,r): return await analytics.report(s,r.query_params.get('date'),r.query_params.get('compare'))
+
+@route('GET','/maps/search')
+async def location_search(s,u,b,r):
+    await auth.rate('map:'+u['id'],30,60)
+    return await shipping.search(r.query_params.get('q',''))
+
+@route('GET','/maps/place')
+async def location_resolve(s,u,b,r):
+    await auth.rate('map:'+u['id'],30,60)
+    return await shipping.resolve(r.query_params.get('id',''))
+
+@app.post('/api/v1/delivery/quote')
+async def delivery_quote(request:Request):
+    csrf_check(request); body=await body_json(request)
+    async with Session.begin() as s:
+        user=await auth.authenticate(s,request.cookies.get('ro_session'),activity=True)
+        prepared=await shipping.prepare(s,user,body)
+    await auth.rate('route:'+user['id'],15,60)
+    routed=await shipping.route(prepared[0],prepared[2])
+    # Recheck versions after network I/O, using a new transaction.
+    async with Session.begin() as s:
+        current=await auth.authenticate(s,request.cookies.get('ro_session'))
+        fresh=await shipping.prepare(s,current,body)
+        check(current['id']==user['id'] and fresh==prepared,'REQUOTE_REQUIRED','Dữ liệu đã đổi khi tính phí; vui lòng thử lại',409)
+        result=await shipping.record_quote(s,current,fresh,routed)
+    return JSONResponse(public(result))
 
 @app.post('/api/v1/media')
 async def upload(request:Request):
@@ -431,7 +495,7 @@ async def media(s,u,b,r):
     id=uuid(r.path_params['id']); asset=await one(s,'media_assets',T['media_assets'].c.id==id,T['media_assets'].c.state=='READY')
     allowed=u['role']=='ADMIN' or asset['owner_id']==u['id']
     if not allowed and asset['purpose']=='PRODUCT':
-        allowed=bool(await one(s,'product_images',T['product_images'].c.asset_id==id,required=False))
+        allowed=any(id in offer['images'] for offer in await commerce.catalog(s,u))
     if not allowed and asset['purpose']=='CHAT':
         a,m,c=T['message_attachments'],T['messages'],T['conversations']
         allowed=bool((await s.execute(select(a.c.asset_id).join(m,a.c.message_id==m.c.id).join(c,m.c.conversation_id==c.c.id)

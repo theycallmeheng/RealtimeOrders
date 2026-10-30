@@ -4,11 +4,13 @@
 
 Khách xem giá theo nhóm, đặt nhiều món rồi chờ duyệt. Người bán kiểm tra kho,
 duyệt đơn, chuẩn bị và giao hàng. **Gửi đơn không giữ hàng; chỉ duyệt mới trừ kho.**
-Chat riêng, yêu cầu hàng/báo giá, thông báo và lịch sử giúp giảm trao đổi thủ công.
+Chat riêng, thông báo lưu bền và lịch sử đơn giúp giảm trao đổi thủ công.
 
 ## Chạy bản đã cài trên máy này
 
-Mở `Start.cmd`, sau đó truy cập **https://localhost:3443**.
+Mở `Start.cmd`, dùng URL mà script in ra (mặc định **https://localhost:3443**).
+Để máy khác cùng LAN truy cập, làm theo [hướng dẫn hai máy](docs/LAN.md).
+Chế độ LAN dùng IP trong tệp local, proxy cổng 3443 và chứng thư CA riêng cho demo.
 Dừng bằng `Stop.cmd`. Tài khoản và mật khẩu demo được sinh ngẫu nhiên, xem tại
 `runtime/demo-accounts.local.json`. Tệp này chỉ có trên máy cài, không nằm trong gói source.
 Không có mật khẩu admin mặc định.
@@ -24,19 +26,19 @@ yêu cầu xác nhận trước khi mở lần đầu. Không dùng chứng thư
 
 ## Chức năng đã triển khai
 
-- Đăng ký SĐT qua OTP, đăng nhập mật khẩu, khôi phục mật khẩu, xác minh email tùy chọn.
+- Đăng ký SĐT qua OTP Zalo, SMS dự phòng do người dùng chọn; đăng nhập mật khẩu, OTP khôi phục qua cấu hình SMS, xác minh email tùy chọn.
 - Hai nhóm giá sinh viên/người đi làm; tối đa ba địa chỉ và một mặc định.
-- Danh mục, đơn vị, sản phẩm/ảnh, đợt hàng và giá nhóm; giao tập trung/giao riêng có điều kiện.
+- Danh mục, đơn vị, sản phẩm/ảnh (tải tệp hoặc lưu URL HTTPS trong MySQL), đợt hàng và giá nhóm; giao tập trung/giao riêng có điều kiện.
 - Đơn nhiều dòng, kiểm tra giá/phiên bản/phí; duyệt nguyên đơn, kho không âm.
 - Hủy đơn chờ; xin hủy sau duyệt, quản trị quyết định và hoàn kho đúng một lần.
-- Yêu cầu hàng → tiếp nhận → báo giá có hạn → chấp thuận → một đơn liên kết.
+- Menu theo ngày có nhiều sản phẩm và nhiều đợt cùng ngày; tồn kho, giá và nhóm được phép mua được kiểm soát riêng.
+- Giao riêng tính quãng đường bằng Goong; cần `GOONG_API_KEY` và vị trí kho/địa chỉ đã xác nhận.
+- Chức năng yêu cầu hàng/báo giá đã rút khỏi phạm vi; các API cũ trả HTTP 410.
 - Chat text/ảnh, lịch sử, kiểm duyệt từ cấm, thông báo lưu bền và quan tâm sản phẩm.
 - Quản lý tài khoản, thu hồi phiên, báo cáo doanh thu COD khi DELIVERED, audit/ledger.
 - HTTPS/WSS, topic riêng theo quyền, seq, snapshot/replay, reconnect, outbox và retry cùng mã.
 
-**SMS/email hiện chạy demo**: mã hiển thị rõ trên giao diện, chưa gửi thật. Có adapter
-Twilio và SMTP; cần thông tin dịch vụ để kiểm tra với số/email được phép. Đừng đưa
-khách thật vào chế độ demo. Không có thanh toán online, vận chuyển bên thứ ba hay đổi trả sau giao.
+**OTP chỉ chạy demo nếu chưa cấu hình nhà cung cấp**: ở `DEMO_MODE`, mã thử được hiển thị rõ trên giao diện. Để đăng ký thật cần OA/ZBS, access token và template OTP đã duyệt; SMS dự phòng và khôi phục mật khẩu cần cấu hình Twilio. Email tùy chọn cần SMTP. Không có thông tin xác thực Zalo/Twilio trong môi trường hiện tại nên chưa xác minh gửi tin thật. Đừng đưa khách thật vào chế độ demo. Không có thanh toán online, vận chuyển bên thứ ba hay đổi trả sau giao.
 
 ## Kiến trúc và công nghệ
 
@@ -76,6 +78,8 @@ Khởi động MySQL trên máy trước khi setup. `setup.ps1` mặc định k�
 khẩu root, không khởi tạo datadir và không ghi đè database đã tồn tại.
 Sau đó script chạy Alembic/seed, tạo TLS thử và build giao diện. Có thể truyền
 `-MySQLPort`, `-MySQLHost`, `-AdminUser` hoặc `-AdminPasswordFile` nếu cần.
+Migration `0007` thêm `product_images.source_url`; database mới tạo cũng có thể
+lưu URL ảnh sau khi `setup.ps1` chạy `alembic upgrade head`.
 
 Nếu dùng MySQL đã quản trị sẵn: tự tạo **database và user riêng**, cấp quyền trên
 database đó, tạo `.env` theo `.env.example`, rồi chạy setup. Không dùng database của
@@ -123,11 +127,11 @@ npm --prefix frontend run build
 Browser test dùng Edge cài trên máy; có thể đổi `channel` trong
 `frontend/playwright.config.ts` nếu dùng trình duyệt khác. Test tạo dữ liệu `TEST-*`,
 đóng đợt sau khi chạy, giữ lịch sử để truy vết; chỉ chạy trên DB thử.
-Không gửi SMS thật trong kiểm thử/tạo tải. Giới hạn đăng nhập/OTP vẫn áp dụng khi
+Không gửi SMS hoặc Zalo thật trong kiểm thử/tạo tải. Giới hạn đăng nhập/OTP vẫn áp dụng khi
 chạy test nhiều lần; chờ cửa sổ giới hạn thay vì tắt bảo vệ trong môi trường thật.
 
 `prepare` từ chối chạy đè các cổng đang dùng, đối chiếu 39 bảng, dùng thư mục ảnh
-riêng và buộc SMS/email demo. `finish` kiểm tra dữ liệu nguồn rồi chạy lại bản
+riêng, buộc SMS/email demo và xóa cấu hình Zalo/Twilio/SMTP khỏi tiến trình test. `finish` kiểm tra dữ liệu nguồn rồi chạy lại bản
 demo chính; giữ DB audit để kiểm tra. Kết quả backend/browser có thư mục theo
 lượt chạy; phép tải giữ file riêng theo tag tại `evidence/load/`.
 

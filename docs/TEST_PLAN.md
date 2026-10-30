@@ -19,7 +19,7 @@ Không dùng ảnh/log/số liệu của project khác. Các ngưỡng dưới �
 
 | ID | Kịch bản | Kết quả bắt buộc |
 |---|---|---|
-| TC01 | OTP sai/hết hạn/replay/brute force và provider lỗi | Không tạo user hoạt động; giới hạn đúng; không báo đã gửi khi provider thất bại |
+| TC01 | OTP Zalo thành công/từ chối; chọn SMS ngay hoặc sau 60 giây; SMS lỗi; mã cũ, hết hạn, dùng lại và giới hạn gửi | Không tạo user hoạt động khi OTP không hợp lệ; chỉ mã mới còn hiệu lực; không log OTP/token hoặc báo gửi thành công khi provider lỗi |
 | TC02 | Hai đăng ký cùng SĐT/email; email chưa xác minh | Chỉ một định danh hợp lệ; chưa xác minh không đăng nhập bằng email |
 | TC03 | Login/logout/idle/absolute TTL/khóa/xóa mềm khi đang WSS | Phiên và socket hết quyền; heartbeat không giữ phiên mãi |
 | TC04 | Hai request đồng thời thêm địa chỉ thứ ba/tư và chọn default người khác | ≤3, default thuộc đúng user; đơn cũ không đổi khi sửa địa chỉ |

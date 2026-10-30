@@ -70,10 +70,15 @@ async def test_address_ownership(clients):
     admin,a,b,_=clients;addr=(await a.get('/me/addresses'))[0]
     r=await b.request('PATCH','/me/addresses/'+addr['id'],{'expectedVersion':str(addr['version']),'makeDefault':True});assert r.status_code==404
 
-async def test_group_prices_are_private(clients):
-    a=await clients[1].get('/catalog/offers');b=await clients[2].get('/catalog/offers')
-    id=DATA['products'][0]['offerId'];pa=next(o for o in a if o['id']==id);pb=next(o for o in b if o['id']==id)
-    assert pa['unit_price']!=pb['unit_price']; assert 'prices' not in pa
+async def test_group_prices_are_private(clients,sale):
+    from sqlalchemy import update
+    async with Session.begin() as s:
+        for c,amount in ((clients[1],90000),(clients[2],100000)):
+            await s.execute(update(T['offer_prices']).where(T['offer_prices'].c.offer_id==sale['id'],T['offer_prices'].c.group_id==c.user['group_id']).values(unit_price=amount))
+    a=next(o for o in await clients[1].get('/catalog/offers') if o['id']==sale['id'])
+    b=next(o for o in await clients[2].get('/catalog/offers') if o['id']==sale['id'])
+    assert a['unit_price']=='90000' and b['unit_price']=='100000'
+    assert 'prices' not in a and 'cost_price' not in a
 
 async def test_pending_does_not_deduct_and_deduplicates(clients,sale):
     c=clients[1];body=await order_body(c,sale);key=uid()
@@ -105,7 +110,9 @@ async def test_concurrent_approval_never_oversells(clients,sale):
 
 async def test_multi_item_approval_is_atomic(clients,sale):
     admin,c=clients[:2]
-    other=await admin.post('/admin/offers',{'productId':sale['product_id'],'batchCode':'TEST-'+uid()[:8],
+    template=next(p for p in await admin.get('/admin/products') if p['id']==sale['product_id'])
+    product=await admin.post('/admin/products',{'name':'Other atomic '+uid()[:8],'categoryId':template['category_id'],'unitId':template['unit_id'],'quantityStep':'.100','defaultCostPrice':'60000'})
+    other=await admin.post('/admin/offers',{'productId':product['id'],'batchCode':'TEST-'+uid()[:8],
         'opensAt':(now()-timedelta(hours=1)).isoformat()+'Z','closesAt':(now()+timedelta(days=1)).isoformat()+'Z',
         'availableQty':'3','status':'OPEN','prices':[{'groupId':id,'unitPrice':'100000'} for id in DATA['groups'].values()]})
     o=await c.post('/orders',await order_body(c,sale,'2',other))
@@ -163,16 +170,6 @@ async def test_media_validation_and_chat_access(clients):
     conv=await c.get('/conversations/me');await c.post('/conversations/'+conv['id']+'/messages',{'clientMessageId':uid(),'text':'Ảnh mẫu','assetIds':[id]})
     assert (await clients[0].request('GET','/media/'+id)).status_code==200
 
-async def test_quote_accept_convert_once(clients,sale):
-    a,c=clients[:2];req=await c.post('/product-requests',{'itemName':'Cam loại riêng','quantity':'1','unitLabel':'kg','note':'Giao đúng hẹn'})
-    req=await a.post('/admin/product-requests/'+req['id']+'/receive',{'expectedVersion':'1'})
-    ob=await order_body(c,sale);quote_body={**ob,'expectedVersion':str(req['version']),'offerId':sale['id'],'quantity':'1','unitPrice':'90000','expiresMinutes':'60'}
-    req=await a.post('/admin/product-requests/'+req['id']+'/quote',quote_body)
-    q=req['quotes'][0];req=await c.post('/product-requests/'+req['id']+'/accept-quote',{'expectedVersion':str(req['version']),'quoteId':q['id']})
-    payload={**ob,'quoteId':q['id'],'expectedVersion':str(req['version'])};key=uid()
-    req=await c.post('/product-requests/'+req['id']+'/convert',payload,key);again=await c.post('/product-requests/'+req['id']+'/convert',payload,key)
-    assert req['status']=='CONVERTED' and req['linked_order']['id']==again['linked_order']['id']
-    order=await c.get('/orders/'+req['linked_order']['id']);assert order['items'][0]['unit_price']=='90000'
 
 async def socket(c,**hello):
     cookie='; '.join(k+'='+v for k,v in c.http.cookies.items())
@@ -194,7 +191,7 @@ async def test_wss_snapshot_private_topics_and_replay(clients,sale):
     model=json.loads(''.join(m['data'] for m in data if m['type']=='SNAPSHOT_CHUNK'))
     assert all(o['customer_id']==c.user['id'] for o in model['orders'])
     await ws.close();await c.post('/orders',await order_body(c,sale))
-    ws=await socket(c,hasModel=True,lastSeq=heads);data=await sync_messages(ws);await ws.close()
+    ws=await socket(c,hasModel=True,lastSeq=heads,datasetEpoch=data[-1]['datasetEpoch']);data=await sync_messages(ws);await ws.close()
     assert next(m for m in data if m['type']=='SYNC_BEGIN')['mode']=='REPLAY'
     assert any(m.get('eventType')=='ORDER_CHANGED' for m in data)
 

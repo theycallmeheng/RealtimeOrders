@@ -36,14 +36,23 @@ async def complete(s, user, scope, key, response):
 
 async def lock_user(s, id): return await one(s, 'users', T['users'].c.id == id, lock=True)
 
-async def catalog(s, user, admin=False, offer_ids=None):
-    o, p, u, price = T['offers'], T['products'], T['units'], T['offer_prices']
+async def catalog(s, user, admin=False, offer_ids=None, menu_id=None):
+    from .menus import audience
+    o, p, u, price, groups = T['offers'], T['products'], T['units'], T['offer_prices'], T['customer_groups']
     q = select(o, p.c.name, p.c.sku, p.c.description, p.c.quantity_step, p.c.category_id,
+               p.c.allowed_group_ids.label('product_allowed_group_ids'),
                u.c.label.label('unit'), price.c.unit_price, price.c.version.label('price_version')).join(p, o.c.product_id==p.c.id)\
         .join(u, p.c.unit_id==u.c.id).outerjoin(price, and_(price.c.offer_id==o.c.id, price.c.group_id==user['group_id']))
-    if not admin: q = q.where(o.c.status=='OPEN', p.c.active==True, p.c.deleted_at==None,
-                              o.c.opens_at <= now(), o.c.closes_at > now(), price.c.unit_price != None)
+    if admin:q=q.where(o.c.archived_at==None)
+    if not admin:
+        m=T['daily_menus']
+        q=q.join(m,o.c.menu_id==m.c.id).join(groups,groups.c.id==user['group_id']).where(o.c.status=='OPEN',o.c.archived_at==None,
+            p.c.active==True,p.c.deleted_at==None,groups.c.active==True,
+            m.c.status=='OPEN',m.c.opens_at<=now(),m.c.closes_at>now(),price.c.unit_price!=None,
+            audience(p.c.allowed_group_ids,user['group_id']),audience(o.c.allowed_group_ids,user['group_id']),
+            audience(m.c.allowed_group_ids,user['group_id']))
     if offer_ids is not None: q=q.where(o.c.id.in_(offer_ids))
+    if menu_id is not None: q=q.where(o.c.menu_id==menu_id)
     offers = [dict(r) for r in (await s.execute(q.order_by(o.c.sale_date.desc(), p.c.name).limit(200))).mappings()]
     if not offers: return []
     offer_ids=[offer['id'] for offer in offers]
@@ -60,7 +69,9 @@ async def catalog(s, user, admin=False, offer_ids=None):
     counts_by_offer={}
     for count in counts: counts_by_offer.setdefault(count['offer_id'],[]).append(count)
     images_by_product={}
-    for image in images: images_by_product.setdefault(image['product_id'],[]).append(image['asset_id'])
+    for image in images:
+        source=image['asset_id'] or image['source_url']
+        if source: images_by_product.setdefault(image['product_id'],[]).append(source)
     prices_by_offer={}
     if admin:
         for row in (await s.execute(select(price).where(price.c.offer_id.in_(offer_ids)))).mappings():
@@ -73,6 +84,8 @@ async def catalog(s, user, admin=False, offer_ids=None):
         offer['images'] = images_by_product.get(offer['product_id'],[])
         offer['subscribed'] = offer['product_id'] in followed
         if admin: offer['prices'] = prices_by_offer.get(offer['id'],[])[:100]
+        else:
+            for key in ('cost_price','batch_code','archived_at','allowed_group_ids','product_allowed_group_ids'): offer.pop(key,None)
     return public(offers)
 
 async def catalog_event(s, ids):
@@ -98,6 +111,8 @@ async def get_order(s, user, id):
     check(user['role']=='ADMIN' or order['customer_id']==user['id'], 'FORBIDDEN', 'Không có quyền xem đơn', 403)
     order.pop('request_hash', None)
     order['items'] = await rows(s, 'order_items', T['order_items'].c.order_id==id)
+    if user['role']!='ADMIN':
+        for item in order['items']: item.pop('cost_price_snapshot',None)
     order['history'] = await rows(s, 'order_status_history', T['order_status_history'].c.order_id==id,
                                  order=T['order_status_history'].c.order_version)
     order['cancellation_requests'] = await rows(s, 'cancellation_requests', T['cancellation_requests'].c.order_id==id)
@@ -118,6 +133,8 @@ async def get_orders(s,user,ids):
         query=select(T[table]).where(T[table].c.order_id.in_(ids))
         if key=='history':query=query.order_by(T[table].c.order_version)
         for row in (await s.execute(query)).mappings():
+            row=dict(row)
+            if user['role']!='ADMIN': row.pop('cost_price_snapshot',None)
             values=by_id[row['order_id']][key]
             if len(values)<100: values.append(dict(row))
     return public([by_id[id] for id in ids])
@@ -142,9 +159,15 @@ async def delivery(s, user, body, subtotal):
         check(slot['ends_at']>now(), 'PICKUP_EXPIRED', 'Khung giao đã hết hạn')
         check(str(slot['version'])==str(body.get('pickupSlotVersion')), 'REQUOTE_REQUIRED', 'Điểm hoặc lịch giao đã thay đổi',409)
         snapshot['pickupSlot']=public(slot)
+    else:
+        from .shipping import validate_quote
+        check(body.get('deliveryQuoteId'),'REQUOTE_REQUIRED','Lấy phí giao và xác nhận trước khi đặt đơn',409)
+        quote=await validate_quote(s,user,body,address,policy)
+        snapshot.update(shippingFee=str(quote['shipping_fee']),distanceMeters=quote['distance_meters'],
+            durationSeconds=quote['duration_seconds'],deliveryQuoteId=quote['id'])
     return address, policy, snapshot
 
-async def create_order(s, user, body, key, quote=None):
+async def create_order(s, user, body, key):
     scope='create-order'
     prior=await idem(s,user,scope,key,body)
     if prior: return prior
@@ -159,6 +182,10 @@ async def create_order(s, user, body, key, quote=None):
           'INVALID_ITEMS','Đơn cần từ 1 đến 20 mặt hàng hợp lệ')
     ids=[uuid(line.get('offerId')) for line in lines]
     check(len(set(ids))==len(ids),'DUPLICATE_ITEM','Mỗi mặt hàng chỉ xuất hiện một lần')
+    # Match the menu editor's lock order: menu before offers.
+    menu_ids=(await s.execute(select(T['offers'].c.menu_id).where(T['offers'].c.id.in_(ids)))).scalars().all()
+    for menu_id in sorted({m for m in menu_ids if m}):
+        await one(s,'daily_menus',T['daily_menus'].c.id==menu_id,lock=True)
     locked={id:await one(s,'offers',T['offers'].c.id==id,lock=True) for id in sorted(ids)}
     items=[]
     for line,id in zip(lines,ids):
@@ -166,42 +193,22 @@ async def create_order(s, user, body, key, quote=None):
         check(offer['status']=='OPEN' and offer['opens_at']<=now()<offer['closes_at'] and not offer['processing_locked_at'],
               'OFFER_CLOSED','Đợt bán đã đóng',409)
         product=await one(s,'products',T['products'].c.id==offer['product_id'])
+        from .menus import visible
+        check(await visible(s,user,offer,product),'PRODUCT_UNAVAILABLE','Mặt hàng không còn được phép mua hoặc menu đã đóng',409)
         check(product['active'] and not product['deleted_at'],'PRODUCT_UNAVAILABLE','Mặt hàng không còn bán',409)
         qty=number(line.get('quantity'),minimum=Decimal('.001'))
         check(qty % product['quantity_step']==0,'INVALID_STEP','Số lượng không đúng bước đơn vị')
         check(qty<=offer['available_qty'],'INSUFFICIENT_STOCK','Lượng trong kho không đủ',409)
         price=await one(s,'offer_prices',T['offer_prices'].c.offer_id==id,T['offer_prices'].c.group_id==user['group_id'])
-        if quote:
-            check(id==quote['offer_id'] and qty==quote['quantity'],'QUOTE_MISMATCH','Nội dung không đúng báo giá')
-            unitprice=quote['unit_price']
-        else:
-            check(str(price['version'])==str(line.get('expectedPriceVersion')),'REQUOTE_REQUIRED','Giá đã thay đổi, vui lòng kiểm tra lại',409)
-            unitprice=price['unit_price']
+        check(str(price['version'])==str(line.get('expectedPriceVersion')),'REQUOTE_REQUIRED','Giá đã thay đổi, vui lòng kiểm tra lại',409)
+        unitprice=price['unit_price']
         unit=await one(s,'units',T['units'].c.id==product['unit_id'])
-        quoted_item=(quote.get('item_snapshot') or {}) if quote else {}
-        items.append(dict(id=uid(),offer_id=id,product_name_snapshot=quoted_item.get('productName',product['name']),unit_snapshot=quoted_item.get('unitLabel',unit['label']),
+        items.append(dict(id=uid(),offer_id=id,product_name_snapshot=product['name'],unit_snapshot=unit['label'],
                           quantity=qty,unit_price=unitprice,price_version=price['version'],
                           line_total=(unitprice*qty).quantize(Decimal('1'),rounding=ROUND_HALF_UP)))
     subtotal=sum(i['line_total'] for i in items)
-    if quote:
-        # A valid accepted quote freezes the fee and delivery terms just as it freezes price.
-        address=await one(s,'addresses',T['addresses'].c.id==uuid(body.get('addressId')),
-                          T['addresses'].c.user_id==user['id'],T['addresses'].c.deleted_at==None)
-        shipping=quote['delivery_snapshot'];fee=quote['shipping_fee']
-        policy=await one(s,'delivery_policies',T['delivery_policies'].c.id==shipping['policyId'],lock=True)
-        check(address['zone_id']==policy['zone_id'] and body.get('deliveryMethod')==shipping['method'],
-              'REQUOTE_REQUIRED','Chọn đúng khu vực và cách giao đã thỏa thuận trong báo giá',409)
-        check(subtotal>=Decimal(shipping['minimumSubtotal']),'DELIVERY_MINIMUM','Chưa đủ điều kiện đã báo giá')
-        if shipping['method']=='COLLECTIVE':
-            group=await one(s,'customer_groups',T['customer_groups'].c.id==user['group_id'])
-            check(group['code']=='STUDENT','INVALID_DELIVERY','Giao tập trung chỉ dành cho nhóm sinh viên')
-            slot=shipping.get('pickupSlot',{})
-            ends_at=datetime.fromisoformat(slot['ends_at'].replace('Z','+00:00')).replace(tzinfo=None)
-            check(slot.get('id')==body.get('pickupSlotId') and ends_at>now(),
-                  'PICKUP_EXPIRED','Điểm hoặc thời gian nhận không đúng báo giá')
-    else:
-        address,policy,shipping=await delivery(s,user,body,subtotal)
-        fee=policy['shipping_fee']
+    address,policy,shipping=await delivery(s,user,body,subtotal)
+    fee=Decimal(shipping['shippingFee'])
     check(subtotal+fee<=Decimal('999999999999999999'),'ORDER_TOO_LARGE','Tổng đơn vượt giới hạn xử lý')
     group=await one(s,'customer_groups',T['customer_groups'].c.id==user['group_id'])
     id=uid()
@@ -209,7 +216,7 @@ async def create_order(s, user, body, key, quote=None):
               group_snapshot={'id':group['id'],'code':group['code'],'name':group['name']},address_snapshot=public(address),
               delivery_snapshot=shipping,delivery_method=shipping['method'],merchandise_total=subtotal,shipping_fee=fee,
               total=subtotal+fee,version=1,created_at=now(),updated_at=now(),
-              source_request_id=quote['request_id'] if quote else None,source_quote_id=quote['id'] if quote else None,
+              source_request_id=None,source_quote_id=None,
               note=await sanitize(s,user,text(body.get('note',''),1000),'order.note',id))
     for item in items: await add(s,'order_items',order_id=id,**item)
     await add(s,'order_status_history',id=uid(),order_id=id,actor_id=user['id'],from_status=None,to_status='PENDING',order_version=1,created_at=now())
@@ -241,7 +248,11 @@ async def order_action(s,user,id,action,body,key):
         check(status=='PENDING','INVALID_STATE','Chỉ duyệt đơn đang chờ',409)
         check(all(not offers[i['offer_id']]['processing_locked_at'] and offers[i['offer_id']]['available_qty']>=i['quantity'] for i in items),
               'INSUFFICIENT_STOCK','Không đủ kho để duyệt toàn bộ đơn',409)
-        for item in items: await move_stock(s,user,offers[item['offer_id']],-item['quantity'],'APPROVE',id,id)
+        for item in items:
+            offer=offers[item['offer_id']]
+            check(not offer['menu_id'] or offer['cost_price'] is not None,'COST_REQUIRED','Cần nhập giá vốn trước khi duyệt')
+            await change(s,'order_items',item['id'],cost_price_snapshot=offer['cost_price'])
+            await move_stock(s,user,offer,-item['quantity'],'APPROVE',id,id)
         target='APPROVED'; values['approved_at']=now()
     elif action in ('cancel','reject'):
         if action=='reject': require_admin(user)

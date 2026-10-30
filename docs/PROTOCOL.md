@@ -1,7 +1,7 @@
 # Hợp đồng HTTP và WebSocket v1
 
 Đây là hợp đồng đề xuất trước triển khai. Một origin, prefix `/api/v1`, socket
-`/ws/v1`. HTTPS/WSS là cấu hình demo triển khai; HTTP/WS chỉ dùng phát triển
+`/ws`. HTTPS/WSS là cấu hình demo triển khai; HTTP/WS chỉ dùng phát triển
 loopback có nhãn rõ, không được trình bày như kiểm thử TLS.
 
 ## 1. Quy ước chung
@@ -34,16 +34,18 @@ hợp lệ khi làm fixture hoặc gọi API thật.
 
 | Method | Path | Vai trò / tác dụng |
 |---|---|---|
-| POST | /auth/registration/otp | Chưa đăng nhập; xin OTP SĐT, có giới hạn |
-| POST | /auth/registration/verify | Xác minh OTP, lấy ticket hoàn tất một lần |
+| POST | /auth/registration/otp | Chưa đăng nhập; xin OTP Zalo trước, có giới hạn |
+| POST | /auth/registration/sms-fallback | Chọn gửi SMS thay mã Zalo; tối đa một lần cho challenge |
+| POST | /auth/registration/verify | Xác minh OTP mới nhất, lấy ticket hoàn tất một lần |
 | POST | /auth/register | Ticket + mật khẩu + tên; tạo user, session |
 | POST | /auth/login | SĐT/email đã xác minh + mật khẩu; cookie phiên |
 | GET | /auth/session | User/role/nhóm, hạn phiên, CSRF token; Cache-Control no-store |
 | POST | /auth/logout | Thu hồi phiên hiện tại và đóng WSS |
-| POST | /auth/password-reset/otp | OTP cho SĐT đã đăng ký; trả thông báo không tiết lộ tài khoản |
+| POST | /auth/password-reset/otp | OTP SMS cho SĐT đã đăng ký; trả thông báo không tiết lộ tài khoản |
 | POST | /auth/password-reset/confirm | Ticket hợp lệ + mật khẩu mới; thu hồi các phiên cũ |
 | POST | /auth/email/challenge | Đã đăng nhập; xin xác minh email tùy chọn |
 | POST | /auth/email/verify | Gắn email duy nhất sau xác minh |
+
 | GET/PATCH | /me | Hồ sơ; tên được kiểm duyệt |
 | GET/POST | /me/addresses | Địa chỉ của chính mình; max 3 |
 | PATCH/DELETE | /me/addresses/{id} | Sửa/xóa mềm địa chỉ thuộc mình |
@@ -82,8 +84,37 @@ hợp lệ khi làm fixture hoặc gọi API thật.
 | GET | /admin/reports | Theo ngày/tháng, thời gian tính trong múi giờ kinh doanh |
 | GET | /admin/audit | Nhật ký quản trị, lọc/phân trang |
 
+OTP đăng ký trả challengeId, channel, deliveryStatus, expiresIn,
+fallbackAfterSeconds, fallbackAvailable và cờ demo. channel là zalo, sms hoặc
+demo; chỉ OTP demo trong DEMO_MODE mới kèm demoCode. Nếu Zalo nhận yêu cầu, có
+thể chọn SMS sau 60 giây; nếu Zalo từ chối, nút SMS được bật ngay.
+POST /auth/registration/sms-fallback nhận challengeId, tạo OTP mới và vô hiệu
+hóa challenge cũ trước khi gửi SMS. Mỗi challenge Zalo chỉ được chuyển sang SMS
+một lần. Khôi phục mật khẩu không dùng luồng Zalo này.
+
 CRUD con cụ thể được đóng thành OpenAPI khi triển khai; dấu `*` ở bảng là nhóm
 endpoint thiết kế, không phải một route wildcard dùng để bỏ qua phân quyền.
+
+`POST /admin/products` không nhận SKU do trình duyệt tự chọn. Server cấp mã
+SKU tăng dần và trả lại trong sản phẩm đã tạo; `PATCH /admin/products/{id}` giữ
+nguyên mã đã cấp.
+
+`POST/PATCH /admin/products` nhận danh sách ảnh có thứ tự `images`, tối đa 5
+phần tử. Mỗi phần tử phải có đúng một trường: `{"assetId":"UUID"}` cho tệp
+đã tải qua `/media`, hoặc `{"url":"https://..."}` cho ảnh công khai. Server
+kiểm tra chủ sở hữu asset; URL chỉ nhận HTTPS, lưu tại `product_images.source_url`
+và không được server tải xuống. `GET /admin/products` trả `asset_id`,
+`source_url` và `position`; `/catalog/offers` chỉ trả danh sách ảnh của sản phẩm
+mà khách được phép xem. Giá trị ảnh cũ dạng `assetIds` vẫn được nhận để tương thích.
+Database mới cũng có `source_url` sau khi `setup.ps1` chạy Alembic tới `head`
+(revision `0007`).
+
+`GET/POST/PATCH/DELETE /admin/config/groups` quản lý nhóm khách hàng; DELETE là
+ngừng sử dụng mềm để giữ liên kết đơn hàng. `WORKER` không thể ngừng dùng vì là
+nhóm đăng ký mặc định; `STUDENT` chỉ ngừng được sau khi tắt chính sách giao tập
+trung. Mỗi item của menu nhận `allowedGroupIds`: cho phép NULL hoặc danh sách nhóm
+chỉ khi sản phẩm gốc mở cho tất cả nhóm; với sản phẩm đã giới hạn, server từ chối
+override. Khách chỉ nhận item nếu thuộc giao của các audience sản phẩm, item và menu.
 
 ```json
 {
@@ -236,10 +267,22 @@ Catalog event áp dụng trực tiếp trong giao diện:
 đúng nhóm. Ví dụ lược các trường tên/đơn vị để ngắn. Sự kiện cấu hình rộng dùng
 `{"refresh":true}`; admin nhận invalidation riêng, không phát giá nhóm khác cho khách.
 Ảnh upload multipart tại `/media`, trường `file` và `purpose=CHAT|PRODUCT`;
-chat dùng `assetIds`, không Base64 trong WSS. HTTP gửi chat với `clientMessageId`
+chat dùng `assetIds`, không Base64 trong WSS. URL ảnh sản phẩm không đi qua
+endpoint upload và được trình duyệt tải trực tiếp từ host HTTPS trong `source_url`.
+HTTP gửi chat với `clientMessageId`
 được chống trùng như WSS CHAT_SEND.
 
 Code thực dùng RATE_LIMITED, PHONE_USED, INVALID_NUMBER, INVALID_STEP,
 INVALID_STATE, INVALID_IMAGE, RETRY_REQUIRED cùng các code quyền/phiên/giá trong
 phần trên. Không yêu cầu client phụ thuộc các tên code đề xuất chưa xuất hiện
 trong implementation. Lỗi luôn có `error.code`, `error.message`, `requestId`.
+
+
+## Bổ sung 29/10/2026: menu ngày và phí giao
+
+Hợp đồng bổ sung ở DAILY_SALES.md thay thế quy trình product-requests. GET/POST các
+API `/product-requests` và `/admin/product-requests` trả 410 FEATURE_RETIRED.
+HELLO có `datasetEpoch`; SYNC_END trả epoch hiện tại. Thiếu/khác epoch sẽ nhận
+snapshot thay vì replay để không phục hồi catalog bị thu hồi quyền hoặc dữ liệu đã dọn.
+Đặt giao riêng bắt buộc `deliveryQuoteId`; trả REQUOTE_REQUIRED nếu phí hết hạn hoặc
+không còn khớp địa chỉ/giỏ/nhóm/chính sách/kho. Giá vốn chỉ thuộc DTO quản trị.

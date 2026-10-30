@@ -1,404 +1,348 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect, BrowserContext, Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
+
+const origin = process.env.APP_ORIGIN ?? "https://localhost:3443";
 const data = JSON.parse(
   fs.readFileSync(path.resolve("../runtime/demo-accounts.local.json"), "utf8"),
 );
-const evidence = process.env.AUDIT_EVIDENCE_DIR
-  ? path.resolve(process.env.AUDIT_EVIDENCE_DIR, "screenshots")
-  : path.resolve("../evidence");
-fs.mkdirSync(evidence, { recursive: true });
-async function login(page: Page, index: number) {
-  await page.goto("/");
-  await page
-    .getByLabel("Số điện thoại hoặc email")
-    .fill(data.accounts[index].phone);
-  await page
-    .getByLabel("Mật khẩu", { exact: true })
-    .fill(data.accounts[index].password);
-  await page.getByRole("button", { name: "Đăng nhập", exact: true }).click();
-  await expect(page.getByText("Đang đồng bộ", { exact: true })).toBeVisible({
-    timeout: 30000,
+const evidence =
+  process.env.AUDIT_EVIDENCE_DIR ??
+  path.resolve("../runtime/browser-test-results");
+const day = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+let product: any, offer: any, menu: any;
+
+async function login(context: BrowserContext, index: number) {
+  const a = data.accounts[index];
+  const response = await context.request.post(origin + "/api/v1/auth/login", {
+    headers: { Origin: origin },
+    data: { identifier: a.phone, password: a.password },
+  });
+  expect(response.status()).toBe(200);
+  return await response.json();
+}
+async function call(
+  context: BrowserContext,
+  session: any,
+  method: string,
+  url: string,
+  body?: any,
+) {
+  const r = await context.request.fetch(origin + "/api/v1" + url, {
+    method,
+    headers: {
+      Origin: origin,
+      "X-CSRF-Token": session.csrfToken,
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    data: body,
+  });
+  expect(r.status(), await r.text()).toBe(200);
+  return await r.json();
+}
+async function shot(page: Page, name: string) {
+  fs.mkdirSync(path.join(evidence, "screenshots"), { recursive: true });
+  await page.screenshot({
+    path: path.join(evidence, "screenshots", name + ".png"),
+    fullPage: false,
   });
 }
 
-test("customer creates an order, admin approves, realtime and image chat", async ({
-  browser,
-}) => {
-  const a = await browser.newContext({ ignoreHTTPSErrors: true }),
-    b = await browser.newContext({ ignoreHTTPSErrors: true });
-  const customer = await a.newPage(),
-    admin = await b.newPage();
-  const errors: string[] = [];
-  customer.on("pageerror", (e) => errors.push(e.message));
-  admin.on("pageerror", (e) => errors.push(e.message));
-  await login(customer, 1);
-  await customer.screenshot({
-    path: path.join(evidence, "customer-desktop.png"),
-    fullPage: true,
+test.beforeAll(async ({ browser }) => {
+  if (!process.env.AUDIT_EVIDENCE_DIR)
+    throw new Error("Browser acceptance must use isolated_validation.py");
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const a = await login(context, 0);
+  const products = await call(context, a, "GET", "/admin/products");
+  const p = products[0];
+  product = await call(context, a, "POST", "/admin/products", {
+    name: "Món kiểm thử giao diện " + crypto.randomUUID().slice(0, 6),
+    categoryId: p.category_id,
+    unitId: p.unit_id,
+    quantityStep: "1",
+    defaultCostPrice: "12000",
+    defaultSalePrice: "30000",
   });
-  const row = customer
-    .locator("tr")
-    .filter({ hasText: "Cam sành" })
-    .filter({
-      has: customer.getByRole("button", { name: "Thêm", exact: true }),
-    })
-    .first();
-  await row.getByRole("button", { name: "Thêm", exact: true }).click();
-  await expect(
-    customer.getByText("Đơn đang soạn", { exact: true }),
-  ).toBeVisible();
-  // Choose free collective delivery for the student fixture.
-  await customer
-    .getByLabel("Cách giao", { exact: true })
-    .selectOption({ label: "Giao tập trung · miễn phí" });
-  await customer.getByRole("button", { name: "Gửi đơn chờ duyệt" }).click();
-  await expect(
-    customer.getByText("Đơn đã gửi và đang chờ người bán duyệt."),
-  ).toBeVisible();
-  await customer
-    .getByRole("button", { name: "Đơn của tôi", exact: true })
-    .click();
-  const orderRow = customer.locator("tbody tr").first();
-  const id = await orderRow.locator("td").first().locator("strong").innerText();
-  await login(admin, 0);
-  const target = admin.locator("tbody tr").filter({ hasText: id });
-  await target.getByRole("button", { name: "Chi tiết" }).click();
-  await admin.getByRole("button", { name: "Duyệt toàn bộ đơn" }).click();
-  await expect(
-    admin.getByRole("dialog").getByText("Đã duyệt", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(
-    customer
-      .locator("tbody tr")
-      .filter({ hasText: id })
-      .getByText("Đã duyệt", { exact: true }),
-  ).toBeVisible({ timeout: 15000 });
-  await admin.getByRole("button", { name: "Đóng", exact: true }).click();
-  await admin.screenshot({
-    path: path.join(evidence, "admin-orders.png"),
-    fullPage: true,
+  const list = await call(context, a, "GET", "/admin/menus");
+  menu = list.find((m: any) => m.sale_date === day());
+  const full = menu
+    ? await call(context, a, "GET", "/admin/menus/" + menu.id)
+    : null;
+  const items = (full?.items ?? []).map((i: any) => ({
+    productId: i.product_id,
+    availableQty: i.available_qty,
+    costPrice: i.cost_price,
+    enabled: i.status === "OPEN",
+    expectedVersion: i.version,
+    prices: i.prices.map((p: any) => ({
+      groupId: p.group_id,
+      unitPrice: p.unit_price,
+    })),
+  }));
+  items.push({
+    productId: product.id,
+    availableQty: "20",
+    costPrice: "12000",
+    enabled: true,
+    prices: Object.values(data.groups).map((g) => ({
+      groupId: g,
+      unitPrice: "30000",
+    })),
   });
-  await customer.getByRole("button", { name: "Nhắn người bán" }).click();
-  const message='Chào người bán, đơn của tôi đã được duyệt. '+Date.now();
-  await customer
-    .getByRole("textbox", { name: "Nội dung tin nhắn" })
-    .fill(message);
-  await customer.getByRole("button", { name: "Gửi", exact: true }).click();
-  await expect(
-    customer
-      .getByRole("log")
-      .getByText(message),
-  ).toBeVisible();
-  await customer.getByLabel("Chọn ảnh gửi chat").setInputFiles({
-    name: "test.png",
-    mimeType: "image/png",
-    buffer: Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWs0AAAAASUVORK5CYII=",
-      "base64",
-    ),
-  });
-  await expect(customer.getByText("1 ảnh đã tải")).toBeVisible();
-  await customer.getByRole("button", { name: "Gửi", exact: true }).click();
-  await expect(
-    customer.getByAltText("Ảnh trong hội thoại").last(),
-  ).toBeVisible();
-  await customer.screenshot({
-    path: path.join(evidence, "customer-chat.png"),
-    fullPage: true,
-  });
-  expect(errors).toEqual([]);
-  await a.close();
-  await b.close();
+  menu = await call(
+    context,
+    a,
+    full ? "PATCH" : "POST",
+    "/admin/menus" + (full ? "/" + full.id : ""),
+    {
+      saleDate: day(),
+      status: "OPEN",
+      expectedVersion: full?.version,
+      items,
+      allowedGroupIds: null,
+    },
+  );
+  offer = menu.items.find((i: any) => i.product_id === product.id);
+  await context.close();
 });
 
-test("mobile 360px, keyboard, profile and all admin screens", async ({
+test("customer cart opens on add, merges, closes and restores focus", async ({
+  context,
+  page,
+}) => {
+  await login(context, 1);
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Menu hôm nay" }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const item = page.locator(`[data-offer-id="${offer.id}"]`);
+  const add = item.getByRole("button", { name: "Thêm 1" });
+  await add.click();
+  await expect(page.getByRole("dialog", { name: "Giỏ hàng" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(add).toBeFocused();
+  await add.click();
+  await expect(page.locator(".quantity-controls")).toContainText("2");
+  await shot(page, "daily-cart-desktop");
+  await page.getByRole("button", { name: "Mua tiếp" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("collective checkout, direct admin actions, real WebSocket stock updates", async ({
   browser,
 }) => {
-  const context = await browser.newContext({
-    ignoreHTTPSErrors: true,
-    viewport: { width: 360, height: 800 },
-  });
-  const page = await context.newPage();
-  const errors: string[] = [];
-  page.on("pageerror", (e) => errors.push(e.message));
-  await login(page, 2);
+  const customer = await browser.newContext({ ignoreHTTPSErrors: true });
+  const admin = await browser.newContext({ ignoreHTTPSErrors: true });
+  const c = await login(customer, 1);
+  await login(admin, 0);
+  const cp = await customer.newPage(),
+    ap = await admin.newPage();
+  await cp.goto("/");
+  await ap.goto("/");
+  await cp
+    .locator(`[data-offer-id="${offer.id}"]`)
+    .getByRole("button", { name: "Thêm 1" })
+    .click();
+  await cp.getByRole("button", { name: "Tiếp tục đặt hàng" }).click();
+  const options = await call(customer, c, "GET", "/delivery/options");
+  const address = (await call(customer, c, "GET", "/me/addresses"))[0];
+  const policy = options.policies.find(
+    (p: any) => p.zone_id === address.zone_id && p.method === "COLLECTIVE",
+  );
+  await cp.getByLabel("Cách nhận hàng").selectOption(policy.id);
+  await cp.getByLabel("Tôi đã kiểm tra").check();
+  await cp.getByRole("button", { name: "Đặt hàng · Chờ duyệt" }).click();
+  await expect(cp.getByRole("heading", { name: "Đơn của tôi" })).toBeVisible();
+  const row = ap.locator("tbody tr").filter({ hasText: product.name }).first();
+  await expect(
+    row.getByRole("button", { name: "Duyệt", exact: true }),
+  ).toBeVisible();
+  await row.getByRole("button", { name: "Duyệt", exact: true }).click();
+  await expect(
+    row.getByRole("button", { name: "Chuẩn bị", exact: true }),
+  ).toBeVisible();
+  await expect(ap.getByRole("dialog")).toHaveCount(0);
+  for (const button of ["Chuẩn bị", "Bàn giao", "Đã giao"])
+    await row.getByRole("button", { name: button, exact: true }).click();
+  await expect(
+    cp.locator("tbody tr").filter({ hasText: product.name }).first(),
+  ).toContainText("Đã giao");
+  await shot(ap, "direct-order-actions");
+  await customer.close();
+  await admin.close();
+});
+
+test("mobile navigation, Vietnamese address picker, reconnect and cart layout", async ({
+  context,
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await login(context, 1);
+  await page.goto("/");
+  await expect(page.locator("aside.nav")).toBeHidden();
+  await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
+  await expect(page.locator("aside.nav")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Hồ sơ & địa chỉ", exact: true })
+    .click();
+  const first = page.locator(".list-row").first();
+  await first.getByRole("button", { name: "Sửa", exact: true }).click();
+  await expect(page.getByLabel("Tìm và xác nhận vị trí")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
+  await page
+    .getByRole("button", { name: "Hàng trong ngày", exact: true })
+    .click();
+  await page
+    .locator(`[data-offer-id="${offer.id}"]`)
+    .getByRole("button", { name: "Thêm 1" })
+    .click();
+  await expect(page.getByRole("dialog", { name: "Giỏ hàng" })).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
-  ).toBe(true);
-  await page.screenshot({
-    path: path.join(evidence, "customer-mobile-360.png"),
-    fullPage: true,
-  });
-  await page.getByRole("button", { name: "Hồ sơ & địa chỉ" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Địa chỉ nhận hàng" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Thêm", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+  ).toBeTruthy();
+  await shot(page, "daily-cart-mobile");
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "Thông báo", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Thông báo", exact: true }),
-  ).toBeVisible();
-  await context.close();
-  const admin = await browser.newContext({
-    ignoreHTTPSErrors: true,
-    viewport: { width: 1280, height: 900 },
-  });
-  const p = await admin.newPage();
-  p.on("pageerror", (e) => errors.push(e.message));
-  await login(p, 0);
-  for (const label of [
-    "Đợt mở bán",
-    "Sản phẩm",
-    "Yêu cầu hàng",
-    "Tin nhắn",
-    "Khách hàng",
-    "Cấu hình",
-    "Báo cáo",
-    "Nhật ký",
-  ]) {
-    await p
-      .locator("aside")
-      .getByRole("button", { name: label, exact: true })
-      .click();
-    await expect(p.locator("main h1")).toBeVisible();
-    await p.waitForTimeout(250);
-  }
-  await p.screenshot({
-    path: path.join(evidence, "admin-audit.png"),
-    fullPage: true,
-  });
-  expect(errors).toEqual([]);
-  await admin.close();
-});
-
-test("offline disables editing and reconnect recovers", async ({ browser }) => {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
-  const p = await context.newPage();
-  await login(p, 1);
   await context.setOffline(true);
-  await expect(p.getByText("Đang kết nối lại", { exact: true })).toBeVisible({
-    timeout: 60000,
-  });
   await expect(
-    p.getByRole("button", { name: "Thêm", exact: true }).first(),
-  ).toBeDisabled();
+    page.getByText("Đang khôi phục kết nối.", { exact: false }),
+  ).toBeVisible();
   await context.setOffline(false);
-  await expect(p.getByText("Đang đồng bộ", { exact: true })).toBeVisible({
-    timeout: 45000,
+  await expect(page.locator(".connection")).toContainText("Đang đồng bộ", {
+    timeout: 30000,
   });
-  await expect(
-    p.getByRole("button", { name: "Thêm", exact: true }).first(),
-  ).toBeEnabled();
-  await context.close();
-});
-
-test("request quote acceptance and conversion through both interfaces", async ({
-  browser,
-}) => {
-  const c = await browser.newContext({ ignoreHTTPSErrors: true }),
-    a = await browser.newContext({ ignoreHTTPSErrors: true });
-  const customer = await c.newPage(),
-    admin = await a.newPage();
-  await login(customer, 1);
-  await login(admin, 0);
-  const name = "Cam theo yêu cầu UI " + Date.now();
-  await customer
-    .getByRole("button", { name: "Yêu cầu hàng", exact: true })
-    .click();
-  await customer
-    .getByRole("button", { name: "Gửi yêu cầu", exact: true })
-    .click();
-  const create = customer.getByRole("dialog");
-  await create.getByLabel("Tên mặt hàng").fill(name);
-  await create.getByLabel("Số lượng", { exact: true }).fill("1");
-  await create.getByLabel("Đơn vị mong muốn").fill("kg");
-  await create
-    .getByRole("button", { name: "Gửi yêu cầu", exact: true })
-    .click();
-  await expect(create).toHaveCount(0);
-  await admin
-    .getByRole("button", { name: "Yêu cầu hàng", exact: true })
-    .click();
-  await admin
-    .locator("tbody tr")
-    .filter({ hasText: name })
-    .getByRole("button", { name: "Chi tiết" })
-    .click();
-  const dialog = admin.getByRole("dialog");
-  await dialog.getByRole("button", { name: "Tiếp nhận", exact: true }).click();
-  await dialog
-    .getByRole("button", { name: "Soạn báo giá", exact: true })
-    .click();
-  await dialog
-    .getByLabel("Đợt hàng đáp ứng")
-    .selectOption(data.products[0].offerId);
-  await dialog.getByLabel("Đơn giá thỏa thuận (đ)").fill("28000");
-  const policies = await (
-    await a.request.get("https://localhost:3443/api/v1/admin/config/policies")
-  ).json();
-  const policy = policies.find(
-    (p: any) => p.group_id === data.groups.STUDENT && p.method === "COLLECTIVE",
-  );
-  await dialog.getByLabel("Chính sách giao").selectOption(policy.id);
-  await dialog
-    .getByRole("button", { name: "Gửi báo giá", exact: true })
-    .click();
-  const row = customer.locator("tbody tr").filter({ hasText: name });
-  await expect(row.getByText("Đã báo giá", { exact: true })).toBeVisible();
-  await row.getByRole("button", { name: "Chi tiết" }).click();
-  const quote = customer.getByRole("dialog");
-  await quote
-    .getByRole("button", { name: "Chấp thuận báo giá mới nhất" })
-    .click();
-  await expect(
-    quote.getByRole("button", { name: "Tạo đơn chờ duyệt từ báo giá" }),
-  ).toBeEnabled();
-  await quote
-    .getByRole("button", { name: "Tạo đơn chờ duyệt từ báo giá" })
-    .click();
-  await expect(quote.getByText(/Đã tạo đơn #/)).toBeVisible();
-  await customer.screenshot({
-    path: path.join(evidence, "quote-flow.png"),
-    fullPage: true,
-  });
-  await c.close();
-  await a.close();
-});
-
-test("price and delivery changes require explicit confirmation", async ({
-  browser,
-}) => {
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
-  const page = await context.newPage();
-  await login(page, 1);
-  const h = await browser.newContext({ ignoreHTTPSErrors: true });
-  const admin = await h.newPage();
-  await login(admin, 0);
-  const session = await (
-    await h.request.get("https://localhost:3443/api/v1/auth/session")
-  ).json();
-  const headers = {
-    Origin: "https://localhost:3443",
-    "X-CSRF-Token": session.csrfToken,
-  };
-  const offerId = data.products[2].offerId;
-  const row = page.locator(`tr[data-offer-id="${offerId}"]`);
-  await row.getByRole("button", { name: "Thêm", exact: true }).click();
-  const offers = await (
-    await h.request.get("https://localhost:3443/api/v1/admin/offers")
-  ).json();
-  const offer = offers.find((o: any) => o.id === offerId);
-  const price = offer.prices.find(
-    (p: any) => p.group_id === data.groups.STUDENT,
-  );
-  let catalogReads = 0;
-  page.on("request", (r) => {
-    if (r.url().endsWith("/api/v1/catalog/offers")) catalogReads++;
-  });
-  const change = await h.request.patch(
-    "https://localhost:3443/api/v1/admin/offers/" + offerId,
-    {
-      headers,
-      data: {
-        expectedVersion: String(offer.version),
-        prices: [
-          {
-            groupId: price.group_id,
-            unitPrice: String(Number(price.unit_price) + 1000),
-            expectedVersion: String(price.version),
-          },
-        ],
-      },
-    },
-  );
-  expect(change.ok()).toBe(true);
-  await expect(
-    page.getByText("Giá hoặc đợt bán đã thay đổi.", { exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Gửi đơn chờ duyệt" }),
-  ).toBeDisabled();
-  expect(catalogReads).toBe(0);
-  await page.getByRole("button", { name: "Cập nhật và xem lại tổng" }).click();
-  await expect(
-    page.getByRole("button", { name: "Gửi đơn chờ duyệt" }),
-  ).toBeEnabled();
-  const policies = await (
-    await h.request.get("https://localhost:3443/api/v1/admin/config/policies")
-  ).json();
-  const policy = policies.find(
-    (p: any) => p.group_id === data.groups.STUDENT && p.method === "INDIVIDUAL",
-  );
-  await page.getByLabel("Cách giao", { exact: true }).selectOption(policy.id);
-  const changed = await h.request.patch(
-    "https://localhost:3443/api/v1/admin/config/policies/" + policy.id,
-    {
-      headers,
-      data: {
-        expectedVersion: String(policy.version),
-        shippingFee: String(Number(policy.shipping_fee) + 1000),
-      },
-    },
-  );
-  expect(changed.ok()).toBe(true);
-  await expect(
-    page.getByText("Phí hoặc điều kiện giao đã thay đổi.", { exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Gửi đơn chờ duyệt" }),
-  ).toBeDisabled();
   await page
-    .getByRole("button", { name: "Cập nhật phí và xem lại tổng" })
+    .locator(`[data-offer-id="${offer.id}"]`)
+    .getByRole("button", { name: "Thêm 1" })
     .click();
+  await expect(page.locator(".quantity-controls")).toContainText("2");
+});
+
+test("admin menu editor, sidebar collapse, gross profit report and retired navigation", async ({
+  context,
+  page,
+}) => {
+  await login(context, 0);
+  await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Gửi đơn chờ duyệt" }),
+    page.getByRole("button", { name: "Yêu cầu hàng", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
+  await expect(page.locator(".shell")).toHaveClass(/nav-collapsed/);
+  await page
+    .getByRole("button", { name: "Menu theo ngày", exact: true })
+    .click();
+  const row = page.locator("tbody tr").filter({ hasText: day() }).first();
+  await row.getByRole("button", { name: "Sửa món / giá / kho" }).click();
+  await expect(page.locator(".menu-editor")).toBeVisible();
+  await expect(page.getByText(product.name, { exact: true })).toBeVisible();
+  await shot(page, "daily-menu-admin");
+  await page.getByRole("button", { name: "Báo cáo", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Doanh thu và lãi gộp" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Lãi gộp", { exact: true }).first(),
+  ).toBeVisible();
+  await shot(page, "daily-profit-report");
+});
+
+test("chat text and image delivered to customer over real server", async ({
+  browser,
+}) => {
+  const ca = await browser.newContext({ ignoreHTTPSErrors: true }),
+    cb = await browser.newContext({ ignoreHTTPSErrors: true });
+  const a = await login(ca, 0),
+    b = await login(cb, 1);
+  const ap = await ca.newPage(),
+    bp = await cb.newPage();
+  await ap.goto("/");
+  await bp.goto("/");
+  await bp.getByRole("button", { name: "Nhắn người bán", exact: true }).click();
+  const convo = await call(cb, b, "GET", "/conversations/me");
+  const text = "Kiểm tra tin nhắn mới " + crypto.randomUUID();
+  await call(ca, a, "POST", "/conversations/" + convo.id + "/messages", {
+    clientMessageId: crypto.randomUUID(),
+    text,
+  });
+  await expect(bp.locator(".message").filter({ hasText: text })).toBeVisible();
+  const upload = await ca.request.post(origin + "/api/v1/media", {
+    headers: { Origin: origin, "X-CSRF-Token": a.csrfToken },
+    multipart: {
+      purpose: "CHAT",
+      file: {
+        name: "test.png",
+        mimeType: "image/png",
+        buffer: Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHc8AAAAASUVORK5CYII=",
+          "base64",
+        ),
+      },
+    },
+  });
+  expect(upload.status()).toBe(200);
+  const asset = await upload.json();
+  await call(ca, a, "POST", "/conversations/" + convo.id + "/messages", {
+    clientMessageId: crypto.randomUUID(),
+    text: "Ảnh kiểm thử",
+    assetIds: [asset.id],
+  });
+  await expect(bp.locator(".message img").last()).toBeVisible();
+  await shot(bp, "daily-chat");
+  await ca.close();
+  await cb.close();
+});
+test("price change keeps old cart until explicit customer confirmation", async ({
+  browser,
+}) => {
+  const customer = await browser.newContext({ ignoreHTTPSErrors: true }),
+    admin = await browser.newContext({ ignoreHTTPSErrors: true });
+  await login(customer, 1);
+  const a = await login(admin, 0);
+  const page = await customer.newPage();
+  await page.goto("/");
+  await page
+    .locator(`[data-offer-id="${offer.id}"]`)
+    .getByRole("button", { name: "Thêm 1" })
+    .click();
+  const current = await call(admin, a, "GET", "/admin/menus/" + menu.id);
+  const items = current.items.map((i: any) => ({
+    productId: i.product_id,
+    availableQty: i.available_qty,
+    costPrice: i.cost_price,
+    enabled: i.status === "OPEN",
+    expectedVersion: i.version,
+    prices: i.prices.map((p: any) => ({
+      groupId: p.group_id,
+      unitPrice: i.id === offer.id ? "31000" : p.unit_price,
+    })),
+  }));
+  await call(admin, a, "PATCH", "/admin/menus/" + menu.id, {
+    expectedVersion: current.version,
+    items,
+    status: "OPEN",
+  });
+  await expect(
+    page.getByText("Giá hoặc lượng còn đã đổi.", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Tiếp tục đặt hàng" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Cập nhật giỏ hàng" }).click();
+  await expect(page.getByRole("dialog")).toContainText("31.000");
+  await expect(
+    page.getByRole("button", { name: "Tiếp tục đặt hàng" }),
   ).toBeEnabled();
-  // Restore the original sample prices/policy with fresh versions.
-  const fresh = await (
-    await h.request.get("https://localhost:3443/api/v1/admin/offers")
-  ).json();
-  const o = fresh.find((x: any) => x.id === offerId),
-    p = o.prices.find((x: any) => x.group_id === price.group_id);
-  expect(
-    (
-      await h.request.patch(
-        "https://localhost:3443/api/v1/admin/offers/" + offerId,
-        {
-          headers,
-          data: {
-            expectedVersion: String(o.version),
-            prices: [
-              {
-                groupId: p.group_id,
-                unitPrice: price.unit_price,
-                expectedVersion: String(p.version),
-              },
-            ],
-          },
-        },
-      )
-    ).ok(),
-  ).toBe(true);
-  expect(
-    (
-      await h.request.patch(
-        "https://localhost:3443/api/v1/admin/config/policies/" + policy.id,
-        {
-          headers,
-          data: {
-            expectedVersion: String((await changed.json()).version),
-            shippingFee: policy.shipping_fee,
-          },
-        },
-      )
-    ).ok(),
-  ).toBe(true);
-  await context.close();
-  await h.close();
+  await customer.close();
+  await admin.close();
 });

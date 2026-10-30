@@ -32,8 +32,8 @@ async def snapshot(s,user):
     q=select(t.c.id).order_by(t.c.created_at.desc(),t.c.id.desc()).limit(50)
     if user['role']!='ADMIN': q=q.where(t.c.customer_id==user['id'])
     data['orders']=await commerce.get_orders(s,user,list((await s.execute(q)).scalars()))
-    data['notifications']=await rows(s,'notifications',T['notifications'].c.user_id==user['id'],limit=50,
-                                     order=T['notifications'].c.created_at.desc())
+    from .menus import notification_feed
+    data['notifications']=await notification_feed(s,user)
     data['subscriptions']=await rows(s,'product_subscriptions',T['product_subscriptions'].c.user_id==user['id'],limit=500)
     return public(data)
 
@@ -49,8 +49,10 @@ async def synchronize(ws,user,sub,hello):
                     check(set(await topics_for(s,user))==sub.topics,'SESSION_EXPIRED','Quyền phiên đã thay đổi',401)
                     heads={r['topic']:int(r['last_seq']) for r in await rows(s,'stream_heads',T['stream_heads'].c.topic.in_(sub.topics))}
                     heads={t:heads.get(t,0) for t in sub.topics}
+                    from .menus import epoch
+                    dataset_epoch=await epoch(s)
                     cursors=hello.get('lastSeq',{})
-                    replay=hello.get('hasModel') is True and isinstance(cursors,dict)
+                    replay=hello.get('hasModel') is True and isinstance(cursors,dict) and hello.get('datasetEpoch')==dataset_epoch
                     events=[]
                     if replay:
                         for topic in sorted(sub.topics):
@@ -72,7 +74,7 @@ async def synchronize(ws,user,sub,hello):
         chunks=[encoded[i:i+7000] for i in range(0,len(encoded),7000)]
         for i,chunk in enumerate(chunks):
             await ws.send_json({'v':1,'type':'SNAPSHOT_CHUNK','index':i,'total':len(chunks),'data':chunk})
-    await ws.send_json({'v':1,'type':'SYNC_END','heads':{k:str(v) for k,v in heads.items()}})
+    await ws.send_json({'v':1,'type':'SYNC_END','datasetEpoch':dataset_epoch,'heads':{k:str(v) for k,v in heads.items()}})
     return heads
 
 async def serve_socket(ws:WebSocket):

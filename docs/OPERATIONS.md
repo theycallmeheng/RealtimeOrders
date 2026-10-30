@@ -34,19 +34,35 @@ của người quản lý; không sửa code để có mật khẩu chung.
 Cookie có HttpOnly, Secure và SameSite Strict; API ghi dùng Origin và CSRF.
 WSS dùng cookie + Origin, không đưa token trong URL hay localStorage.
 
-Muốn gửi SMS: `SMS_PROVIDER=twilio`, điền SID/token/sender được cấp; thử trước
-trên số được phép, đối chiếu log nhà cung cấp. Email: `EMAIL_PROVIDER=smtp`, điền
+Đăng ký gửi OTP Zalo trước bằng ZBS Template Message qua SĐT. Cấu hình
+ZALO_ACCESS_TOKEN, ZALO_OTP_TEMPLATE_ID và ZALO_OTP_CODE_FIELD ở tệp .env trên
+server. Template OTP phải được Zalo duyệt, OA/ZBS liên kết và ứng dụng có quyền
+gửi tin qua SĐT. Tên trường mặc định là otp; đặt đúng tên biến đã duyệt trong
+template. Access token là bí mật có hạn sử dụng; cập nhật/luân chuyển tại server
+khi hết hạn. API Zalo nhận lệnh gửi không đảm bảo điện thoại đã nhận tin.
+
+Muốn bật SMS dự phòng và OTP khôi phục mật khẩu: SMS_PROVIDER=twilio, điền
+SID/token/sender được cấp. Người dùng tự bấm gửi SMS khi Zalo từ chối hoặc sau
+60 giây; hệ thống tạo mã mới và vô hiệu hóa mã cũ. Mỗi challenge đăng ký chỉ
+được gửi SMS dự phòng một lần. Email: `EMAIL_PROVIDER=smtp`, điền
 SMTP host/port/user/password/from; kết nối SMTP dùng STARTTLS. `DEMO_MODE=false`
-không chấp nhận SMS demo và không trả mã trong API. Adapter có mã triển khai;
-SMS/email thực tế chưa được nghiệm thu khi chưa có tài khoản dịch vụ.
+không chấp nhận OTP demo và không trả mã trong API. Zalo, SMS và email thật chưa
+được nghiệm thu khi chưa có tài khoản dịch vụ, template được duyệt và cấu hình hợp lệ.
 
 ## LAN và tên miền
 
-Proxy thử hiện nghe `127.0.0.1:3443`. Để demo hai máy, chọn địa chỉ server ổn định,
-đổi địa chỉ nghe proxy sang LAN (hoặc `0.0.0.0`), đặt APP_ORIGIN tương ứng và dùng
-chứng thư có SAN cho host đó, được máy khách tin cậy. Chỉ mở cổng proxy trong
-firewall của môi trường được phép; không mở MySQL/8000/3000 cho khách.
-Không tự cài chứng thư vào trust store hay sửa firewall trong các script này.
+Chế độ mặc định nghe loopback. Chạy `scripts/configure-lan.ps1` để chuẩn bị
+`runtime/network.local.json`, CA/leaf TLS có SAN IP và gói client công khai. Khi
+start, `services.ps1` đặt APP_ORIGIN và proxy theo profile này; chỉ proxy 3443
+nghe IP LAN đã chọn, backend/Next.js tiếp tục nghe loopback. Xem
+[hướng dẫn hai máy, firewall và chứng thư](LAN.md).
+
+Firewall được cấu hình bằng lệnh quản trị riêng `scripts/lan-firewall.ps1`, chỉ
+allow Node/TCP 3443 trên Private/LocalSubnet/card mạng đã chọn. Tham số MakePrivate
+chỉ dùng khi người quản lý xác nhận mạng tin cậy. Start/configure không tự đổi
+firewall hay cài CA vào trust store; máy khách chủ động chạy Trust-Server.cmd.
+Không mở thêm MySQL/8000/3000. Isolated validation mặc định ép về loopback;
+`--network-mode configured restart` cho phép kiểm thử audit qua địa chỉ LAN.
 
 Triển khai công khai cần reverse proxy được vận hành đầy đủ, chứng thư CA hợp lệ,
 backup ngoài máy, giới hạn body/rate tại biên, giám sát, quản lý secrets và domain

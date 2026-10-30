@@ -57,6 +57,8 @@ CREATE TABLE auth_challenges (
   completion_ticket_hash BINARY(32) NULL UNIQUE,
   attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   state ENUM('CREATED','SENT','VERIFIED','CONSUMED','FAILED') NOT NULL,
+  delivery_channel ENUM('SMS','ZALO','DEMO','EMAIL') NOT NULL DEFAULT 'SMS',
+  delivery_accepted_at DATETIME(6) NULL, sms_fallback_used_at DATETIME(6) NULL,
   expires_at DATETIME(6) NOT NULL, verified_at DATETIME(6) NULL,
   consumed_at DATETIME(6) NULL, provider_reference VARCHAR(191) NULL,
   created_at DATETIME(6) NOT NULL,

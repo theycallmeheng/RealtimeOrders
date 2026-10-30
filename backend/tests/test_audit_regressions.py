@@ -172,7 +172,10 @@ async def test_twenty_customers_compete_for_ten_units(clients, sale):
                 collection.append(Client(http, {'user': account, 'csrfToken': csrf(raw)}))
             customers[-1].address_id = address_id
     try:
-        orders = await asyncio.gather(*(customer.post('/orders', {**template, 'clientOrderId': uid(), 'addressId': customer.address_id}) for customer in customers))
+        from conftest import quote_fixture
+        bodies=[{**template,'clientOrderId':uid(),'addressId':c.address_id} for c in customers]
+        for c,body in zip(customers,bodies):body['deliveryQuoteId']=await quote_fixture(c,body)
+        orders=await asyncio.gather(*(c.post('/orders',body) for c,body in zip(customers,bodies)))
         latencies = []
 
         async def approve(index, order):
@@ -206,15 +209,10 @@ async def test_twenty_customers_compete_for_ten_units(clients, sale):
             await session.execute(update(T['users']).where(T['users'].c.id.in_(identities)).values(status='DELETED'))
 
 
-async def test_product_request_retry_does_not_create_duplicates(clients):
-    customer = clients[1]
-    body = {'itemName': 'Audit lost acknowledgment ' + uid(), 'unitLabel': 'kg', 'quantity': '1'}
-    key = uid()
-    responses = await asyncio.gather(*(customer.request('POST', '/product-requests', body, key) for _ in range(5)))
-    assert all(response.status_code == 200 for response in responses)
-    assert len({response.json()['id'] for response in responses}) == 1
-    conflict = await customer.request('POST', '/product-requests', {**body, 'quantity': '2'}, key)
-    assert conflict.status_code == 409
+async def test_retired_product_request_retries_stay_retired(clients):
+    customer=clients[1]; key=uid()
+    responses=await asyncio.gather(*(customer.request('POST','/product-requests',{'itemName':'retired'},key) for _ in range(5)))
+    assert all(r.status_code==410 and r.json()['error']['code']=='FEATURE_RETIRED' for r in responses)
 
 
 async def test_address_retry_does_not_fill_address_slots(clients):

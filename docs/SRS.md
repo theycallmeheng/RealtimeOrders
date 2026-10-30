@@ -1,5 +1,11 @@
 # SRS — Đặc tả yêu cầu RealtimeOrders
 
+> Cập nhật theo lựa chọn người dùng ngày 30/10/2026: đăng ký OTP qua Zalo trước,
+> SMS là kênh dự phòng do người dùng chọn; OTP khôi phục mật khẩu giữ luồng SMS.
+> Các thay đổi menu theo ngày và Goong được mô tả trong DAILY_SALES.md.
+> Quyết định 29/10/2026: FR12 và mục 3.4 về yêu cầu hàng/báo giá thuộc bản thiết kế ban đầu, đã rút khỏi phạm vi triển khai; API cũ trả HTTP 410. Luồng menu theo ngày thay thế quy trình này.
+
+
 Phiên bản thiết kế 0.1 · 22/10/2026 · Nhóm 17 · Ngô Văn Quyền.
 Nguồn và thứ tự quyết định: [DECISIONS.md](DECISIONS.md), [SOURCES.md](SOURCES.md).
 Đây là đặc tả đề xuất để triển khai, không phải biên bản đã nghiệm thu.
@@ -33,11 +39,11 @@ bằng tác vụ quản trị cục bộ có mật khẩu riêng, không có m�
 
 | ID | Yêu cầu và tiêu chí chấp nhận |
 |---|---|
-| FR01 | Đăng ký bắt buộc SĐT và OTP SMS; OTP sai/hết hạn/quá số lần không tạo tài khoản hoạt động; hai đăng ký đồng thời cùng SĐT chỉ tạo một user |
+| FR01 | Đăng ký bắt buộc SĐT và OTP; ưu tiên ZBS Template Message qua Zalo, cho chọn SMS khi Zalo từ chối hoặc sau 60 giây; OTP sai/hết hạn/quá số lần không tạo tài khoản hoạt động; hai đăng ký đồng thời cùng SĐT chỉ tạo một user |
 | FR02 | Đăng nhập bằng SĐT hoặc email đã xác minh và mật khẩu; mật khẩu được hash; khóa/xóa mềm/đăng xuất/idle timeout thu hồi phiên và WSS |
 | FR03 | Tối đa 3 địa chỉ hoạt động và một địa chỉ mặc định; hai lần thêm đồng thời không vượt 3; cần ít nhất một địa chỉ trước khi đặt hàng |
 | FR04 | Admin quản lý nhóm, giá và khóa/mở/xóa mềm tài khoản; mỗi thay đổi có người thực hiện, thời điểm và trạng thái trước/sau |
-| FR05 | CRUD danh mục, đơn vị, SKU và ảnh; tạo đợt mở bán theo ngày; sản phẩm/đợt đã được tham chiếu không bị xóa vật lý làm hỏng lịch sử |
+| FR05 | CRUD danh mục, đơn vị, SKU và tối đa 5 ảnh mỗi sản phẩm (tệp tải lên hoặc URL HTTPS); tạo đợt mở bán theo ngày; dữ liệu đã được tham chiếu không bị xóa vật lý làm hỏng lịch sử |
 | FR06 | Giá lấy từ nhóm hiệu lực do server xác định; thông tin còn kho, khách/đơn chờ và đơn đã duyệt được phân biệt rõ, cập nhật realtime |
 | FR07 | Giao tập trung sinh viên miễn phí theo điểm/khung giờ; giao riêng kiểm tra khu vực, mức tối thiểu và phí; giá/phí được hiển thị trước xác nhận |
 | FR08 | Đặt nhiều sản phẩm; server xác nhận số lượng theo bước đơn vị, giá/phiên bản và phí; lưu snapshot tên/đơn vị/giá/nhóm/địa chỉ; gửi đơn không giữ hoặc trừ kho |
@@ -117,6 +123,8 @@ Với trường địa chỉ cần chính xác để giao hàng, nếu phát hi�
 cầu sửa thay vì âm thầm biến địa chỉ thành dấu sao. Đây là đề xuất xử lý ngoại lệ
 cần thống nhất khi dùng thử. Ảnh được kiểm tra kiểu/kích thước/quyền, chưa có
 kiểm duyệt ngữ nghĩa ảnh bằng AI/OCR trong phạm vi mặc định của link.
+Ảnh sản phẩm có thể là tệp JPEG/PNG/WebP đã tải lên hoặc URL HTTPS công khai;
+URL được lưu trong MySQL và trình duyệt khách tải trực tiếp từ máy chủ chứa ảnh.
 
 ## 4. Yêu cầu phi chức năng và mục tiêu đo
 
@@ -134,8 +142,8 @@ kiểm duyệt ngữ nghĩa ảnh bằng AI/OCR trong phạm vi mặc định c�
 ## 5. Phạm vi và nghiệm thu
 
 Phải có các luồng FR01–FR20, không biến phạm vi thành CRUD sản phẩm đơn thuần.
-Tích hợp SMS thật phụ thuộc O01; fake provider chỉ là môi trường thử. Không mặc
-định bao gồm sàn nhiều người bán, Google login, cổng thanh toán, hãng vận chuyển,
+Gửi OTP thật qua Zalo cần OA/ZBS, ứng dụng được cấp quyền và template OTP đã duyệt;
+SMS dự phòng cần Twilio. Fake provider chỉ là môi trường thử. Không mặc định bao gồm sàn nhiều người bán, Google login, cổng thanh toán, hãng vận chuyển,
 Web Push, AI kiểm duyệt, kế toán hoặc đổi trả sau giao; các mục này theo giới hạn
 trong nguồn và DECISIONS, không được báo là đã làm.
 

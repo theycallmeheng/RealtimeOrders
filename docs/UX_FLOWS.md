@@ -11,11 +11,10 @@ quyền cuối cùng luôn kiểm tra ở backend, không chỉ ẩn menu.
 | /login | SĐT hoặc email đã xác minh, mật khẩu; thông báo lỗi không chứa chi tiết kỹ thuật |
 | /forgot-password | Xác minh SĐT rồi đổi mật khẩu; không tiết lộ có tài khoản hay không |
 | /onboarding | Thêm địa chỉ, chọn mặc định; nêu rõ điều kiện để đặt hàng |
-| /shop | Hàng đang mở theo ngày, giá nhóm mình, đơn vị, còn kho và nhu cầu chờ |
+| /catalog | Menu đang mở, giá nhóm mình, đơn vị, còn kho; lọc/tìm và thêm món vào giỏ |
 | /checkout | Các dòng, số lượng, hình thức giao, phí/tổng, địa chỉ/điểm giao; xác nhận gửi |
 | /orders | Đang xử lý/lịch sử, lọc, trạng thái và mã đơn |
 | /orders/[id] | Snapshot dòng/giá/giao, timeline, hủy/xin hủy theo quyền; lý do từ chối |
-| /requests | Yêu cầu hàng, trạng thái, báo giá; chấp thuận/đặt từ báo giá |
 | /messages | Hội thoại riêng, gửi text/ảnh, preview upload và lịch sử phân trang |
 | /notifications | Danh sách đọc/chưa đọc, link đúng tài nguyên của mình |
 | /account | Thông tin, email tùy chọn, địa chỉ ≤3, theo dõi mặt hàng, đăng xuất |
@@ -35,10 +34,9 @@ dễ thấy. Các nút trạng thái không kéo bảng rộng làm ẩn hành �
 | /admin/orders/[id] | Từng dòng cần/còn, snapshot tiền, địa chỉ, lịch sử; duyệt/từ chối/chuyển giao |
 | /admin/cancellations | Yêu cầu OPEN, lý do, điều kiện hoàn, chấp thuận/từ chối |
 | /admin/catalog | SKU/danh mục/đơn vị/ảnh; tìm, trạng thái hoạt động |
-| /admin/offers | Hàng theo ngày/đợt, lượng còn, giá từng nhóm, mở/đóng và điều chỉnh có lý do |
+| /admin/menus | Menu theo ngày, nhiều sản phẩm/đợt, lượng còn, giá nhóm, mở/đóng |
 | /admin/delivery | Khu, điểm/khung giờ, phí và mức đơn tối thiểu theo nhóm |
 | /admin/users | Tên, nhóm, trạng thái; khóa/mở/xóa mềm có xác nhận và lý do |
-| /admin/requests | Tiếp nhận, báo giá có hạn/phiên bản, theo dõi đơn chuyển đổi |
 | /admin/messages | Danh sách hộp chat khách và hội thoại được chọn |
 | /admin/moderation | Từ cấm, vi phạm, cảnh báo và hành động tài khoản |
 | /admin/reports | Ngày/tháng, số đơn từng trạng thái, hàng giao và doanh thu/phí |

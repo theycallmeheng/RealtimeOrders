@@ -5,9 +5,9 @@ Giữ nguyên cách chia đã chốt với người dùng; chưa gán tên thàn
 | Phần | Phạm vi |
 |---|---|
 | 1. Nền tảng và tài khoản | Thiết kế CSDL, migration, đăng ký/đăng nhập, OTP, hồ sơ và phân quyền |
-| 2. Backend bán hàng | Danh mục, giá nhóm, tồn kho, đặt/duyệt/giao/hủy/hoàn kho, yêu cầu và báo giá |
+| 2. Backend bán hàng | Danh mục, giá nhóm, tồn kho, đặt/duyệt/giao/hủy/hoàn kho, menu ngày, giá vốn và phí giao theo khoảng cách |
 | 3. Backend realtime | WebSocket, chat, thông báo, outbox, đồng bộ sự kiện và reconnect |
-| 4. Giao diện khách hàng | Xem hàng, giỏ hàng, đặt/theo dõi đơn, yêu cầu hàng, chat và thông báo |
+| 4. Giao diện khách hàng | Xem hàng, giỏ hàng, đặt/theo dõi đơn, địa chỉ bản đồ, chat và thông báo |
 | 5. Giao diện người bán/quản trị | Quản lý hàng/kho, xử lý đơn, tài khoản, báo cáo và kiểm duyệt |
 
 Kiểm thử, tài liệu, tích hợp, proxy và vận hành đi kèm từng phần, không tạo thành phần
@@ -21,3 +21,5 @@ frontend giữ các màn hình và trách nhiệm như trước. Xem
 
 Ngày 25/10 tiếp tục tối ưu vòng lặp mạng và outbox trong phạm vi trên, không
 đổi cơ cấu hoặc phân công. Xem [đo lại độ trễ](LATENCY_2026-10-25.md).
+
+Ngày 29/10/2026: các thay đổi menu, nhóm, giỏ, Goong và lãi gộp nằm trong năm phần hiện có; không gán hoặc chuyển trách nhiệm giữa thành viên.

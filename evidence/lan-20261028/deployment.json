@@ -1,0 +1,39 @@
+{
+  "networkCategory": "Private",
+  "systemCertificateTrustInstalledAutomatically": false,
+  "firewall": {
+    "enabled": "True",
+    "localAddress": "172.20.10.2",
+    "port": "3443",
+    "profile": "Private",
+    "remoteAddress": "LocalSubnet",
+    "action": "Allow"
+  },
+  "listeners": [
+    {
+      "LocalAddress": "::1",
+      "LocalPort": 3443
+    },
+    {
+      "LocalAddress": "::",
+      "LocalPort": 3306
+    },
+    {
+      "LocalAddress": "127.0.0.1",
+      "LocalPort": 8000
+    },
+    {
+      "LocalAddress": "172.20.10.2",
+      "LocalPort": 3443
+    },
+    {
+      "LocalAddress": "127.0.0.1",
+      "LocalPort": 3443
+    },
+    {
+      "LocalAddress": "127.0.0.1",
+      "LocalPort": 3000
+    }
+  ],
+  "mySqlBindingWasExisting": true
+}

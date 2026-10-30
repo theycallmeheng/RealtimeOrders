@@ -110,51 +110,8 @@ async def test_topic_sequence_cannot_skip_uncommitted_event(clients):
         events=(await s.execute(select(T['stream_events']).where(T['stream_events'].c.topic==topic).order_by(T['stream_events'].c.seq))).mappings().all()
     assert [(e['seq'],e['event_type']) for e in events]==[(1,'TEST_A'),(2,'TEST_B')]
 
-async def test_expired_quote_rejected(clients,sale):
-    a,c=clients[:2];req=await c.post('/product-requests',{'itemName':'Mặt hàng báo giá hết hạn','quantity':'1','unitLabel':'kg'})
-    req=await a.post('/admin/product-requests/'+req['id']+'/receive',{'expectedVersion':'1'})
-    ob=await order_body(c,sale)
-    req=await a.post('/admin/product-requests/'+req['id']+'/quote',{**ob,'expectedVersion':str(req['version']),
-        'offerId':sale['id'],'quantity':'1','unitPrice':'100000','expiresMinutes':'60'})
-    quote=req['quotes'][0]
-    async with Session.begin() as s:await change(s,'request_quotes',quote['id'],expires_at=now()-timedelta(seconds=1))
-    r=await c.request('POST','/product-requests/'+req['id']+'/accept-quote',{'expectedVersion':str(req['version']),'quoteId':quote['id']})
-    assert r.status_code==409 and r.json()['error']['code']=='QUOTE_EXPIRED'
 
-async def test_quote_keeps_agreed_fee_after_policy_change(clients,sale):
-    a,c=clients[0],clients[2]
-    req=await c.post('/product-requests',{'itemName':'Giữ phí thỏa thuận','quantity':'1','unitLabel':'kg'})
-    req=await a.post('/admin/product-requests/'+req['id']+'/receive',{'expectedVersion':'1'})
-    ob=await order_body(c,sale)
-    req=await a.post('/admin/product-requests/'+req['id']+'/quote',{**ob,'expectedVersion':str(req['version']),
-        'offerId':sale['id'],'quantity':'1','unitPrice':'90000','expiresMinutes':'60'})
-    quote=req['quotes'][0];req=await c.post('/product-requests/'+req['id']+'/accept-quote',{'expectedVersion':str(req['version']),'quoteId':quote['id']})
-    policy=next(p for p in await a.get('/admin/config/policies') if p['id']==quote['delivery_snapshot']['policyId'])
-    response=await a.request('PATCH','/admin/config/policies/'+policy['id'],{'expectedVersion':str(policy['version']),'shippingFee':str(policy['shipping_fee']+1000 if isinstance(policy['shipping_fee'],int) else int(policy['shipping_fee'])+1000)})
-    assert response.status_code==200,response.text
-    try:
-        req=await c.post('/product-requests/'+req['id']+'/convert',{**ob,'quoteId':quote['id'],'expectedVersion':str(req['version'])})
-        order=await c.get('/orders/'+req['linked_order']['id']);assert order['shipping_fee']==quote['shipping_fee']
-        assert order['items'][0]['product_name_snapshot']==quote['item_snapshot']['productName']
-    finally:
-        response=await a.request('PATCH','/admin/config/policies/'+policy['id'],{'expectedVersion':str(response.json()['version']),'shippingFee':policy['shipping_fee']})
-        assert response.status_code==200,response.text
 
-async def test_quote_freezes_product_name(clients,sale):
-    a,c=clients[:2];req=await c.post('/product-requests',{'itemName':'Giữ tên hàng đã báo','quantity':'1','unitLabel':'kg'})
-    req=await a.post('/admin/product-requests/'+req['id']+'/receive',{'expectedVersion':'1'});ob=await order_body(c,sale)
-    req=await a.post('/admin/product-requests/'+req['id']+'/quote',{**ob,'expectedVersion':str(req['version']),'offerId':sale['id'],
-        'quantity':'1','unitPrice':'100000','expiresMinutes':'60'})
-    quote=req['quotes'][0];product=next(p for p in await a.get('/admin/products') if p['id']==sale['product_id'])
-    changed=await a.request('PATCH','/admin/products/'+product['id'],{'expectedVersion':str(product['version']),'name':'Tên mới sau báo giá'})
-    assert changed.status_code==200,changed.text
-    try:
-        req=await c.post('/product-requests/'+req['id']+'/accept-quote',{'expectedVersion':str(req['version']),'quoteId':quote['id']})
-        req=await c.post('/product-requests/'+req['id']+'/convert',{**ob,'quoteId':quote['id'],'expectedVersion':str(req['version'])})
-        order=await c.get('/orders/'+req['linked_order']['id']);assert order['items'][0]['product_name_snapshot']==product['name']
-    finally:
-        restored=await a.request('PATCH','/admin/products/'+product['id'],{'expectedVersion':str(changed.json()['version']),'name':product['name']})
-        assert restored.status_code==200,restored.text
 
 async def test_socket_session_monitor_revokes_idle_session(clients):
     import secrets,ssl,websockets

@@ -30,6 +30,12 @@ async def addresses(s,user,method,id,body):
     values=dict(zone_id=zone['id'],recipient_name=await sanitize(s,user,text(body.get('recipientName'),100,1),'address.recipient',reject=True),
                 phone_e164=phone(body.get('phone')),address_line=await sanitize(s,user,text(body.get('addressLine'),500,5),'address.line',reject=True),
                 note=await sanitize(s,user,text(body.get('note',''),500),'address.note'),updated_at=now())
+    if body.get('locationToken'):
+        from .shipping import verify_location
+        location=verify_location(body['locationToken'])
+        values.update(latitude=location['latitude'],longitude=location['longitude'],place_id=location['placeId'])
+    elif id and values['address_line']!=addr['address_line']:
+        values.update(latitude=None,longitude=None,place_id=None)
     if id: await change(s,'addresses',id,version=addr['version']+1,**values)
     else:
         id=uid()

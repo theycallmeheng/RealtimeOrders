@@ -4,11 +4,21 @@ import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {readNetworkSettings} from './network_config.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const tls={key:fs.readFileSync(path.join(root,'runtime/tls/key.pem')),cert:fs.readFileSync(path.join(root,'runtime/tls/cert.pem'))};
+const network=readNetworkSettings(root);
+const canonicalHost=new URL(network.origin).host;
+const tls={key:fs.readFileSync(path.join(network.tlsDirectory,'key.pem')),cert:fs.readFileSync(path.join(network.tlsDirectory,'cert.pem'))};
 
 function forwardRequest(req,res){
+  if(!req.url.startsWith('/')){res.writeHead(400);res.end();return;}
+  if(network.mode==='lan' && req.headers.host!==canonicalHost && req.url!=='/api/health'){
+    if(!req.url.startsWith('/api/') && ['GET','HEAD'].includes(req.method)){
+      res.writeHead(307,{location:network.origin+req.url,'cache-control':'no-store'});
+    }else{res.writeHead(421,{'content-type':'text/plain; charset=utf-8'});}
+    res.end();return;
+  }
   const port=req.url.startsWith('/api/')?8000:3000;
   const upstream=http.request({hostname:'127.0.0.1',port,path:req.url,method:req.method,
     headers:{...req.headers,'x-forwarded-proto':'https','x-forwarded-for':req.socket.remoteAddress}},response=>{
@@ -25,13 +35,16 @@ function forwardRequest(req,res){
 }
 
 function forwardUpgrade(req,socket,head){
+  if(network.mode==='lan' && req.headers.host!==canonicalHost){
+    socket.end('HTTP/1.1 421 Misdirected Request\r\nConnection: close\r\n\r\n');return;
+  }
   socket.setNoDelay(true);
   req.headers['x-forwarded-for']=req.socket.remoteAddress;
   req.headers['x-forwarded-proto']='https';
   const port=req.url==='/ws'?8000:3000;
   const upstream=net.connect(port,'127.0.0.1',()=>{
-    upstream.write(`${req.method} ${req.url} HTTP/${req.httpVersion}\r\n`+
-      Object.entries(req.headers).map(([key,value])=>`${key}: ${value}`).join('\r\n')+'\r\n\r\n');
+    upstream.write(req.method+' '+req.url+' HTTP/'+req.httpVersion+'\r\n'+
+      Object.entries(req.headers).map(([key,value])=>key+': '+value).join('\r\n')+'\r\n\r\n');
     if(head.length)upstream.write(head);
     upstream.pipe(socket);
     socket.pipe(upstream);
@@ -42,21 +55,18 @@ function forwardUpgrade(req,socket,head){
   socket.on('close',()=>upstream.destroy());
 }
 
-// Both loopback families serve the same origin. localhost may resolve to ::1 first.
-for(const host of ['127.0.0.1','::1']){
+for(const host of network.hosts){
   const server=https.createServer(tls,forwardRequest);
   server.on('secureConnection',socket=>socket.setNoDelay(true));
   server.on('upgrade',forwardUpgrade);
   server.requestTimeout=30000;
   server.on('error',error=>{
     if(host==='::1' && ['EAFNOSUPPORT','EADDRNOTAVAIL'].includes(error.code)){
-      console.log('IPv6 loopback unavailable; IPv4 loopback remains enabled.');
-      return;
+      console.log('IPv6 loopback unavailable; IPv4 remains enabled.');return;
     }
-    console.error(`Proxy listen failed: ${host} (${error.code})`);
-    process.exit(1);
+    console.error('Proxy listen failed: '+host+' ('+error.code+')');process.exit(1);
   });
   server.listen({port:3443,host,...(host==='::1'?{ipv6Only:true}:{})},()=>{
-    console.log(`RealtimeOrders HTTPS loopback ready: ${host}:3443`);
+    console.log('RealtimeOrders HTTPS ready: '+host+':3443 ('+network.mode+')');
   });
 }

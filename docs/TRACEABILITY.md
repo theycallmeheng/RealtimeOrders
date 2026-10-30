@@ -1,7 +1,7 @@
 # Đối chiếu yêu cầu — thiết kế — kiểm thử
 
 Trạng thái ban đầu của mọi dòng: **đã đặc tả, chưa triển khai/chạy test**.
-Các ngày là mục tiêu tích hợp, không phải ngày hoàn thành đã ghi nhận.
+Các ngày là mục tiêu tích hợp, không phải ngày hoàn thành đã ghi nhận. FR12 là yêu cầu của bản thiết kế ban đầu; phiên bản hiện tại đã rút chức năng yêu cầu hàng/báo giá. Xem [DAILY_SALES.md](DAILY_SALES.md).
 
 | Yêu cầu | Module/thiết kế chính | Ca kiểm tra | Mục tiêu |
 |---|---|---|---|
@@ -16,7 +16,7 @@ Các ngày là mục tiêu tích hợp, không phải ngày hoàn thành đã gh
 | FR09 | InnoDB transaction, offer locks, ledger | TC10–11,21–22 | 25/10 |
 | FR10 | state machine/history/version | TC12–13 | 26/10 |
 | FR11 | cancellation_requests/CANCEL_RESTORE | TC12–13 | 26/10 |
-| FR12 | product_requests/quotes/convert | TC14 | 28/10 |
+| FR12 | Rút khỏi phạm vi; API cũ trả HTTP 410 | — | 29/10 |
 | FR13 | conversation/message/assets | TC15,19,25 | 28/10 |
 | FR14 | notifications/subscriptions/fan-out jobs | TC17,20,22,27 | 27/10 |
 | FR15 | moderation rules/violations + server service | TC16,19 | 28/10 |

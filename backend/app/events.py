@@ -7,7 +7,7 @@ from datetime import timedelta
 from sqlalchemy import select, update, or_, func, event as sql_event
 from sqlalchemy.orm import Session as SyncSession
 from sqlalchemy.dialects.mysql import insert
-from .db import T, Session, now, uid, add, public
+from .db import T, Session, now, uid, add, public, one
 
 log = logging.getLogger(__name__)
 outbox_ready = asyncio.Event()
@@ -183,7 +183,12 @@ async def notification_batch():
         q = select(sub.c.user_id).where(sub.c.product_id == job['product_id'])
         if job['after_user_id']: q = q.where(sub.c.user_id > job['after_user_id'])
         users = (await s.execute(q.order_by(sub.c.user_id).limit(100))).scalars().all()
-        for id in users: await notify(s, id, job['kind'], job['payload'], job['source_fact_id'])
+        for id in users:
+            if job['kind']=='PRODUCT_OPENED':
+                from .commerce import catalog
+                user=await one(s,'users',T['users'].c.id==id)
+                if not await catalog(s,user,offer_ids=[job['payload']['offerId']]): continue
+            await notify(s, id, job['kind'], job['payload'], job['source_fact_id'])
         await s.execute(update(j).where(j.c.id == job['id']).values(
             after_user_id=users[-1] if users else job['after_user_id'],
             state='COMPLETED' if len(users) < 100 else 'PENDING',

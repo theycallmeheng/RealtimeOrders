@@ -1,5 +1,10 @@
 # Sổ quyết định và giả định
 
+> Cập nhật đã được người dùng chốt ngày 29/10/2026: menu theo ngày nhiều sản phẩm,
+> giới hạn nhóm, Goong và lãi gộp. Chức năng yêu cầu hàng/báo giá (FR12) ngừng hỗ trợ;
+> P13 về chưa dùng bản đồ được thay thế. Xem DAILY_SALES.md để biết hợp đồng hiện hành.
+
+
 Ngày 22/10/2026. Thứ tự ưu tiên: chỉ dẫn trực tiếp mới của người dùng > yêu cầu
 người dùng đã chốt > bản mô tả cuối trong link > đề xuất thiết kế của nhóm.
 Các câu hỏi/gợi ý trong các câu trả lời cũ của đoạn chat tham khảo không tự trở
@@ -12,7 +17,7 @@ thành yêu cầu. Tài liệu này không phải xác nhận của giảng viê
 | D01 | Web responsive; Next.js, Tailwind, Font Awesome; backend Python, MySQL, WSS | Bản mô tả cuối của đề tài |
 | D02 | Hai vai trò chính: khách hàng và quản trị/người bán; ít nhất hai nhóm giá | Bản mô tả đề tài |
 | D03 | Chỉ trừ tồn khi duyệt; phải kiểm tra lại và xử lý concurrency | Lựa chọn cuối trong link |
-| D04 | SĐT + OTP SMS bắt buộc lúc đăng ký; email tùy chọn; sau đó đăng nhập bằng mật khẩu | Người dùng xác nhận 22/10 |
+| D04 | Đăng ký SĐT qua OTP Zalo trước; người dùng có thể chọn SMS dự phòng khi Zalo từ chối hoặc sau 60 giây; OTP khôi phục mật khẩu vẫn theo cấu hình SMS; email tùy chọn | Người dùng cập nhật lựa chọn 30/10 |
 | D05 | Đơn đã duyệt, chưa bàn giao vận chuyển: khách yêu cầu hủy; admin xác nhận và hoàn kho | Người dùng xác nhận 22/10 |
 | D06 | Sinh viên giao riêng theo khu vực, mức đơn tối thiểu và phí admin cấu hình | Người dùng xác nhận 22/10 |
 | D07 | Thông báo trong website, lưu để đọc lại; chat riêng có ảnh và lịch sử | Bản mô tả cuối |
@@ -48,7 +53,7 @@ schema, API và ca kiểm thử liên quan.
 
 | ID | Còn thiếu | Phần vẫn làm được |
 |---|---|---|
-| O01 | Nhà cung cấp SMS, tài khoản/API key, sender, chi phí và số thử hợp lệ | Adapter + fake provider có nhãn demo + kiểm thử; không tuyên bố SMS thật |
+| O01 | OA/ZBS, quyền gửi theo SĐT, access token, template OTP được duyệt; Twilio cho SMS dự phòng/khôi phục, chi phí và số thử hợp lệ | Adapter + fake provider có nhãn demo + kiểm thử; chỉ nghiệm thu tin thật sau khi có cấu hình nhà cung cấp |
 | O02 | Hạ tầng/tên miền, TLS, tài nguyên và máy tạo tải | Local compose, TLS thử có chứng thư tin cậy trên máy demo; đo cấu hình thực |
 | O03 | Dữ liệu khu giao, điểm giao tập trung, giờ giao, phí và mức tối thiểu | Model/chính sách cấu hình; dữ liệu seed ghi rõ mẫu |
 | O04 | Chính sách đổi trả sau SHIPPING/DELIVERED, công nợ và thanh toán khác COD | Không tự hoàn kho sau giao; ghi nhận đây là phạm vi chưa chốt |

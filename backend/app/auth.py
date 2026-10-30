@@ -83,11 +83,11 @@ def require_admin(user):
     check(user['role'] == 'ADMIN', 'FORBIDDEN', 'Thao tác dành cho quản trị viên', 403)
 
 async def send_code(subject, code, purpose):
-    """Called only after challenge commit. OTP is never logged or persisted in plain text."""
+    """Deliver an OTP and return the channel used; never log or persist the code."""
     if purpose == 'VERIFY_EMAIL':
         if settings.email_provider == 'demo':
             check(settings.demo_mode, 'EMAIL_NOT_CONFIGURED', 'Chưa cấu hình email', 503)
-            return
+            return 'demo'
         def send_mail():
             msg = EmailMessage()
             msg['Subject'], msg['From'], msg['To'] = 'Mã xác minh RealtimeOrders', settings.smtp_from, subject
@@ -97,15 +97,72 @@ async def send_code(subject, code, purpose):
                 smtp.login(settings.smtp_user, settings.smtp_password)
                 smtp.send_message(msg)
         await asyncio.to_thread(send_mail)
-    elif settings.sms_provider == 'twilio':
+        return 'email'
+    if settings.sms_provider == 'twilio':
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
                 f'https://api.twilio.com/2010-04-01/Accounts/{settings.twilio_account_sid}/Messages.json',
                 auth=(settings.twilio_account_sid, settings.twilio_auth_token),
                 data={'To': subject, 'From': settings.twilio_from, 'Body': f'RealtimeOrders: {code}. Hieu luc 5 phut.'})
             check(response.is_success, 'SMS_UNAVAILABLE', 'Không gửi được SMS. Vui lòng thử lại.', 503)
-    else:
-        check(settings.demo_mode, 'SMS_NOT_CONFIGURED', 'Chưa cấu hình SMS', 503)
+        return 'sms'
+    check(settings.demo_mode, 'SMS_NOT_CONFIGURED', 'Chưa cấu hình SMS', 503)
+    return 'demo'
+
+async def send_zalo_code(subject, code):
+    """Send an approved ZBS template to a Zalo phone number; never expose provider details."""
+    if not settings.zalo_access_token or not settings.zalo_otp_template_id:
+        return False
+    payload = {
+        'phone': subject.lstrip('+'),
+        'template_id': settings.zalo_otp_template_id,
+        'template_data': {settings.zalo_otp_code_field: code},
+        'tracking_id': secrets.token_hex(16),
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                'https://business.openapi.zalo.me/message/template',
+                headers={'access_token': settings.zalo_access_token,
+                         'Content-Type': 'application/json'},
+                json=payload)
+        if not response.is_success:
+            return False
+        body = response.json()
+        return isinstance(body, dict) and str(body.get('error')) == '0'
+    except (httpx.HTTPError, ValueError, TypeError):
+        return False
+
+def otp_result(challenge_id, channel, status, *, fallback_after=0,
+               fallback_available=False, demo_code=None):
+    result = {
+        'challengeId': challenge_id,
+        'expiresIn': 300,
+        'channel': channel.lower(),
+        'deliveryStatus': status,
+        'fallbackAfterSeconds': fallback_after,
+        'fallbackAvailable': fallback_available,
+        'demo': channel == 'DEMO',
+    }
+    if channel == 'DEMO' and settings.demo_mode and demo_code is not None:
+        result['demoCode'] = demo_code
+    return result
+
+def validate_sms_fallback(challenge, at):
+    check(challenge['purpose'] == 'REGISTER_PHONE' and challenge['delivery_channel'] == 'ZALO',
+          'SMS_FALLBACK_UNAVAILABLE', 'Không thể chuyển mã xác minh này sang SMS', 409)
+    check(challenge['sms_fallback_used_at'] is None,
+          'SMS_FALLBACK_USED', 'SMS dự phòng đã được sử dụng cho lượt đăng ký này', 409)
+    check(challenge['attempts'] == 0,
+          'SMS_FALLBACK_UNAVAILABLE', 'Mã xác minh này đã bị khóa', 409)
+    check(challenge['expires_at'] > at,
+          'OTP_EXPIRED', 'Mã đã hết hạn; hãy bắt đầu lại', 400)
+    if challenge['state'] == 'FAILED' and challenge['delivery_accepted_at'] is None:
+        return
+    check(challenge['state'] == 'SENT' and challenge['delivery_accepted_at'] is not None,
+          'SMS_FALLBACK_UNAVAILABLE', 'Không thể chuyển mã xác minh này sang SMS', 409)
+    check(challenge['delivery_accepted_at'] + timedelta(seconds=60) <= at,
+          'SMS_FALLBACK_WAIT', 'Bạn có thể chọn SMS sau 60 giây', 429)
 
 async def challenge(subject, purpose, ip, user=None):
     await rate(f'otp-ip:{ip}', 20, 3600)
@@ -113,19 +170,109 @@ async def challenge(subject, purpose, ip, user=None):
     await rate(f'otp-minute:{purpose}:{subject}', 1, 60)
     code = f'{secrets.randbelow(1000000):06d}'
     id = uid()
+    intended_channel = 'EMAIL' if purpose == 'VERIFY_EMAIL' else 'SMS'
     async with Session.begin() as s:
         await add(s, 'auth_challenges', id=id, user_id=user['id'] if user else None,
                   purpose=purpose, subject=subject, secret_hmac=secret_hmac(id+':'+code),
-                  attempts=0, state='CREATED', expires_at=now()+timedelta(minutes=5), created_at=now())
+                  attempts=0, state='CREATED', delivery_channel=intended_channel,
+                  delivery_accepted_at=None, sms_fallback_used_at=None,
+                  expires_at=now()+timedelta(minutes=5), created_at=now())
     try:
-        await send_code(subject, code, purpose)
+        channel = await send_code(subject, code, purpose)
     except Exception:
-        async with Session.begin() as s: await change(s, 'auth_challenges', id, state='FAILED')
+        async with Session.begin() as s:
+            await change(s, 'auth_challenges', id, state='FAILED')
         raise Fault('DELIVERY_FAILED', 'Không gửi được mã xác minh; vui lòng thử lại.', 503)
-    async with Session.begin() as s: await change(s, 'auth_challenges', id, state='SENT')
-    result = {'challengeId': id, 'expiresIn': 300, 'demo': settings.demo_mode}
-    if settings.demo_mode: result['demoCode'] = code
-    return result
+    accepted_at = now()
+    async with Session.begin() as s:
+        await change(s, 'auth_challenges', id, state='SENT',
+                     delivery_channel=channel.upper(), delivery_accepted_at=accepted_at)
+    return otp_result(id, channel.upper(), 'demo' if channel == 'demo' else 'accepted',
+                      demo_code=code)
+
+async def registration_challenge(subject, ip):
+    purpose = 'REGISTER_PHONE'
+    await rate(f'otp-ip:{ip}', 20, 3600)
+    await rate(f'otp-hour:{purpose}:{subject}', 5, 3600)
+    await rate(f'otp-minute:{purpose}:{subject}', 1, 60)
+    code = f'{secrets.randbelow(1000000):06d}'
+    id = uid()
+    issued_at = now()
+    if not settings.zalo_access_token or not settings.zalo_otp_template_id:
+        if settings.demo_mode:
+            async with Session.begin() as s:
+                await add(s, 'auth_challenges', id=id, user_id=None, purpose=purpose,
+                          subject=subject, secret_hmac=secret_hmac(id+':'+code),
+                          attempts=0, state='SENT', delivery_channel='DEMO',
+                          delivery_accepted_at=issued_at, sms_fallback_used_at=None,
+                          expires_at=issued_at+timedelta(minutes=5), created_at=issued_at)
+            return otp_result(id, 'DEMO', 'demo', demo_code=code)
+        async with Session.begin() as s:
+            await add(s, 'auth_challenges', id=id, user_id=None, purpose=purpose,
+                      subject=subject, secret_hmac=secret_hmac(id+':'+code),
+                      attempts=0, state='FAILED', delivery_channel='ZALO',
+                      delivery_accepted_at=None, sms_fallback_used_at=None,
+                      expires_at=issued_at+timedelta(minutes=5), created_at=issued_at)
+        return otp_result(id, 'ZALO', 'unavailable', fallback_available=True)
+
+    async with Session.begin() as s:
+        await add(s, 'auth_challenges', id=id, user_id=None, purpose=purpose,
+                  subject=subject, secret_hmac=secret_hmac(id+':'+code),
+                  attempts=0, state='CREATED', delivery_channel='ZALO',
+                  delivery_accepted_at=None, sms_fallback_used_at=None,
+                  expires_at=issued_at+timedelta(minutes=5), created_at=issued_at)
+    if not await send_zalo_code(subject, code):
+        async with Session.begin() as s:
+            await change(s, 'auth_challenges', id, state='FAILED')
+        return otp_result(id, 'ZALO', 'unavailable', fallback_available=True)
+    accepted_at = now()
+    async with Session.begin() as s:
+        await change(s, 'auth_challenges', id, state='SENT',
+                     delivery_accepted_at=accepted_at)
+    return otp_result(id, 'ZALO', 'accepted', fallback_after=60)
+
+async def sms_fallback(challenge_id, ip):
+    async with Session.begin() as s:
+        original = await one(s, 'auth_challenges', T['auth_challenges'].c.id == challenge_id)
+        validate_sms_fallback(original, now())
+        existing = await one(s, 'users', T['users'].c.phone_e164 == original['subject'],
+                             required=False)
+        check(not existing, 'PHONE_USED', 'Số điện thoại đã được đăng ký', 409)
+        subject, user_id = original['subject'], original['user_id']
+    await rate(f'otp-ip:{ip}', 20, 3600)
+    await rate(f'otp-hour:REGISTER_PHONE:{subject}', 5, 3600)
+    await rate(f'otp-fallback-minute:{subject}', 1, 60)
+
+    code = f'{secrets.randbelow(1000000):06d}'
+    new_id = uid()
+    issued_at = now()
+    async with Session.begin() as s:
+        original = await one(s, 'auth_challenges',
+                             T['auth_challenges'].c.id == challenge_id, lock=True)
+        validate_sms_fallback(original, now())
+        existing = await one(s, 'users', T['users'].c.phone_e164 == original['subject'],
+                             required=False)
+        check(not existing, 'PHONE_USED', 'Số điện thoại đã được đăng ký', 409)
+        await change(s, 'auth_challenges', challenge_id, state='FAILED',
+                     sms_fallback_used_at=issued_at)
+        await add(s, 'auth_challenges', id=new_id, user_id=user_id,
+                  purpose='REGISTER_PHONE', subject=subject,
+                  secret_hmac=secret_hmac(new_id+':'+code), attempts=0,
+                  state='CREATED', delivery_channel='SMS',
+                  delivery_accepted_at=None, sms_fallback_used_at=None,
+                  expires_at=issued_at+timedelta(minutes=5), created_at=issued_at)
+    try:
+        channel = await send_code(subject, code, 'REGISTER_PHONE')
+    except Exception:
+        async with Session.begin() as s:
+            await change(s, 'auth_challenges', new_id, state='FAILED')
+        raise Fault('SMS_UNAVAILABLE', 'Không gửi được SMS. Hãy bắt đầu lại sau giới hạn hiện hành.', 503)
+    accepted_at = now()
+    async with Session.begin() as s:
+        await change(s, 'auth_challenges', new_id, state='SENT',
+                     delivery_channel=channel.upper(), delivery_accepted_at=accepted_at)
+    return otp_result(new_id, channel.upper(),
+                      'demo' if channel == 'demo' else 'accepted', demo_code=code)
 
 async def verify_challenge(id, code, purpose):
     error = None
