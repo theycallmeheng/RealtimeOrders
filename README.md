@@ -6,13 +6,28 @@ RealtimeOrders là ứng dụng web client–server giúp khách hàng xem menu 
 
 ## Bài toán và mục tiêu
 
-Khi nhiều khách đặt hàng cùng lúc, xử lý thủ công dễ gây bán vượt tồn, nhầm giá giữa các nhóm và chậm cập nhật trạng thái. Dự án tập trung giải quyết ba vấn đề có thể kiểm tra trong mô hình client–server:
+Trong mô hình bán hàng theo nhóm ở trường học, người bán thường mở nhiều mặt hàng trong các khung giờ khác nhau, giới hạn số lượng và áp dụng giá hoặc cách giao riêng cho từng nhóm khách. Nếu nhận đơn qua tin nhắn hoặc bảng tính, người bán khó theo dõi hàng còn lại khi nhiều khách cùng đặt, khách dễ nhìn nhầm giá/đợt bán, còn trạng thái đơn không đến mọi người kịp thời.
 
-- Giữ tồn kho đúng khi nhiều đơn cạnh tranh một lượng hàng hữu hạn.
-- Phát thay đổi về đơn hàng và danh mục tới đúng người dùng theo thời gian thực.
-- Đồng bộ lại client sau khi tải lại trang hoặc mất kết nối.
+RealtimeOrders mô phỏng quy trình này bằng ứng dụng client–server cho một người bán. Mục tiêu là:
 
-Phạm vi là ứng dụng hỗ trợ một người bán, gồm hai vai trò chính: khách hàng và quản trị. Hệ thống chưa có thanh toán trực tuyến, kết nối đơn vị vận chuyển, đổi trả sau khi giao thành công hoặc nhiều máy chủ ứng dụng.
+- **Quản lý các đợt bán rõ ràng:** mở nhiều đợt theo thời gian, chọn nhiều sản phẩm, kiểm soát tồn riêng và ngăn cùng một sản phẩm xuất hiện trong các đợt đang chồng lịch.
+- **Phục vụ đúng nhóm khách:** hiển thị sản phẩm, giá và cách giao theo nhóm được cấu hình; máy chủ kiểm tra lại quyền và giá khi nhận đơn.
+- **Giữ dữ liệu đơn hàng và tồn kho nhất quán:** đơn chờ chưa giữ hàng; khi duyệt, máy chủ kiểm tra toàn bộ mặt hàng và cập nhật tồn trong một giao dịch để tránh bán vượt kho hoặc trừ lặp khi gửi lại yêu cầu.
+- **Cập nhật và phục hồi qua mạng:** phát thay đổi đơn/menu qua WebSocket; sau tải lại trang hoặc mất kết nối, client nhận các sự kiện còn thiếu hoặc tải lại snapshot.
+- **Hỗ trợ vận hành và đánh giá:** áp dụng chính sách giao riêng theo quãng đường hoặc giao tập trung; lưu giá vốn tại thời điểm duyệt để báo cáo doanh thu, giá vốn và lãi gộp theo ngày/tháng.
+
+### Trọng tâm cải tiến trong phạm vi đồ án
+
+Các hệ thống đặt hàng trực tuyến đã có sẵn những chức năng như giỏ hàng, quản lý tồn và cập nhật trạng thái. Vì vậy nhóm **không tuyên bố tạo ra công nghệ hay thuật toán mới**. Phần nhóm tập trung xây dựng là cách kết hợp các chức năng đó theo nghiệp vụ bán hàng theo nhóm trong trường:
+
+- Từ một danh sách món chung thành các đợt bán có lịch riêng, tồn riêng, nhiều sản phẩm và quyền xem/mua theo nhóm.
+- Từ kiểm tra tồn đơn giản thành luồng duyệt có kiểm tra đồng thời, cập nhật tồn, ghi biến động kho và chống xử lý trùng.
+- Từ thông báo cập nhật đơn thành luồng sự kiện có lưu bền vững, thứ tự theo phiên bản và đồng bộ lại sau khi client kết nối lại.
+- Từ một mức giao hàng cố định thành chính sách có giao tập trung miễn phí cho sinh viên và giao riêng tính theo tuyến đường, giới hạn quãng đường.
+
+Nhóm có thể chứng minh các mục tiêu này bằng demo hai trình duyệt: tài khoản thuộc nhóm khác nhau thấy đúng giá/sản phẩm; nhiều đơn cạnh tranh mặt hàng cuối không làm tồn âm; thay đổi được cập nhật trực tiếp và client bắt kịp sau khi kết nối lại. Đây là cải tiến về **mô hình nghiệp vụ và cách tích hợp trong đồ án**, không phải khẳng định hệ thống vượt trội hơn các nền tảng thương mại đang vận hành.
+
+Phạm vi hiện tại là ứng dụng hỗ trợ một người bán, gồm hai vai trò chính: khách hàng và quản trị. Hệ thống chưa có thanh toán trực tuyến, kết nối đơn vị vận chuyển, đổi trả sau khi giao thành công hoặc nhiều máy chủ ứng dụng.
 
 ## Thành viên
 
@@ -288,6 +303,162 @@ Dùng [.env.example](.env.example) làm danh sách biến; lưu giá trị cục
 
 Dịch vụ bản đồ công cộng không cần key hoặc billing. Photon và Nominatim chỉ gọi khi bấm tìm, có cache và giới hạn lưu lượng. Địa chỉ thiếu số nhà có thể bổ sung tại **Cấu hình → Địa chỉ công cộng đã xác nhận**; chỉ thêm điểm công cộng đã kiểm tra, không tự chia sẻ địa chỉ khách. Nominatim chỉ được gọi khi người dùng bấm tìm, tối đa một yêu cầu mỗi giây; OSRM demo cũng giới hạn lưu lượng và không bảo đảm uptime. Không nhập địa chỉ cá nhân thật/nhạy cảm hoặc dùng endpoint công cộng cho lưu lượng production.
 
+## Cài đặt và chạy trên macOS (một máy cục bộ)
+
+Hướng dẫn này chạy giao diện, backend, proxy TLS và MySQL trên **cùng một máy Mac**. Phần script `setup.ps1`, `services.ps1`, `remote.ps1` và các script cấu hình mạng hiện tại dành cho Windows PowerShell; không chạy các lệnh đó trong Terminal macOS. Hướng dẫn Cloudflare Tunnel ở mục Windows không phải quy trình đã kiểm thử trên Mac.
+
+### Yêu cầu
+
+- macOS có Terminal và Git.
+- Python **3.12**, Node.js **24** và MySQL **8.4**.
+- Kết nối Internet trong lần cài để tải thư viện Python/npm và dữ liệu ảnh demo.
+- Homebrew là cách cài gọn nếu máy hỗ trợ các formula tương ứng. Cài Homebrew theo [hướng dẫn chính thức](https://docs.brew.sh/Installation); sau đó:
+
+```bash
+xcode-select --install  # Bỏ qua nếu Command Line Tools đã được cài.
+brew install python@3.12 node@24 mysql@8.4
+```
+
+`node@24` và `mysql@8.4` là các formula phiên bản riêng của Homebrew, có thể chưa nằm trong `PATH`. Thêm đường dẫn một lần vào `~/.zprofile`, rồi mở Terminal mới hoặc nạp cấu hình:
+
+```bash
+echo 'export PATH="$(brew --prefix node@24)/bin:$(brew --prefix mysql@8.4)/bin:$PATH"' >> ~/.zprofile
+source ~/.zprofile
+```
+
+Kiểm tra phiên bản:
+
+```bash
+python3.12 --version
+node --version
+npm --version
+mysql --version
+```
+
+Các formula này hiện thuận tiện nhất trên Apple Silicon. Nếu Mac Intel không có bottle Homebrew phù hợp, cài Python 3.12 từ [python.org](https://www.python.org/downloads/macos/), Node 24 từ [nodejs.org](https://nodejs.org/en/download) và MySQL Community Server 8.4 từ [trang tải MySQL](https://dev.mysql.com/downloads/mysql/), chọn đúng kiến trúc máy. Tiếp tục từ bước kiểm tra phiên bản bên trên. Không cài thêm MySQL nếu máy đã có một server khác đang dùng cổng 3306; trước tiên hãy xác định database và sao lưu dữ liệu cần giữ.
+
+### Cài lần đầu
+
+Clone repo, vào thư mục dự án và tạo file cấu hình riêng:
+
+```bash
+git clone https://github.com/theycallmeheng/RealtimeOrders.git
+cd RealtimeOrders
+cp .env.example .env
+nano .env
+```
+
+Trong `.env`, sửa tối thiểu các giá trị sau:
+
+```dotenv
+DATABASE_URL=mysql+asyncmy://realtimeorders_app:THAY_BANG_MAT_KHAU@127.0.0.1:3306/realtimeorders?charset=utf8mb4
+APP_SECRET=THAY_BANG_CHUOI_BI_MAT_RIENG
+APP_ORIGIN=https://localhost:3443
+COOKIE_SECURE=true
+DEMO_MODE=true
+SMS_PROVIDER=demo
+EMAIL_PROVIDER=demo
+```
+
+Tạo chuỗi bí mật rồi dán kết quả vào `APP_SECRET`:
+
+```bash
+python3.12 -c 'import secrets; print(secrets.token_hex(32))'
+```
+
+Dùng mật khẩu MySQL riêng cho ứng dụng, chỉ chứa ký tự chữ và số để tránh phải mã hóa ký tự đặc biệt trong URL. Không dùng mật khẩu root trong `DATABASE_URL`; không commit `.env`.
+
+### Tạo database và tài khoản ứng dụng
+
+Khởi động MySQL và mở client quản trị:
+
+```bash
+brew services start mysql@8.4
+mysql -u root
+```
+
+Homebrew thường cài MySQL cục bộ với tài khoản `root` chưa đặt mật khẩu ban đầu. Nếu máy đã đặt mật khẩu root, dùng `mysql -u root -p` và nhập mật khẩu tại Terminal. Tại dấu nhắc MySQL, chạy lệnh sau; thay `MAT_KHAU_RIENG` bằng mật khẩu chữ-số do bạn chọn. Nếu database đã tồn tại, **không chạy lại lệnh tạo hoặc xóa database**; hãy kiểm tra `.env` và sao lưu trước:
+
+```sql
+CREATE DATABASE realtimeorders CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER 'realtimeorders_app'@'127.0.0.1' IDENTIFIED BY 'MAT_KHAU_RIENG';
+GRANT ALL PRIVILEGES ON realtimeorders.* TO 'realtimeorders_app'@'127.0.0.1';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+Đảm bảo mật khẩu trong câu `CREATE USER` giống mật khẩu ở `DATABASE_URL`. Cấu hình phải trỏ đến `127.0.0.1:3306`, vì user ứng dụng được tạo cho host này.
+
+### Cài thư viện, migration và dữ liệu mẫu
+
+Chạy từ thư mục gốc `RealtimeOrders`:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
+mkdir -p runtime
+cd backend
+python -m alembic upgrade head
+python seed.py
+cd ..
+python scripts/create_cert.py
+cd frontend
+npm ci
+npm run build
+cd ..
+```
+
+Dependency `winloop` chỉ được cài trên Windows; pip tự bỏ qua trên macOS. `seed.py` chỉ tạo tài khoản và dữ liệu mẫu khi database chưa có người dùng. Tài khoản/mật khẩu demo được ghi trong `runtime/demo-accounts.local.json` trên máy này; không chia sẻ công khai.
+
+### Khởi động và dừng ứng dụng
+
+Mở ba cửa sổ Terminal, mỗi cửa sổ chạy một thành phần. Thay `/duong/dan/RealtimeOrders` bằng đường dẫn clone thực tế của bạn.
+
+**Cửa sổ 1 — backend:**
+
+```bash
+cd /duong/dan/RealtimeOrders/backend
+source ../.venv/bin/activate
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Cửa sổ 2 — giao diện:**
+
+```bash
+cd /duong/dan/RealtimeOrders/frontend
+npm run start
+```
+
+**Cửa sổ 3 — HTTPS proxy:**
+
+```bash
+cd /duong/dan/RealtimeOrders
+node scripts/proxy.mjs
+```
+
+Mở `https://localhost:3443`. Chứng thư do `create_cert.py` tạo là chứng thư tự ký dành cho phát triển; trình duyệt có thể cảnh báo. Chỉ tiếp tục khi địa chỉ đúng là localhost, không dùng chứng thư này cho tên miền công khai. Kiểm tra backend và database bằng `https://localhost:3443/api/health`; trạng thái bình thường trả JSON có `"status":"ok"`.
+
+Dừng từng tiến trình bằng `Ctrl+C` trong cửa sổ Terminal tương ứng. MySQL có thể để chạy cho lần sau; nếu muốn dừng dịch vụ:
+
+```bash
+brew services stop mysql@8.4
+```
+
+### Lỗi thường gặp trên macOS
+
+| Hiện tượng | Cách xử lý |
+| --- | --- |
+| `command not found: node`, `npm` hoặc `mysql` | Nạp lại `~/.zprofile`, kiểm tra `brew --prefix node@24` và `brew --prefix mysql@8.4`, rồi mở Terminal mới. Nếu cài bằng trình cài đặt chính thức, kiểm tra lại `PATH`. |
+| Không khởi động được MySQL hoặc cổng 3306 đang dùng | Kiểm tra `brew services list` và `lsof -nP -iTCP:3306 -sTCP:LISTEN`. Chỉ dừng đúng server mà bạn định dùng; không xóa datadir MySQL để giải quyết xung đột. |
+| `Access denied` hoặc backend không kết nối database | Kiểm tra `DATABASE_URL`, mật khẩu, user có host `127.0.0.1`, database `realtimeorders` và MySQL đang nghe cổng 3306. Thử `mysql -h 127.0.0.1 -u realtimeorders_app -p realtimeorders`. |
+| `ModuleNotFoundError: app` khi chạy backend | Chuyển vào thư mục `backend`, kích hoạt `.venv` ở thư mục gốc rồi chạy lại lệnh Uvicorn ở trên. |
+| Trang báo 502 hoặc chưa sẵn sàng | Kiểm tra cả ba Terminal; backend dùng cổng 8000, Next.js dùng 3000, proxy dùng 3443. Dùng `lsof -nP -iTCP:8000 -sTCP:LISTEN` (đổi cổng để kiểm tra từng dịch vụ). |
+| Trình duyệt cảnh báo chứng thư | Đây là chứng thư tự ký cho localhost. Xác nhận URL là `https://localhost:3443`; không bỏ qua cảnh báo nếu mở bằng hostname/IP khác. |
+| `npm ci` báo phiên bản Node không tương thích | Chọn Node 24, mở Terminal mới sau khi sửa `PATH`, rồi xác nhận `node --version` trước khi chạy lại `npm ci`. |
+
+Đây là hướng dẫn chạy cục bộ; chưa được nghiệm thu trên máy Mac. Muốn cho thiết bị ở mạng khác truy cập từ máy Mac, cần một quy trình tunnel/chứng thư phù hợp riêng; các script Windows trong repo không chạy trực tiếp trên macOS.
+
 ## Kiểm thử và thực nghiệm
 
 Test nghiệp vụ cần database MySQL audit riêng; không chạy trên database có dữ liệu thật. Các nhóm cần kiểm tra gồm phân quyền, tính tồn khi đồng thời, retry idempotent, khôi phục WebSocket, báo cáo và trải nghiệm trên điện thoại.
@@ -378,4 +549,6 @@ evidence/      kết quả kiểm thử/đo cục bộ; không commit
 
 - [FastAPI WebSockets](https://fastapi.tiangolo.com/advanced/websockets/) · [MDN WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 - [MySQL InnoDB locking reads](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html) · [Next.js self-hosting](https://nextjs.org/docs/app/guides/self-hosting)
+- [Cài Homebrew](https://docs.brew.sh/Installation) · [Python 3.12 trên Homebrew](https://formulae.brew.sh/formula/python@3.12) · [Python cho macOS](https://www.python.org/downloads/macos/) · [Node.js 24 trên Homebrew](https://formulae.brew.sh/formula/node@24) · [Node.js downloads](https://nodejs.org/en/download)
+- [MySQL 8.4 trên Homebrew](https://formulae.brew.sh/formula/mysql@8.4) · [MySQL cho macOS](https://dev.mysql.com/doc/refman/8.4/en/macos-installation.html) · [MySQL Community downloads](https://dev.mysql.com/downloads/mysql/) · [Yêu cầu Node.js của Next.js](https://nextjs.org/docs/pages/getting-started/installation)
 - [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) · [Chính sách Nominatim](https://operations.osmfoundation.org/policies/nominatim/) · [OSRM demo](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server)
