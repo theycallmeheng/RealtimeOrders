@@ -124,6 +124,10 @@ Báo cáo tính theo ngày giao thành công tại Việt Nam: doanh thu hàng, 
 
 `db/schema.sql` là schema đầu vào của migration đầu tiên; các thay đổi sau đó nằm trong `backend/alembic/versions`. Cài mới và cập nhật schema bằng Alembic đến `head`, không chỉ import riêng schema ban đầu. MySQL/InnoDB giữ dữ liệu nghiệp vụ; ảnh tải lên nằm trong `runtime/uploads` trên máy server.
 
+Khi cài mới, các bước hướng dẫn trên Windows và macOS đều chạy toàn bộ migration đến `head` trước khi seed (Windows dùng `setup.ps1`). Baseline 0001 còn cấu trúc yêu cầu hàng cũ vì migration 0002 cần đọc báo giá để tạo snapshot; migration 0013 gỡ các bảng `product_requests`, `request_quotes`, `request_status_history` và hai cột tham chiếu cũ trong `orders`. Do đó database mới sau khi cài hoàn tất không còn các bảng/dữ liệu yêu cầu hàng, và `seed.py` không tạo lại chúng. Không import riêng `db/schema.sql` để cài dự án.
+
+Migration 0013 không thể rollback tự động. Hãy sao lưu database trước khi nâng cấp bản cũ; migration sẽ dừng nếu đơn hàng còn tham chiếu yêu cầu/báo giá cũ. Nếu cần lưu dữ liệu lịch sử, giữ bản sao lưu trước khi tiếp tục.
+
 ## Đồng thời và tính đúng đắn
 
 FastAPI xử lý nhiều yêu cầu bất đồng bộ. Mỗi WebSocket có hàng đợi riêng, giới hạn kích thước để client chậm không chặn toàn bộ kết nối. Hiện ứng dụng chạy **một FastAPI worker**, vì danh sách socket đang hoạt động nằm trong bộ nhớ của tiến trình. Chạy nhiều worker cần event bus dùng chung và kiểm thử liên tiến trình.

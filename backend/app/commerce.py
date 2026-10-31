@@ -217,7 +217,6 @@ async def create_order(s, user, body, key):
               group_snapshot={'id':group['id'],'code':group['code'],'name':group['name']},address_snapshot=public(address),
               delivery_snapshot=shipping,delivery_method=shipping['method'],merchandise_total=subtotal,shipping_fee=fee,
               total=subtotal+fee,version=1,created_at=now(),updated_at=now(),
-              source_request_id=None,source_quote_id=None,
               note=await sanitize(s,user,text(body.get('note',''),1000),'order.note',id))
     for item in items: await add(s,'order_items',order_id=id,**item)
     await add(s,'order_status_history',id=uid(),order_id=id,actor_id=user['id'],from_status=None,to_status='PENDING',order_version=1,created_at=now())

@@ -167,6 +167,7 @@ CREATE TABLE pickup_slots (
   FOREIGN KEY (zone_id) REFERENCES delivery_zones(id), CHECK (ends_at > starts_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Keep this retired workflow in the historical baseline: migration 0002 needs request_quotes to backfill its snapshot. Migration 0013 removes the workflow from the final schema.
 CREATE TABLE product_requests (
   id CHAR(36) PRIMARY KEY, customer_id CHAR(36) NOT NULL,
   item_name VARCHAR(150) NOT NULL, unit_label VARCHAR(40) NOT NULL,
@@ -197,6 +198,7 @@ CREATE TABLE request_quotes (
 CREATE TABLE orders (
   id CHAR(36) PRIMARY KEY, customer_id CHAR(36) NOT NULL,
   client_order_id CHAR(36) NOT NULL, request_hash BINARY(32) NOT NULL,
+  -- Legacy request references are removed by migration 0013 after the feature is retired.
   source_request_id CHAR(36) NULL UNIQUE, source_quote_id CHAR(36) NULL UNIQUE,
   status ENUM('PENDING','APPROVED','REJECTED','PREPARING','SHIPPING','DELIVERED','CANCELLED') NOT NULL,
   group_snapshot JSON NOT NULL, address_snapshot JSON NOT NULL,
