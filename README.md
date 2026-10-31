@@ -1,6 +1,6 @@
 # RealtimeOrders — Hệ thống đặt và điều phối bán hàng thời gian thực
 
-Đồ án môn **Lập trình mạng**, Nhóm **17** · Giảng viên: **Ngô Văn Quyền**.
+Đồ án môn **Lập trình mạng**, Nhóm **15** · Giảng viên: **Ngô Văn Quyền**.
 
 RealtimeOrders là ứng dụng web client–server giúp khách hàng xem menu theo ngày, đặt nhiều mặt hàng và theo dõi đơn; người bán quản lý sản phẩm, tồn kho, đơn và giao hàng. Backend là nơi quyết định quyền, giá, phí và trạng thái. **Đơn đang chờ không giữ hàng; chỉ khi quản trị duyệt, server mới trừ tồn.**
 
