@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { config } from "@fortawesome/fontawesome-svg-core";
 import "@fortawesome/fontawesome-svg-core/styles.css";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
+import "./visual-theme.css";
+import "./motion.css";
 config.autoAddCss = false;
 export const metadata: Metadata = {
   title: "RealtimeOrders · Đặt hàng trong ngày",

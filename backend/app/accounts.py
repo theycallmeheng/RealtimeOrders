@@ -29,7 +29,7 @@ async def addresses(s,user,method,id,body):
     zone=await one(s,'delivery_zones',T['delivery_zones'].c.id==uuid(body.get('zoneId')),T['delivery_zones'].c.active==True)
     values=dict(zone_id=zone['id'],recipient_name=await sanitize(s,user,text(body.get('recipientName'),100,1),'address.recipient',reject=True),
                 phone_e164=phone(body.get('phone')),address_line=await sanitize(s,user,text(body.get('addressLine'),500,5),'address.line',reject=True),
-                note=await sanitize(s,user,text(body.get('note',''),500),'address.note'),updated_at=now())
+                note=await sanitize(s,user,text('' if body.get('note') is None else body['note'],500),'address.note'),updated_at=now())
     if body.get('locationToken'):
         from .shipping import verify_location
         location=verify_location(body['locationToken'])

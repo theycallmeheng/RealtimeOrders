@@ -46,7 +46,7 @@ async def catalog(s, user, admin=False, offer_ids=None, menu_id=None):
     if admin:q=q.where(o.c.archived_at==None)
     if not admin:
         m=T['daily_menus']
-        q=q.join(m,o.c.menu_id==m.c.id).join(groups,groups.c.id==user['group_id']).where(o.c.status=='OPEN',o.c.archived_at==None,
+        q=q.join(m,o.c.menu_id==m.c.id).join(groups,groups.c.id==price.c.group_id).where(o.c.status=='OPEN',o.c.archived_at==None,
             p.c.active==True,p.c.deleted_at==None,groups.c.active==True,
             m.c.status=='OPEN',m.c.opens_at<=now(),m.c.closes_at>now(),price.c.unit_price!=None,
             audience(p.c.allowed_group_ids,user['group_id']),audience(o.c.allowed_group_ids,user['group_id']),
@@ -198,6 +198,7 @@ async def create_order(s, user, body, key):
         check(product['active'] and not product['deleted_at'],'PRODUCT_UNAVAILABLE','Mặt hàng không còn bán',409)
         qty=number(line.get('quantity'),minimum=Decimal('.001'))
         check(qty % product['quantity_step']==0,'INVALID_STEP','Số lượng không đúng bước đơn vị')
+        check(offer['available_qty']>0,'SOLD_OUT','Mặt hàng đã bán hết. Vui lòng chờ bổ sung kho.',409)
         check(qty<=offer['available_qty'],'INSUFFICIENT_STOCK','Lượng trong kho không đủ',409)
         price=await one(s,'offer_prices',T['offer_prices'].c.offer_id==id,T['offer_prices'].c.group_id==user['group_id'])
         check(str(price['version'])==str(line.get('expectedPriceVersion')),'REQUOTE_REQUIRED','Giá đã thay đổi, vui lòng kiểm tra lại',409)

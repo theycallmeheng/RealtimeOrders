@@ -1,0 +1,54 @@
+/* Motion is optional and never delays a network request or button action. */
+@keyframes enter-soft {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes veil-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(12px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes drawer-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin-loading { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: no-preference) {
+  .auth-inner, .auth-intro > h1, .auth-workflow { animation: enter-soft 320ms ease-out backwards; }
+  .auth-workflow { animation-delay: 70ms; }
+  .page-heading, .inline-modal { animation: enter-soft 240ms ease-out; }
+  .daily-product { animation: enter-soft 250ms ease-out backwards; }
+  .daily-product:nth-child(2), .promotion-product:nth-child(2) { animation-delay: 30ms; }
+  .daily-product:nth-child(3), .promotion-product:nth-child(3) { animation-delay: 60ms; }
+  .daily-product:nth-child(4), .promotion-product:nth-child(4) { animation-delay: 90ms; }
+  .menu-promotion, .promotion-product { animation: enter-soft 280ms ease-out backwards; }
+  .promotion-product:nth-child(5) { animation-delay: 120ms; }
+  .modal-backdrop { animation: veil-in 180ms ease-out; }
+  .modal-backdrop > .modal { animation: panel-in 230ms cubic-bezier(.2,.7,.3,1); }
+  .cart-drawer .modal, .cart-drawer-docked > .modal { animation: drawer-in 250ms cubic-bezier(.2,.7,.3,1); }
+  .toast { animation: drawer-in 220ms ease-out; }
+  .message { animation: enter-soft 180ms ease-out; }
+  .shell.nav-open aside.nav { animation: drawer-in 200ms ease-out; }
+  .daily-product { transition: border-color 180ms, box-shadow 180ms, translate 180ms; }
+  .daily-product-image-main img, .promotion-product img { transition: transform 220ms ease-out; }
+  button, .nav a { transition: background-color 160ms, border-color 160ms, color 160ms, translate 160ms; }
+  .spinner { display: flex; align-items: center; gap: 10px; }
+  .spinner::before { content: ""; width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; flex: 0 0 auto; animation: spin-loading 800ms linear infinite; }
+  @media (hover: hover) and (pointer: fine) {
+    .daily-product:hover { translate: 0 -3px; box-shadow: 0 5px 14px #21482f0a; }
+    .daily-product-image-main:hover img, .promotion-product:hover img { transform: scale(1.035); }
+    .nav a:hover { translate: 2px 0; }
+    button.primary:hover:not(:disabled) { translate: 0 -1px; }
+    button:active:not(:disabled) { translate: 0 1px; }
+  }
+  @media (max-width: 1099px) {
+    .cart-drawer .modal { animation-name: sheet-in; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

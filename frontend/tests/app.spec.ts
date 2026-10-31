@@ -191,7 +191,7 @@ test("mobile navigation, Vietnamese address picker, reconnect and cart layout", 
   await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
   await expect(page.locator("aside.nav")).toBeVisible();
   await page
-    .getByRole("button", { name: "Hồ sơ & địa chỉ", exact: true })
+    .getByRole("link", { name: "Hồ sơ & địa chỉ", exact: true })
     .click();
   const first = page.locator(".list-row").first();
   await first.getByRole("button", { name: "Sửa", exact: true }).click();
@@ -199,7 +199,7 @@ test("mobile navigation, Vietnamese address picker, reconnect and cart layout", 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
   await page
-    .getByRole("button", { name: "Hàng trong ngày", exact: true })
+    .getByRole("link", { name: "Hàng trong ngày", exact: true })
     .click();
   await page
     .locator(`[data-offer-id="${offer.id}"]`)
@@ -240,14 +240,14 @@ test("admin menu editor, sidebar collapse, gross profit report and retired navig
   await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
   await expect(page.locator(".shell")).toHaveClass(/nav-collapsed/);
   await page
-    .getByRole("button", { name: "Menu theo ngày", exact: true })
+    .getByRole("link", { name: "Menu theo ngày", exact: true })
     .click();
   const row = page.locator("tbody tr").filter({ hasText: day() }).first();
   await row.getByRole("button", { name: "Sửa món / giá / kho" }).click();
   await expect(page.locator(".menu-editor")).toBeVisible();
   await expect(page.getByText(product.name, { exact: true })).toBeVisible();
   await shot(page, "daily-menu-admin");
-  await page.getByRole("button", { name: "Báo cáo", exact: true }).click();
+  await page.getByRole("link", { name: "Báo cáo", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Doanh thu và lãi gộp" }),
   ).toBeVisible();
@@ -268,7 +268,7 @@ test("chat text and image delivered to customer over real server", async ({
     bp = await cb.newPage();
   await ap.goto("/");
   await bp.goto("/");
-  await bp.getByRole("button", { name: "Nhắn người bán", exact: true }).click();
+  await bp.getByRole("link", { name: "Nhắn người bán", exact: true }).click();
   const convo = await call(cb, b, "GET", "/conversations/me");
   const text = "Kiểm tra tin nhắn mới " + crypto.randomUUID();
   await call(ca, a, "POST", "/conversations/" + convo.id + "/messages", {

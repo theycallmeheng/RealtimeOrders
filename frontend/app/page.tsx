@@ -1,5 +1,9 @@
 "use client";
 
+import { activityLabel, activityFields, changedFields } from "../lib/activity-labels";
+import { tabForPath, pathForTab } from "../lib/navigation";
+import { menuPrices } from "../lib/pricing";
+import PointMap, { type MapPoint } from "./point-map";
 import React, {
   useState,
   useEffect,
@@ -38,13 +42,13 @@ const TAB_STORAGE_KEY = "ro-tab-session";
 const defaultTab = (session: Session) =>
   session.user.role === "ADMIN" ? "orders" : "catalog";
 function restoreTab(session: Session) {
-  const allowed: string[] =
-    session.user.role === "ADMIN"
-      ? ["orders", "offers", "products", "chat", "users", "config", "reports", "audit", "notifications"]
-      : ["catalog", "checkout", "orders", "chat", "profile", "notifications"];
+  const direct = tabForPath(session.user.role, window.location.pathname);
+  if (direct) return direct;
+  if (window.location.pathname !== "/") return defaultTab(session);
   const saved = sessionStorage.getItem(TAB_STORAGE_KEY);
-  return saved && allowed.includes(saved) ? saved : defaultTab(session);
+  return saved && pathForTab(session.user.role, saved) ? saved : defaultTab(session);
 }
+
 class ApiError extends Error {
   constructor(
     public code: string,
@@ -113,7 +117,7 @@ const lineMoney = (price: unknown, quantity: unknown) => {
     BigInt(fraction.padEnd(3, "0").slice(0, 3));
   return (BigInt(String(price)) * thousandths + BigInt(500)) / BigInt(1000);
 };
-const date = (n: string) => (n ? new Date(n).toLocaleString("vi-VN") : "");
+const date = (n: string) => (n ? new Date(n).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "");
 const statuses: Record<string, string> = {
   PENDING: "Chờ duyệt",
   APPROVED: "Đã duyệt",
@@ -129,6 +133,9 @@ const statuses: Record<string, string> = {
   CONVERTED: "Đã tạo đơn",
   OPEN: "Đang mở",
   CLOSED: "Đã đóng",
+  EXPIRED: "Đã hết hạn",
+  SCHEDULED: "Chờ giờ mở",
+  SOLD_OUT: "Đã bán hết",
   DRAFT: "Bản nháp",
   ACTIVE: "Hoạt động",
   LOCKED: "Bị khóa",
@@ -176,17 +183,19 @@ function Modal({
   children,
   close,
   inline = false,
+  docked = false,
 }: {
   title: string;
   children: React.ReactNode;
   close: () => void;
   inline?: boolean;
+  docked?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(close);
   closeRef.current = close;
   useEffect(() => {
-    if (inline) return;
+    if (inline || docked) return;
     const old = document.activeElement as HTMLElement;
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -217,7 +226,19 @@ function Modal({
       document.body.style.overflow = oldOverflow;
       old?.focus();
     };
-  }, [inline]);
+  }, [inline, docked]);
+  if (docked)
+    return (
+      <aside className="modal" aria-label={title} onKeyDown={(e) => {
+        if (e.key === "Escape") { e.stopPropagation(); close(); }
+      }}>
+        <div className="modal-head">
+          <h2>{title}</h2>
+          <button className="ghost" onClick={close} aria-label="Đóng giỏ hàng">✕</button>
+        </div>
+        <div className="modal-body">{children}</div>
+      </aside>
+    );
   if (inline)
     return (
       <div className="inline-modal" ref={ref} role="region" aria-label={title}>
@@ -277,19 +298,55 @@ export default function App() {
   const [navCollapsed, setNavCollapsed] = useState(false),
     [navOpen, setNavOpen] = useState(false);
   useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Animate headings only: transforming main would move fixed dialogs/cart.
+    const heading = document.querySelector("main .page-heading");
+    const animation = heading?.animate(
+      [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "translateY(0)" }],
+      { duration: 240, easing: "ease-out" },
+    );
+    return () => animation?.cancel();
+  }, [tab]);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const navigateTo = useCallback((target: string, replace = false) => {
+    const active = sessionRef.current;
+    if (!active) return;
+    const path = pathForTab(active.user.role, target);
+    if (!path) return;
+    if (window.location.pathname !== path) {
+      window.history[replace ? "replaceState" : "pushState"](null, "", path);
+    }
+    setTab(target);
+    setNavOpen(false);
+  }, []);
+  useEffect(() => {
     setNavCollapsed(localStorage.getItem("ro-nav-collapsed") === "true");
-    const navigate = (e: Event) => {
-      setTab((e as CustomEvent).detail);
-      setNavOpen(false);
+    const navigate = (e: Event) => navigateTo((e as CustomEvent).detail);
+    const pop = () => {
+      const active = sessionRef.current;
+      if (!active) return;
+      const target = tabForPath(active.user.role, window.location.pathname);
+      if (target) { setTab(target); setNavOpen(false); }
+      else navigateTo(defaultTab(active), true);
     };
     window.addEventListener("ro:navigate", navigate);
-    return () => window.removeEventListener("ro:navigate", navigate);
-  }, []);
+    window.addEventListener("popstate", pop);
+    return () => {
+      window.removeEventListener("ro:navigate", navigate);
+      window.removeEventListener("popstate", pop);
+    };
+  }, [navigateTo]);
+  useEffect(() => {
+    if (!session) return;
+    const target = restoreTab(session);
+    const path = pathForTab(session.user.role, target)!;
+    window.history.replaceState(null, "", path);
+    setTab(target);
+  }, [session?.user.id]);
   useEffect(() => {
     if (session) sessionStorage.setItem(TAB_STORAGE_KEY, tab);
   }, [session?.user.id, tab]);
-  const sessionRef = useRef(session);
-  sessionRef.current = session;
   const notify = useCallback(
     (message: string, error = false) => setToast({ message, error }),
     [],
@@ -376,6 +433,7 @@ export default function App() {
               "VERSION_CONFLICT",
               "REQUOTE_REQUIRED",
               "INSUFFICIENT_STOCK",
+              "SOLD_OUT",
             ].includes(e.code)
           )
             reload();
@@ -646,7 +704,7 @@ export default function App() {
             sessionStorage.removeItem(TAB_STORAGE_KEY);
             csrfToken = s.csrfToken;
             setSession(s);
-            setTab(defaultTab(s));
+            setTab(restoreTab(s));
           }}
         />
         {toast && (
@@ -719,7 +777,7 @@ export default function App() {
           <button
             className="ghost"
             aria-label="Thông báo"
-            onClick={() => setTab("notifications")}
+            onClick={() => navigateTo("notifications")}
           >
             <Icon icon={faBell} />
           </button>
@@ -734,6 +792,8 @@ export default function App() {
                 await api("/auth/logout", "POST", {});
                 csrfToken = "";
                 sessionStorage.removeItem(TAB_STORAGE_KEY);
+                sessionStorage.removeItem("ro:menu-promo-dismissed:" + session.user.id);
+                window.history.replaceState(null, "", "/login");
                 setSession(null);
               } catch (e) {
                 notify((e as Error).message, true);
@@ -763,19 +823,22 @@ export default function App() {
             {admin ? "Điều hành bán hàng" : "Mua sắm & hỗ trợ"}
           </div>
           {nav.map(([id, label, icon]) => (
-            <button
+            <a
               key={String(id)}
+              href={pathForTab(session.user.role, String(id))}
+              aria-current={tab === id ? "page" : undefined}
               className={tab === id ? "active" : ""}
               title={String(label)}
               aria-label={String(label)}
-              onClick={() => {
-                setTab(String(id));
-                setNavOpen(false);
+              onClick={(event) => {
+                if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                event.preventDefault();
+                navigateTo(String(id));
               }}
             >
               <Icon icon={icon as any} />
               <span className="nav-title">{String(label)}</span>
-            </button>
+            </a>
           ))}
           <div className="nav-foot">
             Nhóm 17 · Lập trình mạng
@@ -953,6 +1016,11 @@ function Auth({ onLogin }: { onLogin: (s: Session) => void }) {
           Xem hàng đang bán, theo dõi đơn và trao đổi trực tiếp với người bán
           trong cùng một nơi.
         </p>
+        <div className="auth-workflow" aria-label="Cách mua hàng">
+          <div><span>01</span><strong>Chọn món hôm nay</strong><small>Sản phẩm, giá và lượng còn rõ ràng</small></div>
+          <div><span>02</span><strong>Đặt hàng thuận tiện</strong><small>Chọn nơi nhận, kiểm tra phí giao</small></div>
+          <div><span>03</span><strong>Theo dõi trực tiếp</strong><small>Cập nhật khi người bán xử lý đơn</small></div>
+        </div>
         <div className="muted">Bài tập lớn Lập trình mạng · Nhóm 17</div>
       </section>
       <section className="auth-form">
@@ -1148,6 +1216,14 @@ function Auth({ onLogin }: { onLogin: (s: Session) => void }) {
 }
 
 function useData(path: string) {
+  const previousPath = useRef(path);
+  const [catalogRevision, setCatalogRevision] = useState(0);
+  useEffect(() => {
+    if (path !== "/catalog/upcoming") return;
+    const update = () => setCatalogRevision(value => value + 1);
+    window.addEventListener("ro:catalog", update);
+    return () => window.removeEventListener("ro:catalog", update);
+  }, [path]);
   const { refresh, notify, session } = useApp();
   const [data, setData] = useState<any>(
       path === "/catalog/offers" && catalogOwner === session.user.id
@@ -1164,6 +1240,11 @@ function useData(path: string) {
       return;
     }
     let live = true;
+    if (previousPath.current !== path) {
+      setData(null);
+      previousPath.current = path;
+    }
+    setLoading(true);
     api(path)
       .then((d) => {
         if (live) setData(d);
@@ -1177,7 +1258,7 @@ function useData(path: string) {
     return () => {
       live = false;
     };
-  }, [path, refresh, notify]);
+  }, [path, refresh, notify, catalogRevision]);
   useEffect(() => {
     if (path !== "/catalog/offers") return;
     const update = () => {
@@ -1724,7 +1805,7 @@ function Profile() {
     try {
       await mutate(
         "/me/addresses" + (editing?.id ? "/" + editing.id : ""),
-        { ...editing, expectedVersion: String(editing?.version ?? "") },
+        { ...editing, note: editing?.note ?? "", expectedVersion: String(editing?.version ?? "") },
         editing?.id ? "PATCH" : "POST",
       );
       setEditing(null);
@@ -1781,6 +1862,7 @@ function Profile() {
                       recipientName: a.recipient_name,
                       phone: a.phone_e164,
                       addressLine: a.address_line,
+                      note: a.note ?? "",
                       zoneId: a.zone_id,
                     })
                   }
@@ -1973,21 +2055,20 @@ function Profile() {
             <div className="wide">
               <LocationPicker
                 initial={editing.addressLine}
+                initialPoint={editing.latitude != null && editing.longitude != null ? { latitude: Number(editing.latitude), longitude: Number(editing.longitude) } : null}
                 onSelect={(loc) =>
                   setEditing((prev: Row | null) =>
                     prev
                       ? {
                           ...prev,
                           locationToken: loc.locationToken,
-                          ...(loc.address ? { addressLine: loc.address } : {}),
+
                         }
                       : prev,
                   )
                 }
               />
-              {editing.locationToken && (
-                <p className="notice">Đã xác nhận vị trí nhận hàng.</p>
-              )}
+
             </div>
             <Field label="Địa chỉ cụ thể" wide>
               <textarea
@@ -1999,7 +2080,6 @@ function Profile() {
                   setEditing({
                     ...editing,
                     addressLine: e.target.value,
-                    locationToken: null,
                   })
                 }
               />
@@ -2301,6 +2381,7 @@ function Products() {
       p
         ? {
             ...p,
+            description: p.description ?? "",
             categoryId: p.category_id,
             unitId: p.unit_id,
             quantityStep: p.quantity_step,
@@ -2331,40 +2412,35 @@ function Products() {
           },
     );
   };
-  const addImageUrl = () => {
-    if (!form) return;
+  const preparedImages = (): Row[] | null => {
+    if (!form) return null;
     const value = imageUrlDraft.trim();
-    if (!value) return;
+    if (!value) return form.imageEntries;
     let parsed: URL;
-    try {
-      parsed = new URL(value);
-    } catch {
-      notify("URL ảnh chưa hợp lệ", true);
-      return;
-    }
-    if (
-      parsed.protocol !== "https:" ||
-      !parsed.hostname ||
-      parsed.username ||
-      parsed.password
-    ) {
+    try { parsed = new URL(value); }
+    catch { notify("URL ảnh chưa hợp lệ", true); return null; }
+    if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password) {
       notify("URL ảnh phải là liên kết HTTPS công khai", true);
-      return;
+      return null;
     }
     const url = parsed.href;
     if (form.imageEntries.some((image: Row) => image.kind === "url" && image.url === url)) {
-      notify("URL ảnh này đã được thêm", true);
-      return;
+      return form.imageEntries;
     }
     if (form.imageEntries.length >= 5) {
       notify("Mỗi sản phẩm có thể có tối đa 5 ảnh", true);
-      return;
+      return null;
     }
-    setForm({
-      ...form,
-      imageEntries: [...form.imageEntries, { kind: "url", url }],
-    });
-    setImageUrlDraft("");
+    return [...form.imageEntries, { kind: "url", url }];
+  };
+  const addImageUrl = () => {
+    if (!form || !imageUrlDraft.trim()) return;
+    const imageEntries = preparedImages();
+    if (!imageEntries) return;
+    setForm({ ...form, imageEntries });
+    notify(imageEntries.length === form.imageEntries.length
+      ? "Ảnh đã có trong danh sách. Bấm Lưu sản phẩm để lưu."
+      : "Đã thêm ảnh vào danh sách. Bấm Lưu sản phẩm để lưu.");
   };
   const filteredProducts = (data ?? []).filter((p: Row) => {
     const matchesCategory =
@@ -2507,17 +2583,16 @@ function Products() {
             className="form form-grid"
             onSubmit={async (e) => {
               e.preventDefault();
-              if (imageUrlDraft.trim()) {
-                notify("Nhấn ‘Thêm URL’ để đưa liên kết vào danh sách ảnh trước khi lưu", true);
-                return;
-              }
+              const imageEntries = preparedImages();
+              if (!imageEntries) return;
               setBusy(true);
               try {
-                const { imageEntries, ...productForm } = form;
+                const { imageEntries: previousImages, ...productForm } = form;
                 const saved = await mutate(
                   "/admin/products" + (form.id ? "/" + form.id : ""),
                   {
                     ...productForm,
+                    description: productForm.description ?? "",
                     images: imageEntries.map((image: Row) =>
                       image.kind === "asset"
                         ? { assetId: image.assetId }
@@ -2713,7 +2788,7 @@ function Products() {
             <p className="field-hint wide">
               Ảnh tải lên nhận JPEG, PNG hoặc WebP tối đa 5 MiB. URL cần trỏ
               trực tiếp tới ảnh HTTPS công khai; khách sẽ tải ảnh từ máy chủ đó.
-              Ảnh đầu tiên được dùng làm ảnh đại diện.
+              Ảnh đầu tiên được dùng làm ảnh đại diện. Bấm Thêm URL để xem trước, rồi Lưu sản phẩm để lưu vào hệ thống. Muốn thay ảnh cũ, bấm Gỡ rồi thêm ảnh mới.
             </p>
             <div className="product-image-editor wide">
               <div className="product-image-editor-heading">
@@ -2728,7 +2803,7 @@ function Products() {
                         ? image.url
                         : productImageSrc(image.assetId);
                     return (
-                    <div className="product-image-editor-card" key={image.kind + source}>
+                    <div className="product-image-editor-card" key={index}>
                       <img
                         src={source}
                         alt={`Ảnh sản phẩm ${index + 1}`}
@@ -2740,14 +2815,14 @@ function Products() {
                           type="button"
                           className="small ghost"
                           disabled={busy}
-                          onClick={() =>
+                          onClick={() => {
                             setForm({
                               ...form,
                               imageEntries: form.imageEntries.filter(
                                 (_: Row, i: number) => i !== index,
                               ),
-                            })
-                          }
+                            });
+                          }}
                         >
                           Gỡ
                         </button>
@@ -2805,7 +2880,7 @@ function Users() {
     <>
       <Heading
         title="Khách hàng"
-        sub="Phân nhóm giá, khóa và mở tài khoản. Mọi thay đổi đều được ghi lịch sử."
+        sub="Phân nhóm khách hàng, khóa và mở tài khoản. Mọi thay đổi đều được ghi lịch sử."
       />
       <div className="panel table-scroll">
         <table>
@@ -2813,7 +2888,7 @@ function Users() {
             <tr>
               <th>Họ tên</th>
               <th>Liên hệ</th>
-              <th>Nhóm giá</th>
+              <th>Nhóm khách hàng</th>
               <th>Trạng thái</th>
               <th />
             </tr>
@@ -2824,14 +2899,14 @@ function Users() {
                 <td>
                   <strong>{u.display_name}</strong>
                   <div className="product-subtitle">
-                    {u.role === "ADMIN" ? "Quản trị viên" : "Khách hàng"}
+                    {u.role === "ADMIN" ? "Người quản trị" : "Khách hàng"}
                   </div>
                 </td>
                 <td>
                   {u.phone_e164}
                   <div className="muted">{u.email_normalized}</div>
                 </td>
-                <td>{groups?.find((g: Row) => g.id === u.group_id)?.name}</td>
+                <td>{u.role === "ADMIN" ? "Người quản trị" : groups?.find((g: Row) => g.id === u.group_id)?.name ?? "Chưa phân nhóm"}</td>
                 <td>
                   <Status value={u.status} />
                 </td>
@@ -2901,8 +2976,8 @@ function Users() {
               }
             }}
           >
-            <Field label="Nhóm giá">
-              <select
+            <Field label="Nhóm khách hàng">
+              {selected.role === "ADMIN" ? <input value="Người quản trị" readOnly /> : <select
                 value={selected.groupId}
                 onChange={(e) =>
                   setSelected({ ...selected, groupId: e.target.value })
@@ -2915,7 +2990,7 @@ function Users() {
                       {g.name}
                     </option>
                   ))}
-              </select>
+              </select>}
             </Field>
             <Field label="Trạng thái">
               <select
@@ -2969,13 +3044,17 @@ const configSpecs: Record<string, { title: string; fields: ConfigField[] }> = {
   policies: {
     title: "Chính sách giao",
     fields: [
-      ["groupId", "Nhóm giá", "select", "groups"],
+      ["groupId", "Nhóm khách hàng", "select", "groups"],
       ["zoneId", "Khu giao", "select", "zones"],
       ["method", "Cách giao", "select", "methods"],
       ["minimumSubtotal", "Tiền hàng tối thiểu (đ)", "number"],
       ["shippingFee", "Phí cơ bản (đ)", "number"],
+      ["pricingMode", "Cách tính phí", "select", "pricingModes"],
+      ["perKmFee", "Phí / km trong mốc đầu (đ)", "number"],
+      ["distanceRounding", "Làm tròn khoảng cách", "select", "distanceRoundings"],
+      ["feeRoundingStep", "Làm tròn tiền lên bội số (đ)", "number"],
       ["distanceEnabled", "Bật giao theo khoảng cách", "checkbox"],
-      ["includedKm", "Km đã gồm trong phí cơ bản", "number"],
+      ["includedKm", "Mốc km đầu", "number"],
       ["extraKmFee", "Phí mỗi km vượt (đ)", "number"],
       ["maxDistanceKm", "Khoảng cách tối đa (km)", "number"],
     ],
@@ -3015,22 +3094,31 @@ function Configuration() {
       { id: "INDIVIDUAL", name: "Giao riêng" },
       { id: "COLLECTIVE", name: "Tập trung sinh viên" },
     ],
+    pricingModes: [
+      { id: "BASE_PLUS_EXTRA", name: "Phí cơ bản + km vượt" },
+      { id: "TIERED_KM", name: "Theo km, hai mức giá" },
+    ],
+    distanceRoundings: [
+      { id: "EXACT", name: "Theo quãng đường thực tế" },
+      { id: "CEIL_KM", name: "Làm tròn lên km" },
+    ],
     matchModes: [
       { id: "TOKEN", name: "Từ nguyên vẹn" },
       { id: "PHRASE", name: "Cụm từ" },
     ],
   };
+  const isEnabled = (value: unknown) => value === true || value === 1 || value === "1";
   const edit = (row?: Row) => {
     const f: Row = {
       id: row?.id,
       version: row?.version,
-      active: row?.active ?? true,
+      active: row ? isEnabled(row.active) : true,
     };
     for (const [key, , type, source] of spec.fields) {
       let v = row?.[key === "phrase" ? "phrase_normalized" : snake(key)];
       if (type === "datetime-local" && v) v = v.slice(0, 16);
       f[key] =
-        v ??
+        type === "checkbox" ? isEnabled(v) : v ??
         (type === "checkbox"
           ? false
           : type === "select"
@@ -3038,6 +3126,8 @@ function Configuration() {
             : type === "number"
               ? "0"
               : "");
+      if (kind === "policies" && key === "maxDistanceKm" && f.pricingMode === "TIERED_KM" && v == null) f[key] = "";
+      if (key === "feeRoundingStep" && v == null) f[key] = "1";
     }
     setForm(f);
   };
@@ -3068,6 +3158,7 @@ function Configuration() {
         sub="Quản lý nhóm, chính sách giao, danh mục và kiểm duyệt nội dung."
       />
       <WarehouseSettings />
+      <VerifiedLocations />
       <div className="tabs">
         {Object.entries(configSpecs).map(([id, s]) => (
           <button
@@ -3095,15 +3186,15 @@ function Configuration() {
           khi ngừng dùng.
         </p>
       )}
-      <div className="panel table-scroll">
-        <table>
+      <div className="panel table-scroll configuration-table-wrap">
+        <table className="configuration-table">
           <thead>
             <tr>
               {spec.fields.map(([key, label]) => (
                 <th key={key}>{label}</th>
               ))}
               <th>Hiệu lực</th>
-              <th />
+              <th className="configuration-actions">Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -3119,14 +3210,18 @@ function Configuration() {
                             ?.name ?? value)
                         : type === "datetime-local"
                           ? date(value)
-                          : String(value ?? "")}
+                          : type === "checkbox"
+                            ? isEnabled(value) ? "Bật" : "Tắt"
+                            : kind === "policies" && key === "maxDistanceKm" && row.pricing_mode === "TIERED_KM" && value == null
+                              ? "Không giới hạn"
+                              : String(value ?? "")}
                     </td>
                   );
                 })}
-                <td>{row.active === false ? "Tắt" : "Đang dùng"}</td>
-                <td>
+                <td>{row.active != null && !isEnabled(row.active) ? "Tắt" : "Đang dùng"}</td>
+                <td className="configuration-actions">
                   <div className="actions">
-                    <button className="small" onClick={() => edit(row)}>
+                    <button className="small" disabled={!online || busy} onClick={() => edit(row)}>
                       Sửa
                     </button>
                     {kind === "groups" && row.active && row.code !== "WORKER" && (
@@ -3163,6 +3258,7 @@ function Configuration() {
                 };
                 for (const [key, , type] of spec.fields) {
                   if (type === "datetime-local") b[key] = form[key] + ":00Z";
+                  if (type === "checkbox") b[key] = isEnabled(form[key]);
                 }
                 await mutate(
                   "/admin/config/" + kind + (form.id ? "/" + form.id : ""),
@@ -3177,6 +3273,9 @@ function Configuration() {
               }
             }}
           >
+            {kind === "policies" && form.pricingMode === "TIERED_KM" && (
+              <p className="field-hint wide">Mốc km đầu quyết định khi nào đổi giá / km. Khoảng cách tối đa là giới hạn nhận giao. Tổng phí được làm tròn lên theo bội số tiền đã chọn.</p>
+            )}
             {spec.fields.map(([key, label, type, source]) => (
               <Field key={key} label={label}>
                 {type === "checkbox" ? (
@@ -3203,7 +3302,8 @@ function Configuration() {
                   </select>
                 ) : (
                   <input
-                    required={key !== "description"}
+                    required={key !== "description" && !(kind === "policies" && key === "maxDistanceKm" && form.pricingMode === "TIERED_KM")}
+                    placeholder={kind === "policies" && key === "maxDistanceKm" && form.pricingMode === "TIERED_KM" ? "Để trống: không giới hạn" : undefined}
                     type={type}
                     disabled={
                       kind === "groups" &&
@@ -3220,7 +3320,7 @@ function Configuration() {
                         : undefined
                     }
                     min={type === "number" ? "0" : undefined}
-                    step={type === "number" ? "1" : undefined}
+                    step={type === "number" ? ["includedKm", "maxDistanceKm"].includes(key) ? "0.001" : "1" : undefined}
                     value={form[key] ?? ""}
                     onChange={(e) =>
                       setForm({ ...form, [key]: e.target.value })
@@ -3253,77 +3353,52 @@ function Configuration() {
 
 function Audit() {
   const [kind, setKind] = useState("audit");
-  const { data } = useData(
-    "/admin/" + (kind === "violations" ? "moderation/violations" : kind),
-  );
-  return (
-    <>
-      <Heading
-        title="Nhật ký vận hành"
-        sub="Truy vết thay đổi, điều chỉnh kho và vi phạm nội dung. Chỉ quản trị được xem."
-      />
-      <div className="tabs">
-        {[
-          ["audit", "Thao tác quản trị"],
-          ["inventory-movements", "Biến động kho"],
-          ["violations", "Vi phạm nội dung"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            className={id === kind ? "active" : ""}
-            onClick={() => setKind(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="panel table-scroll" style={{ marginTop: 18 }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Thời điểm</th>
-              <th>Hoạt động</th>
-              <th>Tham chiếu</th>
-              <th>Chi tiết</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.map((r: Row) => (
-              <tr key={r.id}>
-                <td className="date">{date(r.created_at)}</td>
-                <td>{r.action ?? r.kind ?? r.field_name}</td>
-                <td>
-                  {(r.entity_id ?? r.order_id ?? r.reference_id ?? "").slice(
-                    0,
-                    8,
-                  )}
-                </td>
-                <td style={{ maxWidth: 450, overflowWrap: "anywhere" }}>
-                  {kind === "violations" ? (
-                    <>
-                      <span>{r.original_restricted}</span> → {r.sanitized}
-                    </>
-                  ) : kind === "inventory-movements" ? (
-                    <>
-                      {qty(r.quantity_delta)} · Sau thay đổi:{" "}
-                      {qty(r.balance_after)}
-                      <p>{r.reason}</p>
-                    </>
-                  ) : (
-                    <>
-                      <small>Trước: {JSON.stringify(r.before_data)}</small>
-                      <p>Sau: {JSON.stringify(r.after_data)}</p>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {data?.length === 0 && <Empty title="Chưa có bản ghi" />}
-      </div>
-    </>
-  );
+  const [startDate, setStartDate] = useState(vnDateOffset(vnDay(), -6));
+  const [endDate, setEndDate] = useState(vnDay());
+  const [range, setRange] = useState({start: vnDateOffset(vnDay(), -6), end: vnDay()});
+  const [page, setPage] = useState(0);
+  const {data: groups} = useData("/admin/config/groups");
+  const { data, loading } = useData("/admin/" + (kind === "violations" ? "moderation/violations" : kind)
+    + `?startDate=${range.start}&endDate=${range.end}&page=${page}`);
+  const invalid = startDate > endDate;
+  const value = (key: string, v: any): string => {
+    if (v === null || v === undefined || v === "") return "Chưa có";
+    if (key === "group_id") return groups?.find((g:Row) => g.id === v)?.name ?? String(v);
+    if (key === "allowed_group_ids") return Array.isArray(v) ? v.map(id => groups?.find((g:Row) => g.id === id)?.name ?? id).join(", ") : "Tất cả nhóm";
+    if (typeof v === "boolean") return v ? "Có" : "Không";
+    if (key.endsWith("_at")) return date(v);
+    if (key === "status") return statuses[v] ?? String(v);
+    if (key === "audience_mode") return v === "MENU" ? "Nhóm chung của đợt" : "Tùy chỉnh từng sản phẩm";
+    if (key.includes("price") || key.endsWith("fee") || key === "minimum_subtotal") return money(v);
+    return typeof v === "object" ? JSON.stringify(v) : String(v);
+  };
+  return <>
+    <Heading title="Nhật ký vận hành" sub="Theo dõi thao tác, người thực hiện và thay đổi. Phạm vi ngày tính theo giờ Việt Nam, gồm cả ngày kết thúc." />
+    <div className="tabs">{[["audit","Thao tác quản trị"],["inventory-movements","Biến động kho"],["violations","Vi phạm nội dung"]].map(([id,label])=>
+      <button key={id} className={id===kind?"active":""} onClick={()=>{setKind(id);setPage(0);}}>{label}</button>)}</div>
+    <form className="toolbar audit-filter" onSubmit={e=>{e.preventDefault();if(!invalid){setRange({start:startDate,end:endDate});setPage(0);}}}>
+      <Field label="Từ ngày"><input type="date" required value={startDate} max={endDate || undefined} onChange={e=>setStartDate(e.target.value)} /></Field>
+      <Field label="Đến ngày"><input type="date" required value={endDate} min={startDate || undefined} onChange={e=>setEndDate(e.target.value)} /></Field>
+      <button className="primary" disabled={!startDate || !endDate || invalid}>Lọc nhật ký</button>
+      <button type="button" onClick={()=>{const d=vnDay();setStartDate(d);setEndDate(d);setRange({start:d,end:d});setPage(0);}}>Hôm nay</button>
+    </form>
+    {invalid && <p className="notice error" role="alert">Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.</p>}
+    <p className="muted">Từ {range.start} đến {range.end} · Trang {page+1} · Tối đa 100 bản ghi mỗi trang</p>
+    <div className="panel table-scroll" style={{marginTop:14}}><table className="audit-table"><thead><tr>
+      <th>Thời điểm</th><th>Hoạt động</th><th>Người thực hiện</th><th>Đối tượng</th><th>Chi tiết</th>
+    </tr></thead><tbody>{data?.map((r:Row)=><tr key={r.id}>
+      <td className="date">{date(r.created_at)}</td><td><strong>{activityLabel(r)}</strong></td><td>{r.actor_name}</td>
+      <td>{r.entity_name ?? (kind==="violations" ? "Nội dung người dùng" : "Bản ghi")}
+        <div className="product-subtitle">{(r.entity_id ?? r.order_id ?? r.reference_id ?? "").slice(0,8)}</div></td>
+      <td className="audit-detail">{kind==="violations" ? <><p>Trường: {r.field_name}</p><p>{r.original_restricted} → {r.sanitized}</p></>
+        : kind==="inventory-movements" ? <><p>Biến động: {qty(r.quantity_delta)} · Tồn sau: {qty(r.balance_after)}</p><p>{r.reason}</p></>
+        : <><ul className="audit-changes">{changedFields(r).map(key=><li key={key}><strong>{activityFields[key]}: </strong>{value(key,r.before_data?.[key])} → {value(key,r.after_data?.[key])}</li>)}</ul>
+            {!changedFields(r).length && <p>Đã ghi nhận thay đổi. Mở dữ liệu gốc để xem đầy đủ.</p>}
+            <details><summary>Xem dữ liệu gốc</summary><pre>{JSON.stringify({truoc:r.before_data,sau:r.after_data},null,2)}</pre></details></>}
+      </td>
+    </tr>)}</tbody></table>{loading && <div className="spinner">Đang tải nhật ký…</div>}{data?.length===0 && <Empty title="Không có bản ghi trong phạm vi ngày này" />}</div>
+    <div className="toolbar"><button disabled={page===0 || loading} onClick={()=>setPage(p=>p-1)}>Trang trước</button><button disabled={loading || !data || data.length<100} onClick={()=>setPage(p=>p+1)}>Trang sau</button></div>
+  </>;
 }
 
 const vnDay = (d = new Date()) =>
@@ -3392,114 +3467,121 @@ function AudienceFields({
   );
 }
 
-function LocationPicker({
-  onSelect,
-  initial = "",
-}: {
-  onSelect: (v: Row) => void;
-  initial?: string;
-}) {
-  const [query, setQuery] = useState(initial),
-    [results, setResults] = useState<Row[]>([]),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(""),
-    [chosen, setChosen] = useState<Row | null>(null);
-  const { online } = useApp();
-  return (
-    <div className="location-picker">
-      <label>
-        Tìm và xác nhận vị trí
-        <input
-          value={query}
-          maxLength={200}
-          placeholder="Số nhà, đường, phường, Hà Nội"
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setChosen(null);
-            setResults([]);
-            onSelect({ locationToken: null });
-          }}
-        />
-      </label>
-      <button
-        type="button"
-        disabled={!online || busy || query.trim().length < 3}
-        onClick={async () => {
-          setBusy(true);
-          setError("");
-          try {
-            setResults(
-              await api("/maps/search?q=" + encodeURIComponent(query)),
-            );
-          } catch (e) {
-            setError((e as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {busy ? "Đang tìm…" : "Tìm địa chỉ"}
-      </button>
-      <div role="status">
-        {error && <p className="notice warn">{error}</p>}
-        {!busy && results.length > 0 && (
-          <div className="location-results">
-            {results.map((r) => (
-              <button
-                type="button"
-                key={r.id}
-                onClick={async () => {
-                  setBusy(true);
-                  setError("");
-                  try {
-                    const loc = await api(
-                      "/maps/place?id=" + encodeURIComponent(r.id),
-                    );
-                    setChosen({ ...loc, address: loc.address || r.label });
-                    setResults([]);
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      {chosen && (
-        <div className="notice">
-          <p>{chosen.address}</p>
-          <p className="muted">
-            Vĩ độ {chosen.latitude} · Kinh độ {chosen.longitude}
-          </p>
-          <a
-            target="_blank"
-            rel="noreferrer"
-            href={`https://www.google.com/maps/search/?api=1&query=${chosen.latitude},${chosen.longitude}`}
-          >
-            Xem vị trí trên bản đồ
-          </a>
-          <div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                onSelect(chosen);
-                setChosen(null);
-                setQuery(chosen.address);
-              }}
-            >
-              Xác nhận vị trí này
-            </button>
-          </div>
-        </div>
-      )}
+const locationMatchLabels: Record<string, string> = {
+  VERIFIED: "Địa chỉ quản trị đã xác nhận",
+  HOUSE_NUMBER: "Khớp số nhà và tên đường — kiểm tra lại ghim/khu vực",
+  NEARBY: "Địa điểm gần đúng — chưa khớp đủ số nhà",
+  STREET: "Chỉ tìm thấy đường/khu vực — cần chỉnh ghim",
+};
+
+function VerifiedLocations() {
+  const { data } = useData("/admin/maps/verified");
+  const { mutate, online, notify } = useApp();
+  const [expanded, setExpanded] = useState(false);
+  const [form, setForm] = useState<Row | null>(null);
+  const [busy, setBusy] = useState(false);
+  return <section className="panel verified-locations">
+    <div className="panel-head">
+      <div><h2>Địa chỉ công cộng đã xác nhận</h2><p className="muted">Bổ sung số nhà, cổng trường, tòa nhà còn thiếu trên bản đồ.</p></div>
+      <button aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Thu gọn" : "Quản lý địa chỉ"}</button>
     </div>
-  );
+    {expanded && <>
+      <p className="muted">Chỉ thêm địa điểm công cộng đã kiểm tra. Địa chỉ riêng của khách không tự động đưa vào danh sách này.</p>
+      <button className="primary" disabled={!online || busy} onClick={() => setForm({ label: "", houseNumber: "", street: "", aliasesText: "" })}>Thêm địa chỉ công cộng</button>
+      {!data ? <p>Đang tải…</p> : !data.length ? <p className="muted">Chưa có địa chỉ đã xác nhận.</p> : data.map((row: Row) => <div className="list-row" key={row.id}>
+        <strong>{row.label}</strong><p className="muted">{row.aliases.join("; ")}</p>
+        <div className="actions"><button disabled={!online || busy} onClick={() => setForm({ ...row, houseNumber: row.house_number, aliasesText: row.aliases.join("\n") })}>Sửa địa chỉ</button>
+          <button disabled={!online || busy} onClick={async () => {
+            if (!window.confirm("Ngừng gợi ý địa chỉ này? Các đơn và địa chỉ khách đã lưu giữ nguyên.")) return;
+            setBusy(true); try { await mutate("/admin/maps/verified/" + row.id, { expectedVersion: row.version }, "DELETE"); } catch {} finally { setBusy(false); }
+          }}>Ngừng gợi ý</button></div>
+      </div>)}
+    </>}
+    {form && <Modal title={form.id ? "Sửa địa chỉ công cộng" : "Thêm địa chỉ công cộng"} close={() => setForm(null)}>
+      <form className="form form-grid" onSubmit={async (e) => {
+        e.preventDefault(); setBusy(true);
+        try {
+          await mutate("/admin/maps/verified" + (form.id ? "/" + form.id : ""), {
+            label: form.label, houseNumber: form.houseNumber, street: form.street,
+            aliases: form.aliasesText.split("\n").map((v: string) => v.trim()).filter(Boolean),
+            locationToken: form.locationToken, expectedVersion: form.version,
+          }, form.id ? "PATCH" : "POST"); setForm(null); notify("Đã lưu địa chỉ công cộng");
+        } catch {} finally { setBusy(false); }
+      }}>
+        <Field label="Tên và địa chỉ hiển thị" wide><input required maxLength={500} value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} /></Field>
+        <Field label="Số nhà"><input maxLength={40} value={form.houseNumber} onChange={(e) => setForm({ ...form, houseNumber: e.target.value })} /></Field>
+        <Field label="Tên đường"><input maxLength={200} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} /></Field>
+        <Field label="Tên gọi / địa chỉ khác (mỗi dòng một tên)" wide><textarea value={form.aliasesText} onChange={(e) => setForm({ ...form, aliasesText: e.target.value })} /></Field>
+        <div className="wide"><LocationPicker initial={form.label} initialPoint={form.latitude != null ? { latitude: Number(form.latitude), longitude: Number(form.longitude) } : null}
+          onSelect={(loc) => setForm((f: Row | null) => f ? { ...f, locationToken: loc.locationToken, locationDirty: true } : f)} /></div>
+        <button className="primary" disabled={!online || busy || ((!form.id || form.locationDirty) && !form.locationToken)}>Lưu địa chỉ công cộng</button>
+      </form>
+    </Modal>}
+  </section>;
+}
+
+function LocationPicker({ onSelect, initial = "", initialPoint = null }: {
+  onSelect: (v: Row) => void; initial?: string; initialPoint?: MapPoint | null;
+}) {
+  const [query, setQuery] = useState(initial.slice(0, 200));
+  const [results, setResults] = useState<Row[]>([]);
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const [searched, setSearched] = useState(false), [mapOpen, setMapOpen] = useState(false);
+  const [point, setPoint] = useState<MapPoint | null>(initialPoint);
+  const [confirmed, setConfirmed] = useState(false), [approximate, setApproximate] = useState(false);
+  const [matchType, setMatchType] = useState(""), [source, setSource] = useState("");
+  const { online } = useApp();
+  const { data: mapConfig } = useData("/maps/config");
+  const movePoint = (next: MapPoint) => {
+    setPoint(next); setConfirmed(false); setApproximate(false); setMatchType(""); setSource(""); setError(""); onSelect({ locationToken: null });
+  };
+  return <div className="location-picker">
+    <label>Tìm địa danh hoặc đường gần điểm nhận
+      <input value={query} disabled={busy} maxLength={200} placeholder="Tên đường, tòa nhà, trường học…" onChange={(e) => {
+        setQuery(e.target.value); setSearched(false); setError(""); setResults([]);
+        setPoint(null); setConfirmed(false); setMatchType(""); setSource(""); setApproximate(false);
+        onSelect({ locationToken: null });
+      }} />
+    </label>
+    <div className="actions">
+      <button type="button" disabled={!online || busy || query.trim().length < 3} onClick={async () => {
+        setBusy(true); setError("");
+        setResults([]);
+        try { setResults(await api("/maps/search?q=" + encodeURIComponent(query.trim()))); setSearched(true); }
+        catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+      }}>{busy ? "Đang xử lý…" : "Tìm địa chỉ"}</button>
+      <button type="button" onClick={() => setMapOpen(!mapOpen)}>{mapOpen ? "Ẩn bản đồ" : "Chọn trực tiếp trên bản đồ"}</button>
+    </div>
+    <div role="status">
+      {error && <p className="notice warn">{error}</p>}
+      {!busy && searched && !error && results.length === 0 && <p className="notice">Chưa có kết quả phù hợp. Bạn có thể chọn trực tiếp trên bản đồ; không cần chọn một địa chỉ sai.</p>}
+    </div>
+    {!!results.length && <div className="location-results">{results.map((r) => <button type="button" key={r.id} disabled={busy} onClick={async () => {
+      setBusy(true); setError("");
+      try {
+        const loc = await api("/maps/place?id=" + encodeURIComponent(r.id));
+        setPoint({ latitude: Number(loc.latitude), longitude: Number(loc.longitude) });
+        setApproximate(!!loc.approximate); setMatchType(loc.matchType ?? "NEARBY"); setSource(loc.source ?? "NOMINATIM"); setMapOpen(true); setResults([]); setSearched(false);
+        setConfirmed(false); onSelect({ locationToken: null });
+      } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+    }}>{r.label}<small className="location-result-hint">{locationMatchLabels[r.matchType] ?? (r.approximate ? locationMatchLabels.STREET : locationMatchLabels.NEARBY)} · {r.source === "LOCAL" ? "Danh sách công cộng" : r.source === "PHOTON" ? "Photon / OpenStreetMap" : "Nominatim / OpenStreetMap"}</small></button>)}</div>}
+    {mapOpen && <>
+      {matchType && !approximate && <p className="notice">{locationMatchLabels[matchType]}{source === "LOCAL" && ". Vẫn kiểm tra cổng/điểm nhận trước khi xác nhận."}</p>}
+      {approximate && <p className="notice warn">Kết quả này là đoạn đường/khu vực, chưa phải số nhà. Hãy đặt lại ghim trước khi xác nhận.</p>}
+      {mapConfig ? <PointMap value={point} center={mapConfig.center} tileUrl={mapConfig.tileUrl} disabled={busy || !online} onChange={movePoint} /> : <p>Đang tải cấu hình bản đồ…</p>}
+      {point && <p className="muted">Điểm đã chọn: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</p>}
+      <button type="button" className="primary" disabled={!point || busy || !online} onClick={async () => {
+        if (!point) return;
+        setBusy(true); setError("");
+        try {
+          const loc = await api("/maps/pin", "POST", { ...point, address: query.trim() || "Điểm nhận đã chọn trên bản đồ" });
+          onSelect(loc); setConfirmed(true); setApproximate(false);
+        } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+      }}>Xác nhận điểm nhận này</button>
+    </>}
+    {confirmed && <p className="notice" role="status">Đã xác nhận điểm trên bản đồ. Lưu thay đổi để hoàn tất.</p>}
+    <p className="muted osm-attribution">OpenStreetMap có thể thiếu số nhà. Tìm địa danh gần đó rồi chọn ghim; địa chỉ chi tiết vẫn nhập riêng bên dưới. Tìm kiếm qua Photon/Nominatim và tải bản đồ sử dụng dịch vụ công cộng; chỉ dùng địa điểm thử nghiệm.</p>
+  </div>;
 }
 
 function WarehouseSettings() {
@@ -3517,6 +3599,7 @@ function WarehouseSettings() {
       </p>
       <LocationPicker
         initial="96A Trần Phú, Hà Đông, Hà Nội"
+        initialPoint={warehouse?.latitude != null ? { latitude: Number(warehouse.latitude), longitude: Number(warehouse.longitude) } : null}
         onSelect={setLocation}
       />
       <button
@@ -3646,9 +3729,36 @@ function ProductImageGallery({
 
 function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   const { session, online, mutate, notify, reload } = useApp();
+  const [catalogView, setCatalogView] = useState("OPEN");
+  const promoKey = "ro:menu-promo-dismissed:" + session.user.id;
+  const [promoClosed, setPromoClosed] = useState(false);
+  const [promoIds, setPromoIds] = useState<string[] | null>(null);
+  useEffect(() => { setPromoClosed(sessionStorage.getItem(promoKey) === "1"); }, [promoKey]);
+
+  const { data: upcoming } = useData("/catalog/upcoming");
   const { data: offers } = useData("/catalog/offers"),
     { data: addresses } = useData("/me/addresses"),
     { data: delivery } = useData("/delivery/options");
+  useEffect(() => {
+    if (!offers || promoIds !== null) return;
+    const eligible = offers.filter((o: Row) => milli(o.available_qty) > BigInt(0)).map((o: Row) => o.id);
+    if (!eligible.length) return;
+    for (let i = eligible.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [eligible[i], eligible[j]] = [eligible[j], eligible[i]];
+    }
+    setPromoIds(eligible.slice(0, 5));
+  }, [offers, promoIds]);
+  const promoOffers = (promoIds ?? []).map(id => offers?.find((o: Row) => o.id === id))
+    .filter((o: Row | undefined): o is Row => !!o && milli(o.available_qty) > BigInt(0));
+  const [wideScreen, setWideScreen] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1100px)");
+    const update = () => setWideScreen(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const cartKey = "ro-daily-cart-" + session.user.id;
   const [previousFee, setPreviousFee] = useState<string | null>(null);
   const [cart, setCart] = useState<Row[]>(() => {
@@ -3675,6 +3785,18 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   const view =
     mode === "checkout" && requestedView === null ? "checkout" : requestedView;
   const setView = setRequestedView;
+  const cartMotionKey = cart.map(c => `${c.id}:${c.quantity}`).join("|");
+  const previousCartMotionKey = useRef(cartMotionKey);
+  useEffect(() => {
+    const changed = previousCartMotionKey.current !== cartMotionKey;
+    previousCartMotionKey.current = cartMotionKey;
+    if (!changed || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const animation = document.querySelector(".cart-page-button")?.animate(
+      [{ transform: "scale(1)" }, { transform: "scale(1.035)" }, { transform: "scale(1)" }],
+      { duration: 220, easing: "ease-out" },
+    );
+    return () => animation?.cancel();
+  }, [cartMotionKey]);
   const chosenAddress =
     (addresses ?? []).find((a: Row) => a.id === address) ?? addresses?.[0];
   const policies = (delivery?.policies ?? []).filter(
@@ -3877,6 +3999,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   };
   return (
     <>
+    <section className="daily-catalog-layout">
       {mode === "checkout" ? (
         <Heading
           className="daily-checkout-heading"
@@ -3918,6 +4041,16 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               {cart.length > 0 && <strong>{money(subtotal)}</strong>}
             </button>
           </Heading>
+          {!promoClosed && promoOffers.length > 0 && <section className="menu-promotion" aria-label="Gợi ý sản phẩm đang mở bán">
+            <div className="row-heading"><div><div className="eyebrow">Đang mở bán</div><h2>Gợi ý hôm nay</h2></div>
+              <button className="ghost small" aria-label="Đóng gợi ý sản phẩm" onClick={() => { setPromoClosed(true); sessionStorage.setItem(promoKey, "1"); }}>✕</button>
+            </div>
+            <div className="promotion-products">{promoOffers.map((o: Row) => <article key={o.id} className="promotion-product">
+              {o.images?.length > 0 && <img src={productImageSrc(o.images[0])} alt={o.name} loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} />}
+              <strong>{o.name}</strong><span>{money(o.unit_price)} / {o.unit}</span>
+              <button className="small" disabled={!online} onClick={() => add(o)}>Thêm vào giỏ</button>
+            </article>)}</div>
+          </section>}
           <p className="stock-note">
             Số lượng có hạn trong ngày. Đơn được giữ hàng sau khi người bán
             duyệt.
@@ -3926,10 +4059,25 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
       )}
       {mode === "checkout" ? null : !offers ? (
         <Empty title="Đang tải menu…" />
-      ) : !offers.length ? (
-        <Empty title="Hôm nay chưa có món đang mở bán cho bạn" />
       ) : (
         <>
+          <div className="tabs catalog-view-tabs" role="group" aria-label="Trạng thái mở bán">
+            <button className={catalogView === "OPEN" ? "active" : ""} aria-pressed={catalogView === "OPEN"} onClick={() => setCatalogView("OPEN")}>Đang mở bán ({offers.length})</button>
+            <button className={catalogView === "UPCOMING" ? "active" : ""} aria-pressed={catalogView === "UPCOMING"} onClick={() => setCatalogView("UPCOMING")}>Mặt hàng sắp mở bán ({upcoming?.length ?? 0})</button>
+          </div>
+          {catalogView === "OPEN" && offers.length > 0 && offers.every((o: Row) => milli(o.available_qty) <= BigInt(0)) &&
+            <div className="notice" role="status"><strong>Đã bán hết</strong> · Các mặt hàng dành cho bạn hiện đã hết. Bạn có thể mua tiếp khi kho được bổ sung.</div>}
+          {catalogView === "UPCOMING" ? <>
+            <p className="muted">Sản phẩm chưa được đưa vào đợt bán. Theo dõi để nhận thông báo khi mở bán.</p>
+            {!upcoming ? <Empty title="Đang tải sản phẩm…" /> : !upcoming.length ? <Empty title="Chưa có mặt hàng sắp mở bán" /> :
+              <div className="daily-products">{upcoming.map((o: Row) => <article className="daily-product" key={o.product_id}>
+                <ProductImageGallery images={o.images ?? []} name={o.name} />
+                <div className="daily-product-info"><h2>{o.name}</h2><p>{o.description}</p><p>Đơn vị: {o.unit}</p></div>
+                <div className="daily-product-buy"><span className="status SCHEDULED">Chưa mở bán</span>
+                  <button disabled={!online} onClick={async () => { try { await mutate("/subscriptions/products/" + o.product_id, {}, o.subscribed ? "DELETE" : "POST"); } catch {} }}>{o.subscribed ? "Đang theo dõi" : "Báo khi mở bán"}</button>
+                </div>
+              </article>)}</div>}
+          </> : <>
           <div className="daily-catalog-tools">
             <div className="daily-catalog-search">
               <label htmlFor="daily-catalog-search">Tìm món</label>
@@ -3955,7 +4103,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                 aria-pressed={category === "ALL"}
                 onClick={() => setCategory("ALL")}
               >
-                Tất cả ({offers.length})
+                Mọi danh mục ({offers.length})
               </button>
               {categories.map((name) => (
                 <button
@@ -4001,6 +4149,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                   <ProductImageGallery images={o.images ?? []} name={o.name} />
                   <div className="daily-product-info">
                     <h2>{o.name}</h2>
+                    <small className="offer-round-label">Đợt {String(o.menu_id).slice(-6).toUpperCase()} · {date(o.opens_at)} → {date(o.closes_at)}</small>
                     <p className="muted">{o.description}</p>
                     <p>
                       Còn {qty(o.available_qty)} {o.unit}
@@ -4017,7 +4166,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                     >
                       {milli(o.available_qty) <= BigInt(0)
                         ? "Hết hàng"
-                        : "Thêm " + qty(o.quantity_step) + " " + o.unit}
+                        : "Thêm vào giỏ"}
                     </button>
                     <button
                       className="ghost small"
@@ -4039,14 +4188,17 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               ))}
             </div>
           )}
+          </>}
         </>
       )}
+    </section>
       {view && (
         <div
-          className={mode === "checkout" ? "checkout-inline" : "cart-drawer"}
+          className={mode === "checkout" ? "checkout-inline" : "cart-drawer" + (wideScreen ? " cart-drawer-docked" : "")}
         >
           <Modal
             inline={mode === "checkout"}
+            docked={mode === "catalog" && wideScreen}
             title={
               mode === "checkout"
                 ? view === "cart"
@@ -4272,6 +4424,20 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                           </Field>
                         ) : (
                           <>
+                            {delivery?.warehouse && !delivery.warehouse.configured && (
+                              <p className="notice warn">Người bán chưa xác nhận vị trí kho để tính quãng đường.</p>
+                            )}
+                            {policy?.pricing_mode === "TIERED_KM" && !!policy.distance_enabled && (
+                              <p className="muted">
+                                {money(policy.per_km_fee)}/km trong {qty(policy.included_km)} km đầu;
+                                phần vượt {money(policy.extra_km_fee)}/km.
+                                {policy.max_distance_km != null && <> Giao tối đa {qty(policy.max_distance_km)} km.</>}
+                                {Number(policy.fee_rounding_step) > 1 && <> Tổng phí làm tròn lên bội số {money(policy.fee_rounding_step)}.</>}
+                              </p>
+                            )}
+                            {policy && !policy.distance_enabled && (
+                              <p className="notice warn">Người bán chưa bật chính sách phí giao theo khoảng cách cho nhóm của bạn.</p>
+                            )}
                             {!chosenAddress?.latitude && (
                               <p className="notice warn">
                                 Địa chỉ này chưa xác nhận vị trí trên bản đồ.
@@ -4283,7 +4449,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                                 busy ||
                                 stale ||
                                 !chosenAddress?.latitude
-                              }
+                               || !policy?.distance_enabled || delivery?.warehouse?.configured === false}
                               onClick={async () => {
                                 setBusy(true);
                                 setConfirmed(false);
@@ -4339,6 +4505,9 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                                   · khoảng{" "}
                                   {Math.ceil(quote.durationSeconds / 60)} phút
                                   di chuyển
+                                </p>
+                                <p className="muted">
+                                  Tuyến tham khảo do <a href="https://project-osrm.org/" target="_blank" rel="noreferrer">OSRM</a> tính theo mô hình ô tô; có thể khác tuyến xe máy thực tế. Dữ liệu © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.
                                 </p>
                                 <p>
                                   Phí giao:{" "}
@@ -4438,7 +4607,8 @@ function DailyMenus() {
     { data: products } = useData("/admin/products"),
     { data: categories } = useData("/admin/config/categories"),
     { data: units } = useData("/admin/config/units"),
-    { data: groups } = useData("/admin/config/groups");
+    { data: groups } = useData("/admin/config/groups"),
+    { data: priceRules } = useData("/admin/pricing-rules");
   const { mutate, online, notify } = useApp();
   const [form, setForm] = useState<Row | null>(null),
     [busy, setBusy] = useState(false),
@@ -4448,7 +4618,25 @@ function DailyMenus() {
     ),
     [productSearch, setProductSearch] = useState(""),
     [productCategory, setProductCategory] = useState("all");
+  const editorRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (form) editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [!!form, form?.id]);
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const effectiveStatus = (m: Row) => {
+    if (m.status !== "OPEN") return m.status;
+    if (clock >= new Date(m.closes_at).getTime()) return "EXPIRED";
+    return clock < new Date(m.opens_at).getTime() ? "SCHEDULED" : m.sold_out ? "SOLD_OUT" : "OPEN";
+  };
   const edit = async (m?: Row) => {
+    if (!priceRules) {
+      notify("Đang tải quy tắc giá, vui lòng thử lại sau một lát", true);
+      return;
+    }
     setProductSearch("");
     setProductCategory("all");
     if (!m) {
@@ -4457,6 +4645,7 @@ function DailyMenus() {
         closeDate: "",
         closeTime: "",
         allowedGroupIds: null,
+        audienceMode: "MENU",
         items: [],
       });
       return;
@@ -4475,29 +4664,29 @@ function DailyMenus() {
         localCloseTime === "00:00"
           ? vnDateOffset(calendarCloseDay, -1)
           : calendarCloseDay;
-      setForm({
-        ...full,
-        saleDate: full.sale_date,
-        closeDate:
-          inclusiveCloseDay === full.sale_date ? "" : inclusiveCloseDay,
-        closeTime: localCloseTime === "00:00" ? "" : localCloseTime,
-        allowedGroupIds: full.allowed_group_ids,
-        items: full.items.map((o: Row) => ({
+      const existingItems = full.items.map((o: Row) => ({
           productId: o.product_id,
           availableQty: o.available_qty,
           costPrice: o.cost_price ?? "",
           allowedGroupIds:
             products?.find((p: Row) => p.id === o.product_id)
               ?.allowed_group_ids == null
-              ? o.allowed_group_ids
+              ? (full.audience_mode === "PRODUCT" ? o.allowed_group_ids : null)
               : null,
           enabled: o.status === "OPEN",
           expectedVersion: o.version,
-          prices: o.prices.map((p: Row) => ({
-            groupId: p.group_id,
-            unitPrice: p.unit_price,
-          })),
-        })),
+          prices: menuPrices(o.cost_price ?? "", groups ?? [], priceRules),
+        }));
+      setForm({
+        ...full,
+        audienceMode: full.audience_mode ?? "MENU",
+        saleDate: full.sale_date,
+        closeDate:
+          inclusiveCloseDay === full.sale_date ? "" : inclusiveCloseDay,
+        closeTime: localCloseTime === "00:00" ? "" : localCloseTime,
+        allowedGroupIds: full.allowed_group_ids,
+        existingItems,
+        items: existingItems.filter((item: Row) => item.enabled),
       });
     } catch (e) {
       notify((e as Error).message, true);
@@ -4505,15 +4694,20 @@ function DailyMenus() {
   };
   const save = async (status: string) => {
     if (!form) return;
+    if (!priceRules) {
+      notify("Chưa tải được quy tắc giá; chưa lưu menu", true);
+      return;
+    }
     setBusy(true);
     try {
       const closeDay = form.closeDate || form.saleDate;
       const closesAt = form.closeTime
         ? `${closeDay}T${form.closeTime}:00+07:00`
         : `${vnDateOffset(closeDay, 1)}T00:00:00+07:00`;
+      const { existingItems, ...menuForm } = form;
       await mutate(
         "/admin/menus" + (form.id ? "/" + form.id : ""),
-        { ...form, closesAt, status, expectedVersion: form.version },
+        { ...menuForm, closesAt, status, expectedVersion: form.version },
         form.id ? "PATCH" : "POST",
       );
       setForm(null);
@@ -4548,6 +4742,35 @@ function DailyMenus() {
           }
         : f,
     );
+  const toggleMenuItem = (product: Row, checked: boolean) => {
+    setForm((f) => {
+      if (!f) return f;
+      const cached = (f.existingItems ?? []).find((i: Row) => i.productId === product.id);
+      if (checked) {
+        const item = cached ?? {
+          productId: product.id, availableQty: "0",
+          costPrice: product.default_cost_price ?? "", allowedGroupIds: null,
+          prices: menuPrices(product.default_cost_price ?? "", groups ?? [], priceRules),
+        };
+        return { ...f, items: [...f.items, { ...item, enabled: true,
+          allowedGroupIds: f.audienceMode === "PRODUCT" ? item.allowedGroupIds : null }] };
+      }
+      const removed = f.items.find((i: Row) => i.productId === product.id);
+      return { ...f,
+        items: f.items.filter((i: Row) => i.productId !== product.id),
+        existingItems: [...(f.existingItems ?? []).filter((i: Row) => i.productId !== product.id), removed].filter(Boolean),
+      };
+    });
+  };
+  const setMenuAudience = (mode: "MENU" | "PRODUCT", allowedGroupIds: string[] | null) => {
+    setForm((f) => f ? {
+      ...f, audienceMode: mode, allowedGroupIds,
+      items: f.items.map((item: Row) => ({ ...item, allowedGroupIds: mode === "MENU" ? null : item.allowedGroupIds })),
+      existingItems: (f.existingItems ?? []).map((item: Row) => ({ ...item, allowedGroupIds: mode === "MENU" ? null : item.allowedGroupIds })),
+    } : f);
+  };
+  const menuGroupNames = form?.allowedGroupIds == null ? "Tất cả nhóm" : form.allowedGroupIds
+    .map((id: string) => groups?.find((g: Row) => g.id === id)?.name ?? "Nhóm đã ngừng dùng").join(", ");
   const filteredProducts = (products ?? [])
     .filter((p: Row) => {
       const selected = form?.items.some((i: Row) => i.productId === p.id);
@@ -4570,81 +4793,26 @@ function DailyMenus() {
     <>
       <Heading
         title="Menu theo ngày"
-        sub="Có thể tạo nhiều đợt cùng ngày; đặt khung giờ riêng, không chồng lấn."
+        sub="Có thể mở nhiều đợt cùng thời gian, nhưng không trùng sản phẩm giữa các đợt."
       >
         <button
           className="primary"
-          disabled={!online || !products || !categories || !groups}
+          disabled={!online || !products || !categories || !groups || !priceRules}
           onClick={() => edit()}
         >
           Tạo menu ngày
         </button>
       </Heading>
-      <div className="panel table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Ngày bắt đầu</th>
-              <th>Trạng thái</th>
-              <th>Thời gian</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {menus?.map((m: Row) => (
-              <tr key={m.id}>
-                <td>
-                  <strong>{m.sale_date}</strong>
-                  <div className="muted">ID: {m.id}</div>
-                </td>
-                <td>
-                  <Status value={m.status} />
-                </td>
-                <td>
-                  {date(m.opens_at)} → {date(m.closes_at)}
-                </td>
-                <td>
-                  <div className="actions">
-                    <button disabled={!online || busy} onClick={() => edit(m)}>
-                      Sửa món / giá / kho
-                    </button>
-                    {m.status !== "OPEN" && m.sale_date >= vnDay() && (
-                      <button
-                        disabled={!online || busy}
-                        onClick={() => changeStatus(m, "OPEN")}
-                      >
-                        Mở bán
-                      </button>
-                    )}
-                    {m.status === "OPEN" && (
-                      <button
-                        disabled={!online || busy}
-                        onClick={() => changeStatus(m, "CLOSED")}
-                      >
-                        Đóng bán
-                      </button>
-                    )}
-                    <button
-                      disabled={!online || busy}
-                      onClick={() => setCopying(m)}
-                    >
-                      Sao chép
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {menus?.length === 0 && <Empty title="Chưa có menu" />}
-      </div>
       {form && (
-        <section className="panel menu-editor">
+        <section className="panel menu-editor" ref={editorRef} aria-label={form.id ? "Sửa menu" : "Tạo menu"}>
           <div className="panel-head">
             <h2>{form.id ? "Sửa menu" : "Tạo menu"}</h2>
             <button onClick={() => setForm(null)}>Đóng biểu mẫu</button>
           </div>
           <div className="form">
+            <div className="menu-editor-layout">
+            <aside className="menu-settings" aria-label="Thiết lập menu">
+            <h3>Lịch bán và khách hàng</h3>
             <div className="form-grid menu-schedule-grid">
               <Field label="Ngày bắt đầu bán">
                 <input
@@ -4710,15 +4878,35 @@ function DailyMenus() {
               </Field>
             </div>
             <p className="muted">
-              Đặt giờ đóng của đợt trước trước giờ mở đợt tiếp theo. Để trống
+              Các đợt có thể trùng thời gian nếu không trùng sản phẩm. Để trống
               giờ đóng để bán đến hết ngày đã chọn.
             </p>
-            <AudienceFields
-              groups={groups ?? []}
-              value={form.allowedGroupIds}
-              onChange={(v) => setForm({ ...form, allowedGroupIds: v })}
-              legend="Nhóm được phép mua trong menu"
-            />
+            <fieldset className="audience menu-audience">
+              <legend>Nhóm được phép mua trong menu</legend>
+              <label className="check">
+                <input type="radio" name="menu-audience-mode"
+                  checked={form.audienceMode === "MENU" && form.allowedGroupIds == null}
+                  onChange={() => setMenuAudience("MENU", null)} />
+                Tất cả nhóm
+              </label>
+              {groups?.filter((g: Row) => g.active).map((g: Row) => (
+                <label className="check" key={g.id}>
+                  <input type="checkbox"
+                    checked={form.audienceMode === "MENU" && !!form.allowedGroupIds?.includes(g.id)}
+                    onChange={(e) => {
+                      const selected = form.audienceMode === "MENU" ? form.allowedGroupIds ?? [] : [];
+                      setMenuAudience("MENU", e.target.checked ? [...selected, g.id] : selected.filter((id: string) => id !== g.id));
+                    }} />
+                  {g.name}
+                </label>
+              ))}
+              <label className="check">
+                <input type="radio" name="menu-audience-mode"
+                  checked={form.audienceMode === "PRODUCT"}
+                  onChange={() => setMenuAudience("PRODUCT", null)} />
+                Tùy chỉnh theo từng sản phẩm
+              </label>
+            </fieldset>
             <div className="form-grid">
               <Field label="Lọc theo danh mục">
                 <select
@@ -4746,49 +4934,59 @@ function DailyMenus() {
             <p className="muted">
               Món đã chọn vẫn hiển thị khi đổi danh mục hoặc từ khóa.
             </p>
+            <div className="actions menu-editor-actions">
+              <button disabled={!online || busy || !priceRules} onClick={() => save("DRAFT")}>
+                Lưu nháp
+              </button>
+              <button
+                className="primary"
+                disabled={!online || busy || !form.items.length || !priceRules}
+                onClick={() => save("OPEN")}
+              >
+                Lưu và mở bán
+              </button>
+              {form.id && (
+                <button
+                  disabled={!online || busy || !priceRules}
+                  onClick={() => save("CLOSED")}
+                >
+                  Lưu và đóng bán
+                </button>
+              )}
+            </div>
+            </aside>
+            <section className="menu-products-area" aria-label="Chọn sản phẩm mở bán">
+              <div className="menu-products-heading">
+                <h3>Sản phẩm mở bán</h3>
+                <span className="muted">Đã chọn {form.items.length} sản phẩm</span>
+              </div>
+              <p className="muted">Tích chọn sản phẩm để xem ảnh và thiết lập lượng bán, giá, nhóm khách. Bỏ chọn để ngừng bán món trong đợt; đơn đã tạo vẫn giữ nguyên.</p>
             <div className="menu-product-list">
               {filteredProducts.map((p: Row) => {
                   const item = form.items.find(
                     (i: Row) => i.productId === p.id,
                   );
                   return (
-                    <div key={p.id} className="menu-product">
+                    <article key={p.id} className={"menu-product" + (item ? " selected" : "")} data-product-id={p.id}>
                       <label className="check">
                         <input
                           type="checkbox"
                           checked={!!item}
-                          disabled={!!form.id && !!item}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              items: e.target.checked
-                                ? [
-                                    ...form.items,
-                                    {
-                                      productId: p.id,
-                                      availableQty: "0",
-                                      costPrice: p.default_cost_price ?? "",
-                                      allowedGroupIds: null,
-                                      enabled: true,
-                                      prices: (groups ?? [])
-                                        .filter((g: Row) => g.active)
-                                        .map((g: Row) => ({
-                                          groupId: g.id,
-                                          unitPrice: p.default_sale_price ?? "",
-                                        })),
-                                    },
-                                  ]
-                                : form.items.filter(
-                                    (i: Row) => i.productId !== p.id,
-                                  ),
-                            })
-                          }
+                          disabled={!online || busy}
+                          onChange={(e) => toggleMenuItem(p, e.target.checked)}
                         />
                         <strong>{p.name}</strong>
                       </label>
+                      <p className="muted menu-product-meta">{p.sku} · {units?.find((u: Row) => u.id === p.unit_id)?.label ?? "đơn vị"}</p>
                       {item && (
+                        <div className="menu-selected-product">
+                          <ProductImageGallery images={p.images ?? []} name={p.name} />
                         <div className="menu-line-fields">
-                          {p.allowed_group_ids == null ? (
+                          {form.audienceMode !== "PRODUCT" ? (
+                            <p className="muted">Nhóm mua theo menu: {menuGroupNames}.
+                              {p.allowed_group_ids != null && <> Sản phẩm vẫn giữ giới hạn nhóm đã cấu hình trong danh mục.</>}
+                            </p>
+                          ) : p.allowed_group_ids == null ? (
                             <AudienceFields
                               groups={groups ?? []}
                               value={item.allowedGroupIds ?? null}
@@ -4830,10 +5028,14 @@ function DailyMenus() {
                               step="1"
                               value={item.costPrice}
                               onChange={(e) =>
-                                changeItem(p.id, { costPrice: e.target.value })
+                                changeItem(p.id, {
+                                  costPrice: e.target.value,
+                                  prices: menuPrices(e.target.value, groups ?? [], priceRules),
+                                })
                               }
                             />
                           </Field>
+                          <p className="muted menu-pricing-note">Giá bán tự tính theo quy tắc giá hiện hành và làm tròn đến 1 đồng.</p>
                           {groups
                             ?.filter((g: Row) => g.active)
                             .map((g: Row) => (
@@ -4847,22 +5049,12 @@ function DailyMenus() {
                                       (x: Row) => x.groupId === g.id,
                                     )?.unitPrice ?? ""
                                   }
-                                  onChange={(e) =>
-                                    changeItem(p.id, {
-                                      prices: [
-                                        ...item.prices.filter(
-                                          (x: Row) => x.groupId !== g.id,
-                                        ),
-                                        {
-                                          groupId: g.id,
-                                          unitPrice: e.target.value,
-                                        },
-                                      ],
-                                    })
-                                  }
+                                  readOnly
+                                  aria-readonly="true"
                                 />
                               </Field>
                             ))}
+                          {form.id && ["OPEN", "SOLD_OUT"].includes(effectiveStatus(form)) && (
                           <label className="check">
                             <input
                               type="checkbox"
@@ -4873,38 +5065,84 @@ function DailyMenus() {
                             />
                             Đang bán món này
                           </label>
+                          )}
+                        </div>
                         </div>
                       )}
-                    </div>
+                    </article>
                   );
                 })}
               {!filteredProducts.length && (
                 <p className="muted">Không có sản phẩm phù hợp với bộ lọc.</p>
               )}
             </div>
-            <div className="actions">
-              <button disabled={!online || busy} onClick={() => save("DRAFT")}>
-                Lưu nháp
-              </button>
-              <button
-                className="primary"
-                disabled={!online || busy || !form.items.length}
-                onClick={() => save("OPEN")}
-              >
-                Lưu và mở bán
-              </button>
-              {form.id && (
-                <button
-                  disabled={!online || busy}
-                  onClick={() => save("CLOSED")}
-                >
-                  Lưu và đóng bán
-                </button>
-              )}
+            </section>
             </div>
+
           </div>
         </section>
       )}
+      <section className="menu-history" aria-label="Lịch sử mở bán">
+        <h2>Lịch sử mở bán</h2>
+        <div className="panel table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Ngày bắt đầu</th>
+              <th>Trạng thái</th>
+              <th>Thời gian</th>
+              <th>Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            {menus?.map((m: Row) => (
+              <tr key={m.id}>
+                <td>
+                  <strong>{m.sale_date}</strong>
+                  <div className="muted">ID: {m.id}</div>
+                </td>
+                <td>
+                  <Status value={effectiveStatus(m)} />
+                </td>
+                <td>
+                  {date(m.opens_at)} → {date(m.closes_at)}
+                </td>
+                <td>
+                  <div className="actions">
+                    <button disabled={!online || busy || !priceRules} onClick={() => edit(m)}>
+                      Sửa món / giá / kho
+                    </button>
+                    {m.status !== "OPEN" && new Date(m.closes_at).getTime() > clock && m.sale_date >= vnDay() && (
+                      <button
+                        disabled={!online || busy}
+                        onClick={() => changeStatus(m, "OPEN")}
+                      >
+                        Mở bán
+                      </button>
+                    )}
+                    {m.status === "OPEN" && effectiveStatus(m) !== "EXPIRED" && (
+                      <button
+                        disabled={!online || busy}
+                        onClick={() => changeStatus(m, "CLOSED")}
+                      >
+                        Đóng bán
+                      </button>
+                    )}
+                    <button
+                      disabled={!online || busy}
+                      onClick={() => setCopying(m)}
+                    >
+                      Sao chép
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {menus?.length === 0 && <Empty title="Chưa có menu" />}
+      </div>
+      </section>
       {copying && (
         <Modal
           title="Sao chép menu sang ngày khác"
@@ -4949,9 +5187,19 @@ function DailyMenus() {
 function DailyReports() {
   const [day, setDay] = useState(vnDay()),
     [compare, setCompare] = useState(vnDay(new Date(Date.now() - 86400000)));
-  const { data } = useData(
-    "/admin/reports/daily?date=" + day + "&compare=" + compare,
-  );
+  const [period, setPeriod] = useState("day");
+  const [month, setMonth] = useState(vnDay().slice(0, 7));
+  const [compareMonth, setCompareMonth] = useState(() => {
+    const [y, m] = vnDay().split("-").map(Number);
+    return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+  });
+  const selectedPeriod = period === "month" ? month : day;
+  const comparisonPeriod = period === "month" ? compareMonth : compare;
+  const { data: reportData } = useData(period === "month"
+    ? "/admin/reports/monthly?month=" + month + "&compare=" + compareMonth
+    : "/admin/reports/daily?date=" + day + "&compare=" + compare);
+  const data = reportData?.selected?.[period === "month" ? "month" : "day"] === selectedPeriod
+    && reportData?.comparison?.[period === "month" ? "month" : "day"] === comparisonPeriod ? reportData : null;
   const exportCSV = () => {
     const rows = [
       [
@@ -4980,7 +5228,7 @@ function DailyReports() {
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "lai-gop-" + day + ".csv";
+    a.download = "lai-gop-" + selectedPeriod + ".csv";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -4990,27 +5238,33 @@ function DailyReports() {
         title="Doanh thu và lãi gộp"
         sub="Ghi nhận theo ngày giao thành công, giờ Việt Nam. Phí giao được tách riêng."
       />
-      <div className="toolbar">
-        <Field label="Ngày báo cáo">
+      <div className="tabs" role="group" aria-label="Kỳ báo cáo">
+        <button className={period === "day" ? "active" : ""} aria-pressed={period === "day"} onClick={() => setPeriod("day")}>Theo ngày</button>
+        <button className={period === "month" ? "active" : ""} aria-pressed={period === "month"} onClick={() => setPeriod("month")}>Theo tháng</button>
+      </div>
+      <div className="toolbar report-period-controls">
+        <Field label={period === "month" ? "Tháng báo cáo" : "Ngày báo cáo"}>
           <input
-            type="date"
-            value={day}
-            onChange={(e) => e.target.value && setDay(e.target.value)}
+            type={period === "month" ? "month" : "date"}
+            value={selectedPeriod}
+            onChange={(e) => e.target.value && (period === "month" ? setMonth(e.target.value) : setDay(e.target.value))}
           />
         </Field>
         <Field label="So sánh với">
           <input
-            type="date"
-            value={compare}
-            onChange={(e) => e.target.value && setCompare(e.target.value)}
+            type={period === "month" ? "month" : "date"}
+            value={comparisonPeriod}
+            onChange={(e) => e.target.value && (period === "month" ? setCompareMonth(e.target.value) : setCompare(e.target.value))}
           />
         </Field>
         <button disabled={!data} onClick={exportCSV}>
           Xuất CSV
         </button>
       </div>
+      {!data && <div className="spinner" role="status">Đang tải báo cáo…</div>}
       {data && (
         <>
+          <p className="muted">{period === "month" ? `Tổng tháng ${month}; bảng bên dưới hiển thị từng ngày trong tháng.` : `7 ngày gần nhất: từ ${vnDateOffset(day, -6)} đến ${day}.`}</p>
           <div className="report-totals">
             {[
               ["orders", "Đơn đã giao"],
@@ -5030,12 +5284,13 @@ function DailyReports() {
                 </strong>
                 {data.changes[field] && (
                   <p className="muted">
-                    So với {compare}:{" "}
+                    So với {comparisonPeriod}:{" "}
+                    {data.changes[field].amount !== null && (Number(data.changes[field].amount) > 0 ? "Tăng " : Number(data.changes[field].amount) < 0 ? "Giảm " : "Không đổi ")}
                     {data.changes[field].amount === null
                       ? "Chưa đủ dữ liệu"
                       : field === "orders"
-                        ? data.changes[field].amount
-                        : money(data.changes[field].amount)}
+                        ? String(data.changes[field].amount).replace(/^-/, "")
+                        : money(String(data.changes[field].amount).replace(/^-/, ""))}
                     {data.changes[field].percent !== null
                       ? " (" + data.changes[field].percent + "%)"
                       : ""}

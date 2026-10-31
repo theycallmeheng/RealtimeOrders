@@ -58,6 +58,22 @@
         }
       }
     },
+    "/api/v1/auth/registration/sms-fallback": {
+      "post": {
+        "summary": "Registration Sms Fallback",
+        "operationId": "registration_sms_fallback_api_v1_auth_registration_sms_fallback_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/{kind}/verify": {
       "post": {
         "summary": "Verify",
@@ -937,6 +953,22 @@
         }
       }
     },
+    "/api/v1/catalog/upcoming": {
+      "get": {
+        "summary": "Upcoming Catalog",
+        "operationId": "upcoming_catalog_api_v1_catalog_upcoming_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/catalog/menu": {
       "get": {
         "summary": "Daily Catalog",
@@ -1059,6 +1091,22 @@
         }
       }
     },
+    "/api/v1/admin/reports/monthly": {
+      "get": {
+        "summary": "Monthly Report",
+        "operationId": "monthly_report_api_v1_admin_reports_monthly_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/reports/daily": {
       "get": {
         "summary": "Daily Report",
@@ -1107,6 +1155,98 @@
         }
       }
     },
+    "/api/v1/admin/maps/verified": {
+      "get": {
+        "summary": "Verified List",
+        "operationId": "verified_list_api_v1_admin_maps_verified_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Verified Create",
+        "operationId": "verified_create_api_v1_admin_maps_verified_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/maps/verified/{id}": {
+      "delete": {
+        "summary": "Verified Remove",
+        "operationId": "verified_remove_api_v1_admin_maps_verified__id__delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Verified Update",
+        "operationId": "verified_update_api_v1_admin_maps_verified__id__patch",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maps/config": {
+      "get": {
+        "summary": "Map Config",
+        "operationId": "map_config_api_v1_maps_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maps/pin": {
+      "post": {
+        "summary": "Location Pin",
+        "operationId": "location_pin_api_v1_maps_pin_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/delivery/quote": {
       "post": {
         "summary": "Delivery Quote",
@@ -1143,22 +1283,6 @@
       "get": {
         "summary": "Media",
         "operationId": "media_api_v1_media__id__get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/registration/sms-fallback": {
-      "post": {
-        "summary": "Registration Sms Fallback",
-        "operationId": "registration_sms_fallback_api_v1_auth_registration_sms_fallback_post",
         "responses": {
           "200": {
             "description": "Successful Response",

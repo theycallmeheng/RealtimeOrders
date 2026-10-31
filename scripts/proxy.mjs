@@ -11,9 +11,18 @@ const network=readNetworkSettings(root);
 const canonicalHost=new URL(network.origin).host;
 const tls={key:fs.readFileSync(path.join(network.tlsDirectory,'key.pem')),cert:fs.readFileSync(path.join(network.tlsDirectory,'cert.pem'))};
 
+function clientAddress(req) {
+  const peer=req.socket.remoteAddress;
+  // Only the local tunnel connector may provide Cloudflare's edge client IP.
+  const header=req.headers['cf-connecting-ip'];
+  if(network.mode==='remote' && ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(peer)
+      && typeof header==='string' && net.isIP(header)) return header;
+  return peer;
+}
+
 function forwardRequest(req,res){
   if(!req.url.startsWith('/')){res.writeHead(400);res.end();return;}
-  if(network.mode==='lan' && req.headers.host!==canonicalHost && req.url!=='/api/health'){
+  if(network.mode!=='local' && req.headers.host!==canonicalHost && req.url!=='/api/health'){
     if(!req.url.startsWith('/api/') && ['GET','HEAD'].includes(req.method)){
       res.writeHead(307,{location:network.origin+req.url,'cache-control':'no-store'});
     }else{res.writeHead(421,{'content-type':'text/plain; charset=utf-8'});}
@@ -21,7 +30,7 @@ function forwardRequest(req,res){
   }
   const port=req.url.startsWith('/api/')?8000:3000;
   const upstream=http.request({hostname:'127.0.0.1',port,path:req.url,method:req.method,
-    headers:{...req.headers,'x-forwarded-proto':'https','x-forwarded-for':req.socket.remoteAddress}},response=>{
+    headers:{...req.headers,'x-forwarded-proto':'https','x-forwarded-for':clientAddress(req)}},response=>{
     res.writeHead(response.statusCode,response.headers);
     response.pipe(res);
   });
@@ -35,11 +44,11 @@ function forwardRequest(req,res){
 }
 
 function forwardUpgrade(req,socket,head){
-  if(network.mode==='lan' && req.headers.host!==canonicalHost){
+  if(network.mode!=='local' && req.headers.host!==canonicalHost){
     socket.end('HTTP/1.1 421 Misdirected Request\r\nConnection: close\r\n\r\n');return;
   }
   socket.setNoDelay(true);
-  req.headers['x-forwarded-for']=req.socket.remoteAddress;
+  req.headers['x-forwarded-for']=clientAddress(req);
   req.headers['x-forwarded-proto']='https';
   const port=req.url==='/ws'?8000:3000;
   const upstream=net.connect(port,'127.0.0.1',()=>{

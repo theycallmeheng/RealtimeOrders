@@ -49,6 +49,24 @@ SMTP host/port/user/password/from; kết nối SMTP dùng STARTTLS. `DEMO_MODE=f
 không chấp nhận OTP demo và không trả mã trong API. Zalo, SMS và email thật chưa
 được nghiệm thu khi chưa có tài khoản dịch vụ, template được duyệt và cấu hình hợp lệ.
 
+## OpenStreetMap
+
+Tìm địa chỉ và tính tuyến không cần API key, project Cloud hay billing. Mặc định
+backend ưu tiên địa chỉ công cộng đã xác nhận, sau đó Photon/Nominatim; OSRM tính tuyến qua HTTPS. URL có thể đổi bằng
+PHOTON_URL, NOMINATIM_URL, OSM_TILE_URL và OSRM_URL trong tệp .env để trỏ tới dịch vụ tự quản. Cần kết nối
+Internet đi ra từ máy chạy backend. Vào **Cấu hình**, tìm **96A Trần Phú, Hà Đông, Hà Nội**, kiểm tra
+kết quả và xác nhận tọa độ kho thực tế trước khi lưu.
+
+Nominatim chỉ được gọi do người dùng chủ động bấm nút tìm, không dùng autocomplete.
+Ứng dụng áp dụng giới hạn một request mỗi giây và cache kết quả; không gửi địa chỉ
+riêng tư/thông tin nhạy cảm tới dịch vụ công cộng. OSRM demo cũng giới hạn một
+request mỗi giây, không bảo đảm dịch vụ liên tục và đang dùng tuyến tham khảo kiểu
+ô tô, có thể khác tuyến xe máy.
+
+Xem [chính sách Nominatim](https://operations.osmfoundation.org/policies/nominatim/),
+[chính sách OSRM demo](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server)
+và [tài liệu tích hợp](DAILY_SALES.md#openstreetmap-địa-chỉ-và-tuyến-đường).
+
 ## LAN và tên miền
 
 Chế độ mặc định nghe loopback. Chạy `scripts/configure-lan.ps1` để chuẩn bị
@@ -64,7 +82,13 @@ firewall hay cài CA vào trust store; máy khách chủ động chạy Trust-Se
 Không mở thêm MySQL/8000/3000. Isolated validation mặc định ép về loopback;
 `--network-mode configured restart` cho phép kiểm thử audit qua địa chỉ LAN.
 
-Triển khai công khai cần reverse proxy được vận hành đầy đủ, chứng thư CA hợp lệ,
+Để demo với client khác mạng, dùng `Start-Remote.cmd` sau khi cài cloudflared
+bằng `scripts/install-cloudflared.ps1`. Quick Tunnel cấp link HTTPS công khai,
+profile remote giữ các dịch vụ ứng dụng trên loopback và tự đặt APP_ORIGIN.
+`Stop-Remote.cmd` đóng connector và khôi phục profile trước đó. Không cần đổi
+Wi-Fi sang Private hay mở cổng router. Xem [hướng dẫn truy cập từ xa](REMOTE.md).
+
+Triển khai công khai lâu dài cần reverse proxy được vận hành đầy đủ, chứng thư CA hợp lệ,
 backup ngoài máy, giới hạn body/rate tại biên, giám sát, quản lý secrets và domain
 được sở hữu. Node proxy trong source phục vụ cục bộ/bài tập; chưa là cấu hình
 triển khai công khai được kiểm định. Hiện chỉ một FastAPI worker; cần shared bus

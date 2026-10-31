@@ -1,8 +1,8 @@
 # Sổ quyết định và giả định
 
-> Cập nhật đã được người dùng chốt ngày 29/10/2026: menu theo ngày nhiều sản phẩm,
-> giới hạn nhóm, Goong và lãi gộp. Chức năng yêu cầu hàng/báo giá (FR12) ngừng hỗ trợ;
-> P13 về chưa dùng bản đồ được thay thế. Xem DAILY_SALES.md để biết hợp đồng hiện hành.
+> Lựa chọn menu theo ngày, giới hạn nhóm và lãi gộp được chốt ngày 29/10/2026.
+> Ngày 31/10/2026, lựa chọn OpenStreetMap thay thế tích hợp Google Maps do tài khoản chưa thể kích hoạt billing.
+> FR12 ngừng hỗ trợ; P13 về chưa dùng bản đồ được thay thế. Xem DAILY_SALES.md để biết hợp đồng hiện hành.
 
 
 Ngày 22/10/2026. Thứ tự ưu tiên: chỉ dẫn trực tiếp mới của người dùng > yêu cầu
@@ -24,6 +24,8 @@ thành yêu cầu. Tài liệu này không phải xác nhận của giảng viê
 | D08 | Che từ, cảnh báo, nhật ký và thông báo admin; báo cáo ngày/tháng | Bản mô tả cuối |
 | D09 | Tối đa 3 địa chỉ, có mặc định; email/SĐT duy nhất; xóa mềm và ghi lịch sử khóa/mở | Bản mô tả đề tài |
 | D10 | Mục tiêu 1.000–2.000 khách đồng thời, cần đo để xác nhận | Bản mô tả cuối |
+| D11 | Google Places API (New) và Google Routes API được chọn tạm thời để tìm địa chỉ và tính tuyến, thay lựa chọn Goong trước đó | Người dùng xác nhận 31/10/2026; được D12 thay thế |
+| D12 | OpenStreetMap Nominatim tìm địa chỉ theo thao tác bấm nút; OSRM demo profile driving tính tuyến tham khảo. Không cần key/billing; áp dụng attribution, giới hạn công cộng và cảnh báo quyền riêng tư/tuyến ô tô | Người dùng chọn thử OpenStreetMap 31/10/2026 |
 
 ## Đề xuất thiết kế để nhóm triển khai
 

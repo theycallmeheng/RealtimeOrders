@@ -28,20 +28,37 @@ def test_location_signature_expiry_and_vn_midnight():
     a,b=menus.bounds('2026-10-28');assert a.isoformat()=='2026-10-27T17:00:00' and b-a==timedelta(days=1)
 
 
-async def test_goong_adapter_handles_distance_and_no_route():
-    address={'latitude':'21','longitude':'105'};wh={'latitude':'20','longitude':'105'}
-    fake={'routes':[{'legs':[{'distance':{'value':3101},'duration':{'value':720}}]}]}
-    with patch.object(shipping,'goong',AsyncMock(return_value=fake)) as call:
-        meters,seconds,_=await shipping.route(address,wh)
-        assert (meters,seconds)==(3101,720);assert call.call_args.args[1]['vehicle']=='bike'
-    with patch.object(shipping,'goong',AsyncMock(return_value={'routes':[]})):
-        with pytest.raises(Fault):await shipping.route(address,wh)
+async def test_openstreetmap_adapter_search_resolve_and_osrm_route():
+    shipping._search_cache.clear()
+    shipping._place_cache.clear()
+    shipping._route_cache.clear()
+    place_result = {
+        "osm_type": "way", "osm_id": 12345, "lat": "21.001", "lon": "105.801",
+        "display_name": "96A Trần Phú, Hà Đông, Hà Nội",
+    }
+    with patch.object(shipping, "nominatim_json", AsyncMock(return_value=[place_result])) as nominatim:
+        results = await shipping.search(None, "96A Trần Phú")
+        assert results == [{"id": "W12345", "label": "96A Trần Phú, Hà Đông, Hà Nội"}]
+        resolved = await shipping.resolve("W12345")
+        location = shipping.verify_location(resolved["locationToken"])
+        assert location["latitude"] == "21.001"
+        assert location["longitude"] == "105.801"
+        assert location["placeId"] == "W12345"
+        assert nominatim.await_count == 1
 
+    address = {"latitude": "21", "longitude": "105"}
+    warehouse = {"latitude": "20", "longitude": "105"}
+    fake = {"code": "Ok", "routes": [{"distance": 3101, "duration": 720}]}
+    with patch.object(shipping, "osrm_json", AsyncMock(return_value=fake)) as osrm:
+        meters, seconds, details = await shipping.route(address, warehouse)
+        assert (meters, seconds) == (3101, 720)
+        assert details == {"provider": "OSRM", "profile": "driving"}
+        assert "/route/v1/driving/105.0000000,20.0000000;105.0000000,21.0000000" in osrm.call_args.args[0]
 
-async def test_map_key_missing_has_honest_error():
-    with patch.object(shipping.settings,'goong_api_key',''):
-        with pytest.raises(Fault) as err:await shipping.search('96A Trần Phú')
-        assert err.value.code=='MAP_NOT_CONFIGURED'
+    with patch.object(shipping, "osrm_json", AsyncMock(return_value={"code": "NoRoute", "routes": []})):
+        with pytest.raises(Fault):
+            await shipping.route({"latitude": "22", "longitude": "106"}, warehouse)
+
 
 
 @pytest.mark.parametrize('method,path',[('GET','/product-requests'),('POST','/product-requests'),('GET','/admin/product-requests'),
@@ -149,3 +166,40 @@ async def test_cleanup_preserves_recent_orders_and_is_repeatable(clients):
             again=await apply(s,cutoff,fingerprint(second))
             assert again['ordersDeleted']==again['offersDeleted']==0
         finally:await s.rollback()
+
+
+@pytest.mark.parametrize('offset,status', [(-1, 'SCHEDULED'), (0, 'OPEN'), (59, 'OPEN'), (60, 'EXPIRED'), (61, 'EXPIRED')])
+def test_menu_effective_status_schedule_boundaries(offset, status):
+    start = menus.bounds('2026-10-31')[0]
+    menu = {'status': 'OPEN', 'opens_at': start, 'closes_at': start + timedelta(seconds=60)}
+    assert menus.effective_status(menu, start + timedelta(seconds=offset)) == status
+
+
+@pytest.mark.parametrize('status', ['DRAFT', 'CLOSED'])
+def test_menu_effective_status_preserves_manual_state(status):
+    start = menus.bounds('2026-10-31')[0]
+    menu = {'status': status, 'opens_at': start, 'closes_at': start + timedelta(seconds=60)}
+    assert menus.effective_status(menu, start + timedelta(seconds=120)) == status
+
+
+async def test_quote_prepare_rejects_invalid_address_id():
+    with pytest.raises(Fault) as error:
+        await shipping.prepare(None, {'id': uid()}, {'addressId': 'invalid'})
+    assert error.value.code == 'INVALID_ID'
+
+
+async def test_quote_validate_rejects_invalid_quote_id():
+    with pytest.raises(Fault) as error:
+        await shipping.validate_quote(None, {'id': uid()}, {'deliveryQuoteId': 'invalid'}, {}, {})
+    assert error.value.code == 'INVALID_ID'
+
+
+@pytest.mark.parametrize('stored,offset,sold_out,expected', [
+    ('OPEN', 0, True, 'SOLD_OUT'), ('OPEN', 0, False, 'OPEN'),
+    ('OPEN', -1, True, 'SCHEDULED'), ('OPEN', 60, True, 'EXPIRED'),
+    ('CLOSED', 0, True, 'CLOSED'), ('DRAFT', 0, True, 'DRAFT'),
+])
+def test_sold_out_respects_schedule_and_manual_close(stored, offset, sold_out, expected):
+    start=menus.bounds('2026-10-31')[0]
+    menu={'status':stored,'opens_at':start,'closes_at':start+timedelta(seconds=60),'sold_out':sold_out}
+    assert menus.effective_status(menu,start+timedelta(seconds=offset))==expected

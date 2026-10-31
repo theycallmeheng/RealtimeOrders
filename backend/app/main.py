@@ -17,7 +17,8 @@ from sqlalchemy import select, update, func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
 from .config import settings
 from .db import T, Session, engine, reflect, now, uid, uuid, one, rows, add, change, check, text, public, Fault
-from . import auth, commerce, accounts, admin, chat, menus, shipping, analytics
+from . import auth, commerce, accounts, admin, chat, menus, shipping, analytics, geocoding
+from . import activity as activity_log
 from .events import emit, flush_events, outbox_worker, session_monitor, hub, Subscriber, event_wire
 from .moderation import sanitize
 
@@ -247,9 +248,11 @@ async def delete_address(s,u,b,r): return await accounts.addresses(s,u,'DELETE',
 async def offers(s,u,b,r): return await commerce.catalog(s,u)
 @route('GET','/delivery/options')
 async def delivery_options(s,u,b,r):
+    warehouse=await shipping.warehouse(s)
     return {'zones':await rows(s,'delivery_zones',T['delivery_zones'].c.active==True),
             'policies':await rows(s,'delivery_policies',T['delivery_policies'].c.group_id==u['group_id'],T['delivery_policies'].c.active==True),
-            'pickupSlots':await rows(s,'pickup_slots',T['pickup_slots'].c.active==True,T['pickup_slots'].c.ends_at>now())}
+            'pickupSlots':await rows(s,'pickup_slots',T['pickup_slots'].c.active==True,T['pickup_slots'].c.ends_at>now()),
+            'warehouse':{'configured':warehouse['configured'],'address':warehouse['address']}}
 
 @route('POST','/orders')
 async def place_order(s,u,b,r): return await commerce.create_order(s,u,b,r.headers.get('idempotency-key'))
@@ -386,15 +389,18 @@ async def customer_delivery_context(s,u,b,r):
             'policies':await rows(s,'delivery_policies',T['delivery_policies'].c.group_id==customer['group_id'],T['delivery_policies'].c.active==True),
             'pickupSlots':await rows(s,'pickup_slots',T['pickup_slots'].c.active==True,T['pickup_slots'].c.ends_at>now())}
 @route('GET','/admin/moderation/violations')
-async def violations(s,u,b,r): return await rows(s,'moderation_violations',limit=100,order=T['moderation_violations'].c.created_at.desc())
+async def violations(s,u,b,r): return await activity_log.history(s,'moderation_violations',r.query_params)
 @route('GET','/admin/audit')
-async def audit_list(s,u,b,r): return await rows(s,'audit_logs',limit=100,order=T['audit_logs'].c.created_at.desc())
+async def audit_list(s,u,b,r): return await activity_log.history(s,'audit_logs',r.query_params)
 @route('GET','/admin/inventory-movements')
-async def movement_list(s,u,b,r): return await rows(s,'inventory_movements',limit=100,order=T['inventory_movements'].c.created_at.desc())
+async def movement_list(s,u,b,r): return await activity_log.history(s,'inventory_movements',r.query_params)
 @route('GET','/admin/reports')
 async def report(s,u,b,r):
     return await admin.reports(s,admin.date_time(r.query_params.get('start',str(now().date())+'T00:00:00Z')),
                                admin.date_time(r.query_params.get('end',str((now()+timedelta(days=1)).date())+'T00:00:00Z')))
+
+@route('GET','/catalog/upcoming')
+async def upcoming_catalog(s,u,b,r): return await menus.upcoming(s,u)
 
 @route('GET','/catalog/menu')
 async def daily_catalog(s,u,b,r): return await menus.current(s,u)
@@ -402,7 +408,8 @@ async def daily_catalog(s,u,b,r): return await menus.current(s,u)
 @route('GET','/admin/menus')
 async def menu_list(s,u,b,r):
     data=await rows(s,'daily_menus',limit=100,order=[T['daily_menus'].c.sale_date.desc(),T['daily_menus'].c.opens_at.desc()])
-    return public(data)
+    at=now()
+    return public(await menus.stock_status(s,data,at))
 
 @route('GET','/admin/menus/{id}')
 async def menu_detail(s,u,b,r): return await menus.detail(s,uuid(r.path_params['id']))
@@ -422,18 +429,50 @@ async def warehouse_get(s,u,b,r): return await shipping.warehouse(s)
 @route('PATCH','/admin/warehouse')
 async def warehouse_save(s,u,b,r): return await shipping.save_warehouse(s,u,b)
 
+@route('GET','/admin/pricing-rules')
+async def pricing_rules(s,u,b,r):
+    from .pricing import load_rules
+    return await load_rules(s)
+
+@route('GET','/admin/reports/monthly')
+async def monthly_report(s,u,b,r): return await analytics.monthly_report(s,r.query_params.get('month'),r.query_params.get('compare'))
+
 @route('GET','/admin/reports/daily')
 async def daily_report(s,u,b,r): return await analytics.report(s,r.query_params.get('date'),r.query_params.get('compare'))
 
 @route('GET','/maps/search')
 async def location_search(s,u,b,r):
     await auth.rate('map:'+u['id'],30,60)
-    return await shipping.search(r.query_params.get('q',''))
+    return await geocoding.search(s,r.query_params.get('q',''))
 
 @route('GET','/maps/place')
 async def location_resolve(s,u,b,r):
     await auth.rate('map:'+u['id'],30,60)
-    return await shipping.resolve(r.query_params.get('id',''))
+    return await geocoding.resolve(s,r.query_params.get('id',''))
+
+@route('GET','/admin/maps/verified')
+async def verified_list(s,u,b,r):
+    return await rows(s,'verified_locations',T['verified_locations'].c.active==True,limit=2000,order=T['verified_locations'].c.label)
+
+@route('POST','/admin/maps/verified',idempotent=True)
+async def verified_create(s,u,b,r): return await geocoding.save_verified(s,u,None,b)
+
+@route('PATCH','/admin/maps/verified/{id}')
+async def verified_update(s,u,b,r): return await geocoding.save_verified(s,u,uuid(r.path_params['id']),b)
+
+@route('DELETE','/admin/maps/verified/{id}')
+async def verified_remove(s,u,b,r): return await geocoding.save_verified(s,u,uuid(r.path_params['id']),b,delete=True)
+
+@route('GET','/maps/config')
+async def map_config(s,u,b,r):
+    wh=await shipping.warehouse(s)
+    return {'tileUrl':settings.osm_tile_url,'center':{'latitude':float(wh.get('latitude',20.9809427)),
+            'longitude':float(wh.get('longitude',105.7870861))}}
+
+@route('POST','/maps/pin')
+async def location_pin(s,u,b,r):
+    await auth.rate('pin:'+u['id'],30,60)
+    return shipping.pin_location(b)
 
 @app.post('/api/v1/delivery/quote')
 async def delivery_quote(request:Request):

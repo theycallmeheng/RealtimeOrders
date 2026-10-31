@@ -16,4 +16,4 @@ if($LocalOnly){
     & $pythonPath (Join-Path $PSScriptRoot 'configure_lan.py') --address $Address
 }
 if($LASTEXITCODE -ne 0){throw 'Network configuration failed'}
-Write-Host 'Restart project services to apply the profile. See docs\LAN.md.'
+Write-Host 'Restart project services to apply the profile. See README.md.'

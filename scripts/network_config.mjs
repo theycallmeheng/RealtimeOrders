@@ -8,6 +8,19 @@ export function isPrivateIPv4(value) {
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
 
+export function validateRemoteOrigin(value) {
+  if (typeof value !== 'string') throw new Error('Remote origin must be an HTTPS hostname');
+  let parsed;
+  try { parsed = new URL(value); } catch { throw new Error('Invalid remote origin'); }
+  if (parsed.protocol !== 'https:' || parsed.origin !== value || parsed.port || parsed.username || parsed.password
+      || parsed.hostname === 'localhost' || parsed.hostname.endsWith('.localhost')
+      || !parsed.hostname.includes('.') || net.isIP(parsed.hostname)
+      || !/^[a-z0-9.-]+$/i.test(parsed.hostname)) {
+    throw new Error('Use an HTTPS hostname without path, port, query, IP or credentials');
+  }
+  return parsed.origin;
+}
+
 export function readNetworkSettings(root, env = process.env) {
   const local = {
     mode: 'local', origin: 'https://localhost:3443',
@@ -22,6 +35,9 @@ export function readNetworkSettings(root, env = process.env) {
   if (!fs.existsSync(filename)) return local;
   const settings = JSON.parse(fs.readFileSync(filename, 'utf8').replace(/^\uFEFF/, ''));
   if (settings.mode === 'local') return local;
+  if (settings.mode === 'remote') {
+    return {...local, mode: 'remote', origin: validateRemoteOrigin(settings.origin)};
+  }
   if (settings.mode !== 'lan' || !isPrivateIPv4(settings.address)
       || settings.origin !== 'https://' + settings.address + ':3443'
       || settings.tlsDirectory !== 'runtime/tls-lan') {

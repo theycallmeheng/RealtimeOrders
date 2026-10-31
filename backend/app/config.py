@@ -24,7 +24,10 @@ class Settings(BaseSettings):
     zalo_access_token: str = ''
     zalo_otp_template_id: str = ''
     zalo_otp_code_field: str = 'otp'
-    goong_api_key: str = ''
+    nominatim_url: str = 'https://nominatim.openstreetmap.org'
+    photon_url: str = 'https://photon.komoot.io'
+    osrm_url: str = 'https://router.project-osrm.org'
+    osm_tile_url: str = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
     upload_dir: str = str(ROOT / 'runtime/uploads')
     idle_seconds: int = 1800
     session_seconds: int = 86400

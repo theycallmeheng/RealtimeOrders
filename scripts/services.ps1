@@ -62,6 +62,10 @@ if($networkOverride -ne 'local' -and (Test-Path -LiteralPath $networkPath)){
         if(-not $private -or $network.origin -ne ('https://' + $network.address + ':3443') -or $network.tlsDirectory -ne 'runtime/tls-lan'){throw 'Invalid LAN configuration. Run scripts\configure-lan.ps1 again.'}
         if(-not(Get-NetIPAddress -IPAddress $network.address -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.AddressState -eq 'Preferred'})){throw 'LAN IPv4 changed. Run scripts\configure-lan.ps1 with the current address, then restart.'}
         $publicOrigin=$network.origin;$activeMode='lan'
+    }elseif($network.mode -eq 'remote'){
+        $validatedOrigin=& node.exe (Join-Path $PSScriptRoot 'configure-remote.mjs') '--validate' $network.origin
+        if($LASTEXITCODE -ne 0){throw 'Invalid remote HTTPS origin.'}
+        $publicOrigin=($validatedOrigin | Out-String).Trim();$activeMode='remote'
     }elseif($network.mode -ne 'local'){throw 'Invalid network mode.'}
 }
 $env:APP_ORIGIN=$publicOrigin

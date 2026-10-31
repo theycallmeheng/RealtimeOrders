@@ -2,7 +2,7 @@
 
 > Cập nhật theo lựa chọn người dùng ngày 30/10/2026: đăng ký OTP qua Zalo trước,
 > SMS là kênh dự phòng do người dùng chọn; OTP khôi phục mật khẩu giữ luồng SMS.
-> Các thay đổi menu theo ngày và Goong được mô tả trong DAILY_SALES.md.
+> Các thay đổi menu theo ngày và tích hợp OpenStreetMap/OSRM được mô tả trong DAILY_SALES.md.
 > Quyết định 29/10/2026: FR12 và mục 3.4 về yêu cầu hàng/báo giá thuộc bản thiết kế ban đầu, đã rút khỏi phạm vi triển khai; API cũ trả HTTP 410. Luồng menu theo ngày thay thế quy trình này.
 
 

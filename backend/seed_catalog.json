@@ -1,0 +1,782 @@
+[
+  {
+    "sku": "0010",
+    "name": "Thịt cừu",
+    "description": "",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 220000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://thitbonhapkhau.com/Upload/Anh-Moi-2022/Thit-cuu-uc/Suon-cuu-uc-loc-kieu-phap-1.jpg"
+    ]
+  },
+  {
+    "sku": "DEMO-001",
+    "name": "Cam sành",
+    "description": "Cam tươi, bán theo cân. Dữ liệu mẫu.",
+    "category": "Trái cây",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 20000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://bizweb.dktcdn.net/thumb/grande/100/390/808/products/unnamed-2.jpg?v=1592642521770"
+    ]
+  },
+  {
+    "sku": "DEMO-002",
+    "name": "Trứng gà 10 quả",
+    "description": "Hộp 10 quả, nhận hàng trong ngày.",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 25000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdnv2.tgdd.vn/bhx-static/bhx/Products/Images/8783/228775/bhx/hop-10-trung-ga-tuoi-tfood_202509301104427641.jpg"
+    ]
+  },
+  {
+    "sku": "DEMO-003",
+    "name": "Gạo thơm 5 kg",
+    "description": "Túi đóng sẵn 5 kg.",
+    "category": "Gạo, bột & mì khô",
+    "unit_code": "BAG",
+    "unit": "túi",
+    "quantity_step": "1.000",
+    "cost": 85000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://giagao.com/wp-content/uploads/2021/10/gao-ST25-hut-chan-khong-5kg.jpg"
+    ]
+  },
+  {
+    "sku": "DEMO-004",
+    "name": "Khoai lang",
+    "description": "Có thể mua theo bước 0,1 kg.",
+    "category": "Rau củ",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ8bY8IaaJ8X_bwZ-tCDy8dyfesEhBvj5pNcCcURMtWTg&s=10"
+    ]
+  },
+  {
+    "sku": "DEMO-005",
+    "name": "Sữa chua 4 hộp",
+    "description": "Bảo quản mát, kiểm tra khi nhận.",
+    "category": "Sữa & sữa chua",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdnv2.tgdd.vn/bhx-static/bhx/Products/Images/7558/198066/bhx/loc-4-hu-sua-chua-co-duong-vinamilk-len-men-tu-nhien-100g_202508281518442130.jpg"
+    ]
+  },
+  {
+    "sku": "DEMO-006",
+    "name": "Thịt bò",
+    "description": "Thịt bò tươi ngon",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 180000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSlJmv87Y9uDAjq-Bcp1gy5djljyxEPJTkgVpg-kAqfwg&s=10"
+    ]
+  },
+  {
+    "sku": "DEMO-007",
+    "name": "Thịt Lợn",
+    "description": "Thịt lợn tươi ngon",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 80000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ61Qyi4AV-z1rMghv4QeSUwLpjqaSK1sUsAimu3W_ZGUQ97loLg2hOouvG&s=10"
+    ]
+  },
+  {
+    "sku": "DEMO-008",
+    "name": "Thịt Ngựa",
+    "description": "Thịt ngựa ngon",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 160000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEiH9sFJq-JvOCSrjvah6knXl3S7xEIVFkBSVZVy7TBo78eEzgnGq6gaoPO4W1ml7HP-dKvEwML6iGTZS5ocv4EmK0G3On1FLMAeGhHsoMbCgaAJMEWApDN4pJPwSASvBuZqv5LJybbl6aLKNbmw2nsKDig9ixCMhe1qEEdZydmGR6ubiBlgfbXepiNIVDA/s799-rw/thit-ngua-tay-bac-2.webp"
+    ]
+  },
+  {
+    "sku": "SKU-000001",
+    "name": "Dầu ăn Neptune Light chai 1L",
+    "description": "Dầu ăn Neptune Light, chai 1 lít.",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 38000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/200000352097/product/8934988012026_915cd3ecbe864ce2a0ddf5906a34e090_1024x1024.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000002",
+    "name": "Nước mắm Nam Ngư 3in1 chai 750ml",
+    "description": "Nước mắm Nam Ngư 3in1, chai 750 ml.",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 30000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://bizweb.dktcdn.net/100/436/921/products/nuoc-mam-nam-ngu-chai-pet-750ml-18-2-org.jpg?v=1631612759250"
+    ]
+  },
+  {
+    "sku": "SKU-000003",
+    "name": "Nước tương Chin-su Tam Thái Tử chai 500ml",
+    "description": "Nước tương Chin-su Tam Thái Tử, chai 500 ml.",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/200000352097/product/17273f6d-832c-48a1-8b16-aa4302a48d87_10bd90e6f079447d898bff10c04ef6df.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000004",
+    "name": "Đường tinh luyện Biên Hòa Pure gói 1kg",
+    "description": "Đường tinh luyện Biên Hòa Pure, gói 1 kg.",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 21000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://bizweb.dktcdn.net/thumb/grande/100/004/714/products/du-o-ng-tinh-luye-n-bie-n-ho-a-1kg.jpg?v=1708750309073"
+    ]
+  },
+  {
+    "sku": "SKU-000005",
+    "name": "Muối i-ốt Bạc Liêu gói 500g",
+    "description": "Muối i-ốt Bạc Liêu, gói 500 g.",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 4000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcQTGoOVjR-ZY0srnij-hs-rc9f5ZuaJd9wQc0DYE7Dt9ZEFEVwhvVN1DmXQM3L60BY8wIcZFanEgGdO0wuQZ5Ml8Je_2pq8Vw"
+    ]
+  },
+  {
+    "sku": "SKU-000006",
+    "name": "Mì Hảo Hảo tôm chua cay gói 75g",
+    "description": "Mì ăn liền Hảo Hảo vị tôm chua cay, gói 75 g.",
+    "category": "Gạo, bột & mì khô",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 3500,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://bizweb.dktcdn.net/100/514/431/products/mi-hao-hao-tom-chua-cay.jpg?v=1716271249223"
+    ]
+  },
+  {
+    "sku": "SKU-000007",
+    "name": "Sữa tươi Vinamilk có đường hộp 1L",
+    "description": "Sữa tươi tiệt trùng Vinamilk có đường, hộp 1 lít.",
+    "category": "Sữa & sữa chua",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 28000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://bizweb.dktcdn.net/thumb/1024x1024/100/447/072/products/sua-tuoi-tiet-trung-vinamilk-co-duong-1-lit.jpg?v=1685350207790"
+    ]
+  },
+  {
+    "sku": "SKU-000008",
+    "name": "Bột ngọt Ajinomoto hạt lớn gói 454g",
+    "description": "Bột ngọt Ajinomoto hạt lớn, gói 454 g.",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 27000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdnv2.tgdd.vn/bhx-static/bhx/Products/Images/2806/77081/bhx/bot-ngot-ajinomoto-hat-lon-goi-454g_202511031322533742.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000009",
+    "name": "Rau muống baby gói 300g",
+    "description": "Rau muống baby đóng gói 300 g.",
+    "category": "Rau củ",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 12000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdnv2.tgdd.vn/bhx-static/bhx/Products/Images/8820/223334/bhx/rau-muong-hat-baby-goi-300g_202505261048323712.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000010",
+    "name": "Dưa leo VietGAP vỉ 500g",
+    "description": "Dưa leo VietGAP đóng vỉ 500 g.",
+    "category": "Rau củ",
+    "unit_code": "BLISTER",
+    "unit": "vỉ",
+    "quantity_step": "1.000",
+    "cost": 14000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://storage.googleapis.com/onelife-public/8936148071362.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000011",
+    "name": "Cà rốt Đà Lạt",
+    "description": "Cà rốt tươi Đà Lạt, bán theo kg.",
+    "category": "Rau củ",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://bizweb.dktcdn.net/100/447/072/products/ca-rot-da-lat-tuoi.jpg?v=1684380325343"
+    ]
+  },
+  {
+    "sku": "SKU-000012",
+    "name": "Táo Gala Mỹ túi 1kg",
+    "description": "Táo Gala nhập khẩu, túi 1 kg.",
+    "category": "Trái cây",
+    "unit_code": "BAG",
+    "unit": "túi",
+    "quantity_step": "1.000",
+    "cost": 45000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://storage.googleapis.com/onelife-public/8936052004029.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000013",
+    "name": "Ức gà tươi phi lê CP khay 500g",
+    "description": "Ức gà phi lê CP, khay 500 g.",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "TRAY",
+    "unit": "khay",
+    "quantity_step": "1.000",
+    "cost": 38000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://img.tgdd.vn/imgt/bhx/f_webp%2Cfit_outside%2Cquality_95%2Cs_720x584/https%3A/cdn.tgdd.vn/Products/Images/8790/239600/bhx/uc-ga-tuoi-phi-le-khay-500g-1-3-mieng-202111261944529543.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000014",
+    "name": "Cá basa fillet gói 500g",
+    "description": "Cá basa fillet đóng gói 500 g.",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 30000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/200000878163/product/78_e97f0e375811431882d995078850f1b1.png"
+    ]
+  },
+  {
+    "sku": "SKU-000015",
+    "name": "Đậu hũ mềm Vị Nguyên hộp 280g",
+    "description": "Đậu hũ mềm Vị Nguyên, hộp 280 g.",
+    "category": "Đậu & thực phẩm chay",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 9000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://pos.nvncdn.com/40ed96-201888/ps/20250329_2QPtyPHRsm.webp?v=1743190780"
+    ]
+  },
+  {
+    "sku": "SKU-000016",
+    "name": "Bún khô Long Phụng gói 500g",
+    "description": "Bún gạo khô Long Phụng, gói 500 g.",
+    "category": "Gạo, bột & mì khô",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 17000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://down-vn.img.susercontent.com/file/vn-11134207-7ras8-m0mgy2y7zekvf3"
+    ]
+  },
+  {
+    "sku": "SKU-000017",
+    "name": "Nước tinh khiết Aquafina chai 1.5L",
+    "description": "Nước tinh khiết Aquafina, chai 1,5 lít.",
+    "category": "Đồ uống",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 8000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://storage.googleapis.com/sc_pcm_product/prod/2025/2/19/618876-8934588063060.webp"
+    ]
+  },
+  {
+    "sku": "SKU-000018",
+    "name": "Hạt nêm Knorr thịt thăn xương ống 400g",
+    "description": "",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 24000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcQQVU8arw397S89Cio5-oksvtzCcpqSNpahgdhlzEcOicwEJiVzl5rq7rkqSWMjb7SjqlCNzGul8ljmIvjzDD5ygNgi5a91"
+    ]
+  },
+  {
+    "sku": "SKU-000019",
+    "name": "Tương ớt Chin-Su 250g",
+    "description": "",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 10000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://nhaphanphoihangtieudung.net/upload/images/tuong-ot-chinsu-250g.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000020",
+    "name": "Giấm gạo Ajinomoto 400ml",
+    "description": "",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 13000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/200000352097/product/8935039510034_f21c1917dd7749c9b225d672830ae65f.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000021",
+    "name": "Tiêu đen xay DH Foods 45g",
+    "description": "",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdn.tgdd.vn/Products/Images/2809/155820/bhx/tieu-den-xay-dh-foods-hu-45g-202209161317247665.png"
+    ]
+  },
+  {
+    "sku": "SKU-000022",
+    "name": "Bột canh Hải Châu 190g",
+    "description": "",
+    "category": "Gia vị & dầu ăn",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 4000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://haichau.com.vn/uploads/product/20/1492530002-bot-canh.png"
+    ]
+  },
+  {
+    "sku": "SKU-000023",
+    "name": "Cánh gà CP 500g",
+    "description": "",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "TRAY",
+    "unit": "khay",
+    "quantity_step": "1.000",
+    "cost": 42000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://www.lottemart.vn/media/catalog/product/cache/0x0/8/9/8935058908843-1-1.jpg.webp"
+    ]
+  },
+  {
+    "sku": "SKU-000024",
+    "name": "Ba rọi heo MEATDeli 500g",
+    "description": "",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "TRAY",
+    "unit": "khay",
+    "quantity_step": "1.000",
+    "cost": 50000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn0.gstatic.com/shopping?q=tbn:ANd9GcQrYtaCfaWyWSyk6dIyvgs2_ixbKoKs3W-2D3TqT-F6lp3fM-mgOE42MF3oF7FiwHXqxvBC-RBSOTjVNZ_Nv4kfdOFLxSMu3kfrQEtPk-Tn7nvvlag6zrt6"
+    ]
+  },
+  {
+    "sku": "SKU-000025",
+    "name": "Trứng cút Thành Lợi 30 quả",
+    "description": "",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 20000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdn.tgdd.vn/Products/Images/8783/311101/bhx/trung-cut-hop-30-giao-ngau-nhien-thuong-hieu-202406181411245652.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000026",
+    "name": "Tôm thẻ tươi 300g",
+    "description": "",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "TRAY",
+    "unit": "khay",
+    "quantity_step": "1.000",
+    "cost": 45000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/1000282430/product/tom-the_027111444ba948588d914a02a04ca761_grande.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000027",
+    "name": "Cá hồi phi lê SG Food 200g",
+    "description": "",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "TRAY",
+    "unit": "khay",
+    "quantity_step": "1.000",
+    "cost": 65000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn1.gstatic.com/shopping?q=tbn:ANd9GcRIYtrUqPfPOwI1mWNkloQqEhOw-MWSVvoC4oc6eihAxH_nlXpnZYL-LA_7YUCLT7OUMvYY8gNNduX6myOxRq5y5UXCo6DsWw"
+    ]
+  },
+  {
+    "sku": "SKU-000028",
+    "name": "Xúc xích Vissan 500g",
+    "description": "",
+    "category": "Thịt, cá & trứng",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 38000,
+    "allowed_groups": null,
+    "image_urls": []
+  },
+  {
+    "sku": "SKU-000029",
+    "name": "Cà chua",
+    "description": "",
+    "category": "Rau củ",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://storage.googleapis.com/tm-zopsmart-uploads/2/images/originals/20250428/3760881-20250428-124213.webp"
+    ]
+  },
+  {
+    "sku": "SKU-000030",
+    "name": "Bắp cải trắng",
+    "description": "",
+    "category": "Rau củ",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 12000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/1000282430/product/bap-cai-trang_f5ff3d3816734f4293af73d46730f6f8_master.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000031",
+    "name": "Hành tây",
+    "description": "",
+    "category": "Rau củ",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 15000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://storage.googleapis.com/sc_pcm_product/prod/2025/1/8/616733-image5.webp"
+    ]
+  },
+  {
+    "sku": "SKU-000032",
+    "name": "Tỏi làm sạch An Lạc 100g",
+    "description": "",
+    "category": "Rau củ",
+    "unit_code": "TRAY",
+    "unit": "khay",
+    "quantity_step": "1.000",
+    "cost": 10000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdn.tgdd.vn/Products/Images/8785/303391/bhx/cu-toi-lam-sach-an-lac-khay-100g-202303040838254532.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000033",
+    "name": "Bông cải xanh VietGAP 320g",
+    "description": "",
+    "category": "Rau củ",
+    "unit_code": "TRAY",
+    "unit": "khay",
+    "quantity_step": "1.000",
+    "cost": 22000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://storage.googleapis.com/sc_pcm_product/prod/2024/11/25/608622-Group_24.webp"
+    ]
+  },
+  {
+    "sku": "SKU-000034",
+    "name": "Chuối cau",
+    "description": "",
+    "category": "Trái cây",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://shop.annam-gourmet.com/pub/media/catalog/product/i/t/item_F133716_9ede.png"
+    ]
+  },
+  {
+    "sku": "SKU-000035",
+    "name": "Thanh long ruột trắng",
+    "description": "",
+    "category": "Trái cây",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 20000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/1000141988/product/thanh_long_ru_t_tr_ng_1kg__i0004796__21e06ca74b194aec944792203ba0e802_master.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000036",
+    "name": "Dưa hấu đỏ",
+    "description": "",
+    "category": "Trái cây",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 14000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://cdn-img.freshdi.com/640x640/files/Accde2714c9914f139853c9559cc9db60p.jpeg"
+    ]
+  },
+  {
+    "sku": "SKU-000037",
+    "name": "Bơ sáp Đắk Lắk",
+    "description": "",
+    "category": "Trái cây",
+    "unit_code": "KG",
+    "unit": "kg",
+    "quantity_step": "0.100",
+    "cost": 35000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://shop.findtour.vn/Media/Products/200721104937439/Gallery/bo-sap-dak-lak-2.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000038",
+    "name": "Bột mì đa dụng Meizan 1kg",
+    "description": "",
+    "category": "Gạo, bột & mì khô",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 18000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://s3-hcmc02.higiocloud.vn/images/2023/05/bmdd_mz_1kg-20230525104035.png"
+    ]
+  },
+  {
+    "sku": "SKU-000039",
+    "name": "Bột gạo Tài Ký 400g",
+    "description": "",
+    "category": "Gạo, bột & mì khô",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 12000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcRnDsjnf1G2SJ6UwTMHeV21YxJHWeyjmEFrrlfkW2ymukSO9JVXThl9lpiGI7eah2X7-Sw2uUteQjipivRsxD5mug_lem3g0w"
+    ]
+  },
+  {
+    "sku": "SKU-000040",
+    "name": "Miến dong Na Rì 500g",
+    "description": "",
+    "category": "Gạo, bột & mì khô",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 24000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://bizweb.dktcdn.net/100/516/494/products/z5640660051213-46ed127b43ac58f2c4820870c1030b5d.jpg?v=1721181322540"
+    ]
+  },
+  {
+    "sku": "SKU-000041",
+    "name": "Nui ống 500g",
+    "description": "",
+    "category": "Gạo, bột & mì khô",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 20000,
+    "allowed_groups": null,
+    "image_urls": []
+  },
+  {
+    "sku": "SKU-000042",
+    "name": "Phô mai Con Bò Cười 8 miếng",
+    "description": "",
+    "category": "Sữa & sữa chua",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 22000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://my-live-01.slatic.net/p/a98550d72e4f239653913a336daae53d.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000043",
+    "name": "Sữa đậu nành Fami lốc 6 hộp 200ml",
+    "description": "",
+    "category": "Sữa & sữa chua",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 26000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcR2ZHDA0W_LtK8wM-ps1Lqp9M_Myih8I8Nu9YFlIGe_YbBQsW5oWUi_btNM1_3j0mESVltd0kv9KuJuomsFxlBCbMykU_vpBgQpFtAShOassn7EuzuAAf9i"
+    ]
+  },
+  {
+    "sku": "SKU-000044",
+    "name": "Sữa chua uống Probi 400ml",
+    "description": "",
+    "category": "Sữa & sữa chua",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 16000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://product.hstatic.net/1000075554/product/0779_73a6badbbf4b41f489c512eda4b4eff4_b68412a5bb6a4ea88972773210ed9e40_016f8d6edc20458bb93fd04da3e340fc_grande.jpg"
+    ]
+  },
+  {
+    "sku": "SKU-000045",
+    "name": "Trà xanh Không Độ 455ml",
+    "description": "",
+    "category": "Đồ uống",
+    "unit_code": "BOTTLE",
+    "unit": "chai",
+    "quantity_step": "1.000",
+    "cost": 7000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://iwater.vn/Image/Picture/Water/Nuoc-tra-xanh-khong-do-455ml.png"
+    ]
+  },
+  {
+    "sku": "SKU-000046",
+    "name": "Cà phê G7 3in1 hộp 18 gói",
+    "description": "",
+    "category": "Đồ uống",
+    "unit_code": "BOX",
+    "unit": "hộp",
+    "quantity_step": "1.000",
+    "cost": 45000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn2.gstatic.com/shopping?q=tbn:ANd9GcRSbTcRAslljfxKYsDcJUBb0GUbhPd_bh8OVq0F-oPhbdThQR0TfjyD9JMqVWg2lhZNgit8gY9kzonBtkPK2Tcp7tkHinbf"
+    ]
+  },
+  {
+    "sku": "SKU-000047",
+    "name": "Đậu xanh bóc vỏ 500g",
+    "description": "",
+    "category": "Đậu & thực phẩm chay",
+    "unit_code": "PACK",
+    "unit": "gói",
+    "quantity_step": "1.000",
+    "cost": 24000,
+    "allowed_groups": null,
+    "image_urls": [
+      "https://encrypted-tbn3.gstatic.com/shopping?q=tbn:ANd9GcSgQxRNZ7US9IExNacBjzPzjKwoF6DqMNo3tXPNsmHtjxzIb_BxT45M9F_A0ht3H0eUKr4kagzwArD54ld1My8eZNaYHvhq_4TukGTc3A2BMtcTUYnmEQDvTh0"
+    ]
+  }
+]

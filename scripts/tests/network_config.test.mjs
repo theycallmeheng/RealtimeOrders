@@ -54,3 +54,18 @@ test('address and environment validation reject accidental public exposure', t =
   }
   assert.throws(() => readNetworkSettings(fixture(t), {REALTIMEORDERS_NETWORK_MODE: 'typo'}));
 });
+
+
+test('remote tunnel profile keeps every app listener on loopback', t => {
+  const result=readNetworkSettings(fixture(t,{mode:'remote',origin:'https://demo.trycloudflare.com'}),{});
+  assert.equal(result.mode,'remote');assert.equal(result.origin,'https://demo.trycloudflare.com');
+  assert.deepEqual(result.hosts,['127.0.0.1','::1']);
+  assert.ok(result.tlsDirectory.endsWith(path.join('runtime','tls')));
+});
+
+test('remote profile rejects origins that would weaken host or TLS checks', t => {
+  for(const origin of ['http://demo.example.com','https://localhost','https://127.0.0.1','https://demo.example.com/path',
+    'https://user:pass@demo.example.com','https://demo.example.com?x=1','https://demo.example.com:3443','https://demo.example.com/']) {
+    assert.throws(()=>readNetworkSettings(fixture(t,{mode:'remote',origin}),{}));
+  }
+});

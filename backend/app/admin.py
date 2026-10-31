@@ -18,7 +18,7 @@ FIELDS={
  'categories':{'name':'name','active':'active'},
  'units':{'code':'code','label':'label'},
  'delivery_zones':{'code':'code','name':'name','description':'description','active':'active'},
- 'delivery_policies':{'groupId':'group_id','zoneId':'zone_id','method':'method','minimumSubtotal':'minimum_subtotal','shippingFee':'shipping_fee','active':'active','distanceEnabled':'distance_enabled','includedKm':'included_km','extraKmFee':'extra_km_fee','maxDistanceKm':'max_distance_km'},
+ 'delivery_policies':{'groupId':'group_id','zoneId':'zone_id','method':'method','minimumSubtotal':'minimum_subtotal','shippingFee':'shipping_fee','active':'active','distanceEnabled':'distance_enabled','includedKm':'included_km','extraKmFee':'extra_km_fee','maxDistanceKm':'max_distance_km','pricingMode':'pricing_mode','perKmFee':'per_km_fee','distanceRounding':'distance_rounding','feeRoundingStep':'fee_rounding_step'},
  'pickup_slots':{'zoneId':'zone_id','name':'name','addressLine':'address_line','startsAt':'starts_at','endsAt':'ends_at','active':'active'},
  'moderation_rules':{'phrase':'phrase_normalized','matchMode':'match_mode','active':'active'},
 }
@@ -67,8 +67,9 @@ async def configuration(s,user,table,id,body,method='POST'):
             if external not in body: continue
             value=body[external]
             if column.endswith('_id'): value=uuid(value)
-            elif column in ('minimum_subtotal','shipping_fee','extra_km_fee'): value=number(value,places=0)
-            elif column in ('included_km','max_distance_km'): value=number(value)
+            elif column=='fee_rounding_step': value=number(value,places=0,minimum=Decimal(1))
+            elif column in ('minimum_subtotal','shipping_fee','extra_km_fee','per_km_fee'): value=number(value,places=0)
+            elif column in ('included_km','max_distance_km'): value=None if column=='max_distance_km' and value in ('',None) else number(value)
             elif column.endswith('_at'): value=date_time(value)
             elif column in ('active','distance_enabled'): check(isinstance(value,bool),'INVALID_BOOLEAN','Giá trị bật/tắt không hợp lệ')
             else: value=text(value,500 if column in ('description','address_line') else 150,1)
@@ -86,10 +87,15 @@ async def configuration(s,user,table,id,body,method='POST'):
                         T['delivery_policies'].c.method=='COLLECTIVE',T['delivery_policies'].c.active==True,required=False)
                     check(not collective,'GROUP_IN_USE','Hãy tắt chính sách giao tập trung trước khi xóa nhóm sinh viên',409)
         if table=='delivery_policies':
+            mode=merged.get('pricing_mode','BASE_PLUS_EXTRA')
+            check(mode in ('BASE_PLUS_EXTRA','TIERED_KM'),'INVALID_DELIVERY','Cách tính phí không hợp lệ')
+            check(merged.get('distance_rounding','EXACT') in ('EXACT','CEIL_KM'),'INVALID_DELIVERY','Cách làm tròn không hợp lệ')
             if merged.get('distance_enabled'):
-                check(all(merged.get(k) is not None for k in ('included_km','max_distance_km','extra_km_fee')) and
-                      Decimal(str(merged['max_distance_km']))>0 and Decimal(str(merged['included_km']))<=Decimal(str(merged['max_distance_km'])),
-                      'INVALID_DISTANCE_POLICY','Nhập km bao gồm, km tối đa và phí km vượt hợp lệ')
+                maximum=merged.get('max_distance_km')
+                check(all(merged.get(k) is not None for k in ('included_km','extra_km_fee')) and
+                      (mode=='TIERED_KM' and merged.get('per_km_fee') is not None or mode=='BASE_PLUS_EXTRA' and maximum is not None) and
+                      (maximum is None or Decimal(str(maximum))>0 and Decimal(str(merged['included_km']))<=Decimal(str(maximum))),
+                      'INVALID_DISTANCE_POLICY','Nhập mốc km, phí và giới hạn giao hợp lệ')
             check(merged.get('method') in ('INDIVIDUAL','COLLECTIVE'),'INVALID_DELIVERY','Cách giao không hợp lệ')
             group=await one(s,'customer_groups',T['customer_groups'].c.id==merged.get('group_id'))
             check(merged['method']!='COLLECTIVE' or (group['code']=='STUDENT' and Decimal(str(merged.get('shipping_fee',0)))==0),
@@ -129,6 +135,7 @@ async def product(s,user,id,body,method='POST'):
                       'quantityStep':'quantity_step','active':'active'}.items():
             if k not in body: continue
             v=body[k]
+            if col=='description' and v is None: v=''
             if col.endswith('_id'): v=uuid(v)
             elif col=='quantity_step': v=number(v,minimum=Decimal('.001'))
             elif col=='active': check(isinstance(v,bool),'INVALID_BOOLEAN','Giá trị bật/tắt không hợp lệ')

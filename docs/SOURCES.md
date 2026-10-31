@@ -31,6 +31,10 @@ cho agent đang làm việc.
     và [Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html):
     hash mật khẩu (đề xuất Argon2id) và vòng đời phiên.
 
+11. OpenStreetMap/OSRM: [Nominatim Search API](https://nominatim.org/release-docs/latest/api/Search/), [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/), [OSRM demo server](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server), [OSRM API](https://project-osrm.org/docs/v5.24.0/api/), [OSM copyright and attribution](https://www.openstreetmap.org/copyright). Đối chiếu 31/10/2026 khi thay Google Maps; public services có giới hạn và không phải SLA production.
+
 Thiết kế stream theo topic, snapshot/replay, ledger/idempotency và fan-out trong
 bộ tài liệu này là phương án nhóm đề xuất cho yêu cầu, không tuyên bố thuật toán
 mới. So sánh với polling/read-then-write là baseline tự xây trong môi trường test.
+
+12. Photon: [mã nguồn và giới hạn demo](https://github.com/komoot/photon), [API](https://github.com/komoot/photon/blob/master/docs/api-v1.md). Tích hợp HTTP, xếp gợi ý theo số nhà và khu vực kho; không sao chép dữ liệu khách sang registry công cộng.
