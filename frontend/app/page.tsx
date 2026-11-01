@@ -1070,7 +1070,7 @@ export default function App() {
             </a>
           ))}
           <div className="nav-foot">
-            Nhóm 17 · Lập trình mạng
+            Nhóm 15 · Lập trình mạng
             <br />
             Dữ liệu lưu trên máy chủ
           </div>
