@@ -296,6 +296,7 @@ export default function App() {
     [unreadChat, setUnreadChat] = useState(0),
     [soundEnabled, setSoundEnabled] = useState(true),
     [soundReady, setSoundReady] = useState(false),
+    [customerNotice, setCustomerNotice] = useState<{ id: string; text: string } | null>(null),
     [messageNotice, setMessageNotice] = useState<{
       id: string;
       conversationId: string;
@@ -448,7 +449,13 @@ export default function App() {
     setUnreadChat(0);
     setMessageNotice(null);
     setOrderNotice(null);
+    setCustomerNotice(null);
   }, [session?.user.id]);
+  useEffect(() => {
+    if (!customerNotice) return;
+    const timer = setTimeout(() => setCustomerNotice(null), 10000);
+    return () => clearTimeout(timer);
+  }, [customerNotice]);
   const notify = useCallback(
     (message: string, error = false) => setToast({ message, error }),
     [],
@@ -678,6 +685,10 @@ export default function App() {
               "Có nội dung vi phạm mới. Xem Nhật ký → Vi phạm nội dung.",
               true,
             );
+          if (m.eventType === "NOTIFICATION" && sessionRef.current?.user.role === "CUSTOMER" && m.payload?.kind !== "CHAT_MESSAGE") {
+            setCustomerNotice({ id: String(m.payload?.id ?? crypto.randomUUID()), text: String(m.payload?.payload?.message ?? "Bạn có thông báo mới.") });
+            playNotificationSound();
+          }
           if (
             m.eventType === "CHAT_MESSAGE" &&
             m.payload?.sender_id !== sessionRef.current?.user.id
@@ -1097,8 +1108,17 @@ export default function App() {
           {tab === "reports" && <DailyReports />} {tab === "audit" && <Audit />}
         </main>
       </div>
-      {(messageNotice || orderNotice) && (
+      {(messageNotice || orderNotice || customerNotice) && (
         <div className="live-notifications">
+          {customerNotice && (
+            <div key={customerNotice.id} className="message-notice" role="status" aria-live="polite">
+              <span className="message-notice-icon" aria-hidden="true"><Icon icon={faBell} /></span>
+              <button className="message-notice-content" onClick={() => { setCustomerNotice(null); navigateTo("notifications"); }}>
+                <strong>Thông báo mới</strong><span>{customerNotice.text}</span><small>Nhấn để xem thông báo</small>
+              </button>
+              <button className="ghost message-notice-close" aria-label="Đóng thông báo" onClick={() => setCustomerNotice(null)}>✕</button>
+            </div>
+          )}
           {orderNotice && (
             <div
               key={orderNotice.id}
@@ -4471,8 +4491,8 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                     <h2>{o.name}</h2>
                     <small className="offer-round-label">Đợt {String(o.menu_id).slice(-6).toUpperCase()} · {date(o.opens_at)} → {date(o.closes_at)}</small>
                     <p className="muted">{o.description}</p>
-                    <p>
-                      Còn {qty(o.available_qty)} {o.unit}
+                    <p className="stock-note">
+                      Số lượng còn lại: <strong>{qty(o.available_qty)} {o.unit}</strong>
                     </p>
                   </div>
                   <div className="daily-product-buy">
