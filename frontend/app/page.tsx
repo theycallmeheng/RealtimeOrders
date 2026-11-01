@@ -34,6 +34,8 @@ import {
   faClipboardList,
   faCartShopping,
   faMagnifyingGlass,
+  faVolumeHigh,
+  faVolumeXmark,
 } from "@fortawesome/free-solid-svg-icons";
 
 type Row = Record<string, any>;
@@ -291,6 +293,19 @@ export default function App() {
     [tab, setTab] = useState("catalog"),
     [online, setOnline] = useState(false),
     [refresh, setRefresh] = useState(0),
+    [unreadChat, setUnreadChat] = useState(0),
+    [soundEnabled, setSoundEnabled] = useState(true),
+    [soundReady, setSoundReady] = useState(false),
+    [messageNotice, setMessageNotice] = useState<{
+      id: string;
+      conversationId: string;
+      title: string;
+      preview: string;
+    } | null>(null),
+    [orderNotice, setOrderNotice] = useState<{
+      id: string;
+      orderId: string;
+    } | null>(null),
     [toast, setToast] = useState<{ message: string; error: boolean } | null>(
       null,
     ),
@@ -309,6 +324,64 @@ export default function App() {
   }, [tab]);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const soundReadyRef = useRef(false);
+  const unlockNotificationSound = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!audioContextRef.current) {
+        if (!window.AudioContext) return false;
+        audioContextRef.current = new window.AudioContext();
+        audioContextRef.current.onstatechange = () => {
+          const ready = audioContextRef.current?.state === "running";
+          soundReadyRef.current = ready;
+          setSoundReady(ready);
+        };
+      }
+      const context = audioContextRef.current;
+      if (context.state !== "running") await context.resume();
+      const ready = context.state === "running";
+      soundReadyRef.current = ready;
+      setSoundReady(ready);
+      return ready;
+    } catch {
+      soundReadyRef.current = false;
+      setSoundReady(false);
+      return false;
+    }
+  }, []);
+  const playNotificationSound = useCallback(
+    (preview = false, kind: "message" | "order" = "message") => {
+      const context = audioContextRef.current;
+      if ((!preview && !soundEnabledRef.current) || !context) return;
+      const play = () => {
+        if (context.state !== "running") return;
+        const start = context.currentTime;
+        const notes = kind === "order" ? [523, 659, 784] : [880, 1175];
+        notes.forEach((frequency, index) => {
+          const delay = index * (kind === "order" ? 0.12 : 0.14);
+          const oscillator = context.createOscillator();
+          const volume = context.createGain();
+          const noteStart = start + delay;
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(frequency, noteStart);
+          volume.gain.setValueAtTime(0.0001, noteStart);
+          volume.gain.exponentialRampToValueAtTime(0.17, noteStart + 0.02);
+          volume.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.21);
+          oscillator.connect(volume);
+          volume.connect(context.destination);
+          oscillator.start(noteStart);
+          oscillator.stop(noteStart + 0.22);
+        });
+      };
+      if (context.state === "running") play();
+      else void context.resume().then(play).catch(() => {});
+    },
+    [],
+  );
   const navigateTo = useCallback((target: string, replace = false) => {
     const active = sessionRef.current;
     if (!active) return;
@@ -338,6 +411,24 @@ export default function App() {
     };
   }, [navigateTo]);
   useEffect(() => {
+    const unlock = () => unlockNotificationSound();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      if (audioContextRef.current) audioContextRef.current.onstatechange = null;
+      void audioContextRef.current?.close();
+      audioContextRef.current = null;
+      soundReadyRef.current = false;
+    };
+  }, [unlockNotificationSound]);
+  useEffect(() => {
+    const enabled = localStorage.getItem("ro-notification-sound") !== "off";
+    setSoundEnabled(enabled);
+    soundEnabledRef.current = enabled;
+  }, []);
+  useEffect(() => {
     if (!session) return;
     const target = restoreTab(session);
     const path = pathForTab(session.user.role, target)!;
@@ -347,6 +438,17 @@ export default function App() {
   useEffect(() => {
     if (session) sessionStorage.setItem(TAB_STORAGE_KEY, tab);
   }, [session?.user.id, tab]);
+  useEffect(() => {
+    if (tab === "chat") {
+      setUnreadChat(0);
+      setMessageNotice(null);
+    }
+  }, [tab]);
+  useEffect(() => {
+    setUnreadChat(0);
+    setMessageNotice(null);
+    setOrderNotice(null);
+  }, [session?.user.id]);
   const notify = useCallback(
     (message: string, error = false) => setToast({ message, error }),
     [],
@@ -368,6 +470,18 @@ export default function App() {
       return () => clearTimeout(id);
     }
   }, [toast]);
+  useEffect(() => {
+    if (messageNotice) {
+      const id = setTimeout(() => setMessageNotice(null), 8000);
+      return () => clearTimeout(id);
+    }
+  }, [messageNotice]);
+  useEffect(() => {
+    if (orderNotice) {
+      const id = setTimeout(() => setOrderNotice(null), 10000);
+      return () => clearTimeout(id);
+    }
+  }, [orderNotice]);
   useEffect(() => {
     if (!session) return;
     try {
@@ -565,6 +679,41 @@ export default function App() {
               true,
             );
           if (
+            m.eventType === "CHAT_MESSAGE" &&
+            m.payload?.sender_id !== sessionRef.current?.user.id
+          ) {
+            const payload = m.payload ?? {};
+            const text = String(payload.text_sanitized ?? "").trim();
+            const hasAttachments =
+              Array.isArray(payload.attachments) && payload.attachments.length > 0;
+            const preview =
+              text || (hasAttachments ? "Đã gửi ảnh" : "Có tin nhắn mới.");
+            setMessageNotice({
+              id: crypto.randomUUID(),
+              conversationId: String(payload.conversation_id ?? ""),
+              title:
+                sessionRef.current?.user.role === "ADMIN"
+                  ? "Tin nhắn mới từ khách hàng"
+                  : "Người bán vừa nhắn tin",
+              preview:
+                preview.length > 120 ? preview.slice(0, 117) + "…" : preview,
+            });
+            playNotificationSound();
+            if (tabRef.current !== "chat")
+              setUnreadChat((count) => Math.min(99, count + 1));
+          }
+          if (
+            m.eventType === "ORDER_CHANGED" &&
+            m.payload?.status === "PENDING" &&
+            sessionRef.current?.user.role === "ADMIN"
+          ) {
+            playNotificationSound(false, "order");
+            setOrderNotice({
+              id: crypto.randomUUID(),
+              orderId: String(m.payload.id ?? ""),
+            });
+          }
+          if (
             m.eventType === "CATALOG_CHANGED" &&
             Array.isArray(m.payload.offers)
           ) {
@@ -668,7 +817,7 @@ export default function App() {
       try {
         const result = await api(e.path, e.method, e.body, e.key);
         if (e.path === "/orders")
-          sessionStorage.removeItem("ro-cart-" + sessionRef.current!.user.id);
+          sessionStorage.removeItem("ro-daily-cart-" + sessionRef.current!.user.id);
         window.dispatchEvent(
           new CustomEvent("ro:operation-resolved", {
             detail: { path: e.path, result },
@@ -775,6 +924,70 @@ export default function App() {
             {online ? "Đang đồng bộ" : "Đang kết nối lại"}
           </span>
           <button
+            className="ghost notification-sound-toggle"
+            aria-label={
+              soundEnabled && soundReady
+                ? "Tắt âm thanh thông báo"
+                : soundEnabled
+                  ? "Thử và bật âm thanh thông báo"
+                  : "Bật âm thanh thông báo"
+            }
+            aria-pressed={soundEnabled}
+            title={
+              soundEnabled
+                ? soundReady
+                  ? "Âm thanh thông báo đang bật · nhấn để tắt"
+                  : "Nhấn để mở quyền phát và thử âm thanh"
+                : "Nhấn để bật và thử âm thanh thông báo"
+            }
+            onClick={async () => {
+              if (
+                soundEnabled &&
+                soundReady &&
+                audioContextRef.current?.state === "running"
+              ) {
+                setSoundEnabled(false);
+                soundEnabledRef.current = false;
+                localStorage.setItem("ro-notification-sound", "off");
+                return;
+              }
+              setSoundEnabled(true);
+              soundEnabledRef.current = true;
+              localStorage.setItem("ro-notification-sound", "on");
+              if (await unlockNotificationSound()) playNotificationSound(true);
+              else
+                notify(
+                  "Trình duyệt chưa cho phép phát âm thanh. Hãy kiểm tra chế độ im lặng và âm lượng thiết bị.",
+                  true,
+                );
+            }}
+          >
+            <Icon icon={soundEnabled ? faVolumeHigh : faVolumeXmark} />
+            <span className="notification-sound-label">
+              {!soundEnabled
+                ? "Âm báo tắt"
+                : soundReady
+                  ? "Âm báo bật"
+                  : "Kích hoạt âm báo"}
+            </span>
+          </button>
+          <button
+            className="ghost notification-sound-test"
+            aria-label="Thử âm báo"
+            title="Phát thử âm báo đơn hàng"
+            onClick={async () => {
+              if (await unlockNotificationSound())
+                playNotificationSound(true, "order");
+              else
+                notify(
+                  "Trình duyệt chưa cho phép phát âm thanh. Hãy kiểm tra chế độ im lặng và âm lượng thiết bị.",
+                  true,
+                );
+            }}
+          >
+            Thử
+          </button>
+          <button
             className="ghost"
             aria-label="Thông báo"
             onClick={() => navigateTo("notifications")}
@@ -838,6 +1051,11 @@ export default function App() {
             >
               <Icon icon={icon as any} />
               <span className="nav-title">{String(label)}</span>
+              {id === "chat" && unreadChat > 0 && (
+                <span className="nav-badge" aria-label={`${unreadChat} tin nhắn chưa đọc`}>
+                  {unreadChat > 9 ? "9+" : unreadChat}
+                </span>
+              )}
             </a>
           ))}
           <div className="nav-foot">
@@ -879,6 +1097,87 @@ export default function App() {
           {tab === "reports" && <DailyReports />} {tab === "audit" && <Audit />}
         </main>
       </div>
+      {(messageNotice || orderNotice) && (
+        <div className="live-notifications">
+          {orderNotice && (
+            <div
+              key={orderNotice.id}
+              className="order-notice"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="order-notice-icon" aria-hidden="true">
+                <Icon icon={faClipboardList} />
+              </span>
+              <div className="order-notice-content">
+                <strong>Đơn hàng mới</strong>
+                <span>
+                  {orderNotice.orderId
+                    ? `Đơn #${orderNotice.orderId.slice(0, 8).toUpperCase()} đang chờ xử lý.`
+                    : "Có đơn hàng mới đang chờ xử lý."}
+                </span>
+              </div>
+              <button
+                className="small primary order-notice-open"
+                onClick={() => {
+                  setOrderNotice(null);
+                  navigateTo("orders");
+                }}
+              >
+                Xem đơn
+              </button>
+              <button
+                className="ghost message-notice-close"
+                aria-label="Đóng thông báo đơn hàng"
+                onClick={() => setOrderNotice(null)}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {messageNotice && (
+            <div
+              key={messageNotice.id}
+              className="message-notice"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="message-notice-icon" aria-hidden="true">
+                <Icon icon={faCommentDots} />
+              </span>
+              <button
+                className="message-notice-content"
+                onClick={() => {
+                  if (messageNotice.conversationId)
+                    sessionStorage.setItem(
+                      "ro-chat-target-" + session.user.id,
+                      messageNotice.conversationId,
+                    );
+                  setMessageNotice(null);
+                  navigateTo("chat");
+                  if (messageNotice.conversationId)
+                    window.dispatchEvent(
+                      new CustomEvent("ro:open-chat-conversation", {
+                        detail: messageNotice.conversationId,
+                      }),
+                    );
+                }}
+              >
+                <strong>{messageNotice.title}</strong>
+                <span>{messageNotice.preview}</span>
+                <small>Nhấn để mở hội thoại</small>
+              </button>
+              <button
+                className="ghost message-notice-close"
+                aria-label="Đóng thông báo tin nhắn"
+                onClick={() => setMessageNotice(null)}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {toast && (
         <div role="alert" className={"toast " + (toast.error ? "error" : "")}>
           <span>{toast.message}</span>
@@ -2137,7 +2436,14 @@ function Chat({ admin }: { admin: boolean }) {
       .then((c) => {
         if (live) {
           setConversations(c);
-          setSelected((old) => old || c[0]?.id || "");
+          const targetKey = "ro-chat-target-" + session.user.id;
+          const requested = sessionStorage.getItem(targetKey);
+          const requestedConversation = c.find(
+            (conversation: Row) => conversation.id === requested,
+          );
+          const next = requestedConversation?.id ?? c[0]?.id ?? "";
+          setSelected((old) => old || next);
+          if (requestedConversation) sessionStorage.removeItem(targetKey);
         }
       })
       .catch((e) => notify(e.message, true));
@@ -2145,6 +2451,18 @@ function Chat({ admin }: { admin: boolean }) {
       live = false;
     };
   }, [admin, refresh, notify]);
+  useEffect(() => {
+    const openConversation = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (!id || !conversations.some((conversation) => conversation.id === id)) return;
+      sessionStorage.removeItem("ro-chat-target-" + session.user.id);
+      setSelected(id);
+      setMessages([]);
+    };
+    window.addEventListener("ro:open-chat-conversation", openConversation);
+    return () =>
+      window.removeEventListener("ro:open-chat-conversation", openConversation);
+  }, [conversations, session.user.id]);
   useEffect(() => {
     if (!selected) return;
     let live = true;
@@ -3841,6 +4159,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   useEffect(() => {
     const handler = (e: Event) => {
       if ((e as CustomEvent).detail.path === "/orders") {
+        sessionStorage.removeItem(cartKey);
         setCart([]);
         setQuantityDrafts({});
         setView(null);
@@ -3987,6 +4306,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
         items: items(),
         note,
       });
+      sessionStorage.removeItem(cartKey);
       setCart([]);
       setQuantityDrafts({});
       setView(null);
