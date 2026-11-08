@@ -8,6 +8,7 @@ import GooglePointMap from "./google-point-map";
 import BusinessScreen, { ProductReviews } from "./business-ui";
 import OverviewDashboard, { type OverviewData } from "./overview";
 import MarketplaceScreen, { ShopSelect } from "./marketplace-ui";
+import ProductRequests from "./product-requests";
 import { DEFAULT_SHOP, storefrontShopKey, chatShopKey, shopOf, readCart, clearShopCart } from "../lib/marketplace";
 import React, {
   useState,
@@ -533,6 +534,7 @@ export default function App() {
       };
       const durable =
         path === "/orders" ||
+        /\/product-requests(?:\/|$)/.test(path) ||
         /^\/((admin|shop|courier)\/)?orders\//.test(path) ||
         /^\/(admin\/refunds|shop\/money)\//.test(path) ||
         path === "/admin/inventory-adjustments" ||
@@ -896,6 +898,7 @@ export default function App() {
         ["orders", "Đơn của shop", faListCheck],
         ["offers", "Menu theo ngày", faBasketShopping],
         ["products", "Sản phẩm của shop", faBoxOpen],
+        ["requests", "Yêu cầu sản phẩm", faClipboardList],
         ["chat", "Tin nhắn khách", faCommentDots],
         ["shop", "Hồ sơ cửa hàng", faBoxOpen],
         ["balance", "Số dư và rút tiền", faChartColumn],
@@ -906,6 +909,7 @@ export default function App() {
         ["orders", "Xử lý đơn", faListCheck],
         ["offers", "Menu theo ngày", faBasketShopping],
         ["products", "Sản phẩm", faBoxOpen],
+        ["requests", "Yêu cầu sản phẩm", faClipboardList],
 
         ["chat", "Tin nhắn", faCommentDots],
         ["users", "Khách hàng", faUsers],
@@ -922,6 +926,7 @@ export default function App() {
         ["catalog", "Hàng trong ngày", faBasketShopping],
         ["checkout", "Giỏ hàng", faCartShopping],
         ["orders", "Đơn của tôi", faListCheck],
+        ["requests", "Yêu cầu sản phẩm", faClipboardList],
 
         ["chat", "Nhắn người bán", faCommentDots],
 
@@ -1120,6 +1125,7 @@ export default function App() {
           {tab === "shop" && seller && <WarehouseSettings />}
           {tab === "chat" && <Chat admin={admin} />}{" "}
           {tab === "notifications" && <Notifications />}{" "}
+          {tab === "requests" && <ProductRequests kind="requests" user={session.user} online={online && pending.length === 0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} />}
           {tab === "profile" && <Profile />}{" "}
           {tab === "offers" && <DailyMenus />}{" "}
           {tab === "products" && <Products />} {tab === "users" && <Users />}{" "}

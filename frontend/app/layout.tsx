@@ -8,6 +8,7 @@ import "./motion.css";
 import "./overview.css";
 import "./operations.css";
 import "./product-design.css";
+import "./product-requests.css";
 config.autoAddCss = false;
 export const metadata: Metadata = {
   title: "RealtimeOrders · Đặt hàng trong ngày",

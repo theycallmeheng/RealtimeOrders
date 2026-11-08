@@ -49,6 +49,7 @@ Phân công chi tiết được trình bày trong báo cáo của nhóm.
 - Xem menu đang mở theo nhóm khách hàng; tìm/lọc mặt hàng, xem đơn vị, giá và lượng còn.
 - Thêm món vào giỏ, chọn địa chỉ/cách nhận hàng, xem tổng tiền và gửi đơn.
 - Theo dõi trạng thái đơn, thông báo, hội thoại riêng và mặt hàng quan tâm.
+- Gửi yêu cầu bổ sung sản phẩm riêng cho từng shop; theo dõi tiến trình và nhận thông báo khi shop mở bán sản phẩm phù hợp.
 - Hủy đơn đang chờ; gửi yêu cầu hủy đơn đã duyệt hoặc đang chuẩn bị để quản trị quyết định.
 - Xem bảng tin giới thiệu cửa hàng và bài đăng gắn với đợt bán theo nhóm; nhận thông báo khi đến lượt lấy hàng tập trung.
 - Chọn trả đủ qua payOS sau khi shop duyệt hoặc thu đủ COD khi nhận; không mua nợ hoặc chủ động thanh toán một phần.
@@ -133,9 +134,19 @@ Báo cáo tính theo ngày giao thành công tại Việt Nam: doanh thu hàng, 
 
 `db/schema.sql` là schema đầu vào của migration đầu tiên; các thay đổi sau đó nằm trong `backend/alembic/versions`. Cài mới và cập nhật schema bằng Alembic đến `head`, không chỉ import riêng schema ban đầu. MySQL/InnoDB giữ dữ liệu nghiệp vụ; ảnh tải lên nằm trong `runtime/uploads` trên máy server.
 
-Khi cài mới, các bước hướng dẫn trên Windows và macOS đều chạy toàn bộ migration đến `head` trước khi seed (Windows dùng `setup.ps1`). Baseline 0001 còn cấu trúc yêu cầu hàng cũ vì migration 0002 cần đọc báo giá để tạo snapshot; migration 0013 gỡ các bảng `product_requests`, `request_quotes`, `request_status_history` và hai cột tham chiếu cũ trong `orders`. Do đó database mới sau khi cài hoàn tất không còn các bảng/dữ liệu yêu cầu hàng, và `seed.py` không tạo lại chúng. Không import riêng `db/schema.sql` để cài dự án.
+Khi cài mới, các bước hướng dẫn trên Windows và macOS đều chạy toàn bộ migration đến `head` trước khi seed (Windows dùng `setup.ps1`). Baseline 0001 còn cấu trúc yêu cầu hàng/báo giá cũ vì migration 0002 cần đọc báo giá để tạo snapshot; migration 0013 gỡ các bảng và liên kết đơn của luồng cũ. Migration 0018 tạo bảng `product_requests` mới để theo dõi nhu cầu riêng theo shop; không tạo lại bảng báo giá, không chuyển yêu cầu trực tiếp thành đơn và không phục hồi dữ liệu cũ. `seed.py` không tạo yêu cầu mẫu. Không import riêng `db/schema.sql` để cài dự án.
 
 Migration 0013 không thể rollback tự động. Hãy sao lưu database trước khi nâng cấp bản cũ; migration sẽ dừng nếu đơn hàng còn tham chiếu yêu cầu/báo giá cũ. Nếu cần lưu dữ liệu lịch sử, giữ bản sao lưu trước khi tiếp tục.
+
+### Yêu cầu sản phẩm theo shop
+
+- Khách dùng `/product-requests`; shop dùng `/shop/product-requests`; quản trị xem và hỗ trợ qua `/admin/product-requests`. Người giao hàng không có quyền truy cập. Nội dung chỉ khách gửi, shop tiếp nhận và quản trị được xem.
+- Nhập tên, mô tả, số lượng, đơn vị; URL ảnh HTTPS, link tham khảo và giá mong muốn/đơn vị là tùy chọn. Các URL do trình duyệt mở/tải, server không tải nội dung từ link này.
+- Trạng thái: **Chờ tiếp nhận → Đang xem xét → Chờ mở bán → Đã mở bán**, cùng **Từ chối** (bắt buộc lý do) và **Khách đã hủy**. Khách chỉ sửa khi chờ tiếp nhận, được hủy ở ba trạng thái chưa kết thúc.
+- Shop tiếp nhận, thêm sản phẩm trong danh mục nếu cần, liên kết đúng sản phẩm của shop rồi mở bán qua menu. Không có nút tự đánh dấu đã mở bán: server kiểm tra lịch bán, tồn đủ một bước mua, giá theo nhóm và quyền mua của khách trước khi tự hoàn tất/thông báo. Lịch tương lai, hết hàng hoặc khách không thuộc nhóm được mua vẫn giữ chờ mở bán; monitor kiểm tra lại mỗi giây, kể cả khi bổ sung kho.
+- Mỗi khách tối đa **5 yêu cầu/ngày trên toàn sàn**, tính theo ngày Việt Nam; sửa/hủy không hoàn lượt. Chặn tên trùng đang xử lý trong cùng shop, bỏ qua hoa/thường, khoảng trắng thừa và chuẩn hóa Unicode.
+- Mọi thay đổi có `expectedVersion`; ghi mới/sửa/hủy/xét duyệt hỗ trợ `Idempotency-Key`. Thông báo lưu bền vững và cập nhật qua WebSocket riêng. Yêu cầu chưa tạo đơn, chưa giữ hàng, chưa cam kết giá; khách tự đặt khi mở bán.
+- API: `GET/POST /api/v1/product-requests`, `GET/PATCH /api/v1/product-requests/{id}`, `POST /api/v1/product-requests/{id}/cancel`; shop/quản trị dùng `GET /api/v1/{shop|admin}/product-requests`, `GET/PATCH /api/v1/{shop|admin}/product-requests/{id}`. Danh sách nhận `status`, `shopId` (đúng quyền) và `offset`, tối đa 50 dòng/trang. Các action báo giá/chuyển đơn cũ tiếp tục trả HTTP 410.
 
 ## Đồng thời và tính đúng đắn
 

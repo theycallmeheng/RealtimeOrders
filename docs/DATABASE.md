@@ -1,7 +1,7 @@
 # Mô hình dữ liệu MySQL
 
 Tham chiếu [schema.sql](../db/schema.sql) cho revision 0001. Alembic là nguồn migration thực thi.
-Bản phát triển đã được kiểm tra trên MySQL 8.0.46; repository hiện có các revision 0001–0008.
+Bản phát triển đã được kiểm tra trên MySQL 8.0.46; repository hiện có các revision 0001–0018.
 Revision 0002 bổ sung
 `request_quotes.item_snapshot` để giữ tên sản phẩm và đơn vị đã báo giá;
 không sửa tại chỗ schema ban đầu để tránh lệch bản đã cài. Các quy tắc nhiều
@@ -25,6 +25,12 @@ thô. Các challenge email cũ được gán kênh EMAIL khi migration.
 Revision 0007 bổ sung URL HTTPS cho ảnh sản phẩm.
 Revision 0008 cho phép nhiều menu/đợt bán trong cùng ngày.
 Luôn chạy Alembic đến head, không chỉ áp dụng revision 0001.
+
+Revision 0013 gỡ luồng yêu cầu hàng/báo giá cũ. Revision 0018 tạo lại
+`product_requests` với hợp đồng mới: nhu cầu riêng theo khách/shop, sản phẩm
+liên kết, trạng thái, lịch sử JSON và phiên bản. Không có báo giá hay liên kết
+chuyển thẳng thành đơn. Khóa user tuần tự hóa giới hạn 5 yêu cầu/ngày Việt Nam
+và kiểm tra tên trùng; các thay đổi dùng expectedVersion và idempotency key.
 
 ## 1. Quy ước
 
@@ -57,8 +63,8 @@ erDiagram
   orders ||--o{ cancellation_requests : receives
   offers ||--o{ inventory_movements : audited_by
   users ||--o{ product_requests : asks
-  product_requests ||--o{ request_quotes : quoted_by
-  product_requests o|--o| orders : converted_to
+  shops ||--o{ product_requests : receives
+  products o|--o{ product_requests : fulfills
   users ||--o| conversations : chats
   conversations ||--o{ messages : contains
   messages ||--o{ message_attachments : attaches
@@ -82,7 +88,7 @@ tạo hai hộp chat riêng cho cùng khách.
 | Giao hàng | delivery_zones, delivery_policies, pickup_slots | Khu vực, phí/mức tối thiểu và điểm giao tập trung |
 | Đơn | orders, order_items, order_status_history | Snapshot thương mại, phiên bản và lịch sử |
 | Kho/hủy | inventory_movements, cancellation_requests | Sổ tăng/giảm, yêu cầu và quyết định hủy |
-| Yêu cầu hàng | product_requests, request_quotes, request_status_history | Báo giá được chấp thuận, liên kết đơn duy nhất |
+| Yêu cầu sản phẩm | product_requests | Nhu cầu riêng theo shop, lịch sử JSON; liên kết sản phẩm và đợt bán, không tạo đơn/báo giá |
 | Chat | conversations, messages, message_attachments | Một hộp chat/khách, text đã che và ảnh được phép |
 | Thông báo | notifications, product_subscriptions, notification_jobs | Lịch sử riêng, quan tâm và fan-out bền vững theo lô |
 | Quản trị | moderation_rules, moderation_violations, audit_logs, system_settings, sku_sequences | Chính sách, nhật ký và cấp SKU tăng dần |

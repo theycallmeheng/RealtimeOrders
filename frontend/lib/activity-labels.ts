@@ -2,6 +2,8 @@ type Log = Record<string, any>;
 const entities: Record<string,string> = {customer_groups:"nhóm khách hàng",categories:"danh mục",units:"đơn vị",delivery_zones:"khu vực giao",delivery_policies:"chính sách giao",pickup_slots:"điểm giao tập trung",moderation_rules:"quy tắc nội dung"};
 export function activityLabel(r: Log): string {
  const a=r.after_data ?? {},b=r.before_data ?? {};
+ const requests:Record<string,string>={"product_request.create":"Gửi yêu cầu sản phẩm","product_request.edit":"Sửa yêu cầu sản phẩm","product_request.cancel":"Khách hủy yêu cầu sản phẩm","product_request.review":"Xử lý yêu cầu sản phẩm"};
+ if(requests[r.action])return requests[r.action];
  if(r.action==="user.update") {
   if(a.status && a.status!==b.status) return ({DELETED:"Xóa mềm tài khoản",LOCKED:"Khóa tài khoản",ACTIVE:"Mở khóa tài khoản"} as Record<string,string>)[a.status] ?? "Cập nhật tài khoản";
   return a.group_id && a.group_id!==b.group_id ? "Đổi nhóm khách hàng" : "Cập nhật tài khoản";

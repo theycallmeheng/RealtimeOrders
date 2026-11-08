@@ -17,7 +17,7 @@ from sqlalchemy import select, update, func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
 from .config import settings
 from .db import T, Session, engine, reflect, now, uid, uuid, one, rows, add, change, check, text, public, Fault
-from . import auth, commerce, accounts, admin, chat, menus, shipping, analytics, geocoding, shop, payments, marketplace
+from . import auth, commerce, accounts, admin, chat, menus, shipping, analytics, geocoding, shop, payments, marketplace, product_requests
 from . import activity as activity_log
 from .events import emit, flush_events, outbox_worker, session_monitor, hub, Subscriber, event_wire
 from .moderation import sanitize
@@ -109,7 +109,7 @@ def csrf_check(request):
 def shop_alias(method,path):
     if any(path==prefix or path.startswith(prefix+'/') for prefix in (
         '/admin/products','/admin/orders','/admin/menus','/admin/inventory-adjustments',
-        '/admin/conversations','/admin/warehouse','/admin/reports',
+        '/admin/conversations','/admin/warehouse','/admin/reports','/admin/product-requests',
     )):
         return True
     return method=='GET' and path in ('/admin/config/{kind}','/admin/pricing-rules')
@@ -119,8 +119,6 @@ def route(method,path,anonymous=False,idempotent=False):
     def decorator(handler):
         async def endpoint(request:Request):
             body=await body_json(request) if method!='GET' else {}
-            if '/product-requests' in path:
-                raise Fault('FEATURE_RETIRED','Chức năng yêu cầu hàng và báo giá đã ngừng hỗ trợ',410)
             if method!='GET':
                 if anonymous: origin_check(request)
                 else: csrf_check(request)
@@ -135,6 +133,8 @@ def route(method,path,anonymous=False,idempotent=False):
                 if path.startswith('/catalog'):check(user['role']!='SHIPPER','FORBIDDEN','Người giao chỉ xem đơn được phân công',403)
                 key=request.headers.get('idempotency-key') if idempotent else None
                 scope='http:'+method+':'+path
+                if '/product-requests/' in path:
+                    scope += ':'+uuid(request.path_params['id'])
                 if path in ('/admin/withdrawals/{id}', '/admin/shop-applications/{id}'):
                     scope += ':'+uuid(request.path_params['id'])
                 if user and user['role']=='SELLER': scope += ':'+str(user.get('shop_id'))
@@ -320,14 +320,40 @@ async def admin_order_action(s,u,b,r):
     check(r.path_params['action'] in ('approve','reject','transition','decide-cancel'),'NOT_FOUND','Thao tác không tồn tại',404)
     return await commerce.order_action(s,u,uuid(r.path_params['id']),r.path_params['action'],b,r.headers.get('idempotency-key'))
 
-@route('POST','/product-requests')
+@route('POST','/product-requests',idempotent=True)
+async def create_product_request(s,u,b,r): return await product_requests.create(s,u,b)
+
 @route('GET','/product-requests')
+async def customer_product_requests(s,u,b,r):
+    product_requests.customer_only(u)
+    return await product_requests.listing(s,u,r.query_params)
+
 @route('GET','/product-requests/{id}')
-@route('POST','/product-requests/{id}/{action}')
+async def customer_product_request(s,u,b,r):
+    product_requests.customer_only(u)
+    return await product_requests.detail(s,u,uuid(r.path_params['id']))
+
+@route('PATCH','/product-requests/{id}',idempotent=True)
+async def edit_product_request(s,u,b,r):
+    return await product_requests.customer_edit(s,u,uuid(r.path_params['id']),b)
+
+@route('POST','/product-requests/{id}/cancel',idempotent=True)
+async def cancel_product_request(s,u,b,r):
+    return await product_requests.customer_edit(s,u,uuid(r.path_params['id']),b,cancel=True)
+
 @route('GET','/admin/product-requests')
+async def shop_product_requests(s,u,b,r): return await product_requests.listing(s,u,r.query_params)
+
+@route('GET','/admin/product-requests/{id}')
+async def shop_product_request(s,u,b,r): return await product_requests.detail(s,u,uuid(r.path_params['id']))
+
+@route('PATCH','/admin/product-requests/{id}',idempotent=True)
+async def review_product_request(s,u,b,r): return await product_requests.review(s,u,uuid(r.path_params['id']),b)
+
+@route('POST','/product-requests/{id}/{action}')
 @route('POST','/admin/product-requests/{id}/{action}')
 async def retired_requests(s,u,b,r):
-    raise Fault('FEATURE_RETIRED','Chức năng yêu cầu hàng và báo giá đã ngừng hỗ trợ',410)
+    raise Fault('FEATURE_RETIRED','Luồng báo giá cũ đã ngừng hỗ trợ; sử dụng mục Yêu cầu sản phẩm',410)
 
 @route('GET','/conversations/me')
 async def my_conversation(s,u,b,r): return await chat.conversation(s,u,shop_id=r.query_params.get('shopId'))

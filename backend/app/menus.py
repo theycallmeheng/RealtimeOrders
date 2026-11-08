@@ -328,6 +328,8 @@ async def boundary_monitor():
     while True:
         try:
             async with Session.begin() as s:
+                from .product_requests import opened_batch
+                await opened_batch(s)
                 m,o=T['daily_menus'],T['offers']
                 due=(await s.execute(select(m).where(m.c.status=='OPEN',m.c.announced_at.is_(None),m.c.opens_at<=now(),m.c.closes_at>now()).limit(20).with_for_update(skip_locked=True))).mappings().all()
                 for menu in due:

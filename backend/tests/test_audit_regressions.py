@@ -211,7 +211,7 @@ async def test_twenty_customers_compete_for_ten_units(clients, sale):
 
 async def test_retired_product_request_retries_stay_retired(clients):
     customer=clients[1]; key=uid()
-    responses=await asyncio.gather(*(customer.request('POST','/product-requests',{'itemName':'retired'},key) for _ in range(5)))
+    responses=await asyncio.gather(*(customer.request('POST','/product-requests/'+uid()+'/convert',{'itemName':'retired'},key) for _ in range(5)))
     assert all(r.status_code==410 and r.json()['error']['code']=='FEATURE_RETIRED' for r in responses)
 
 

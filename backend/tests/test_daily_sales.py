@@ -61,8 +61,9 @@ async def test_openstreetmap_adapter_search_resolve_and_osrm_route():
 
 
 
-@pytest.mark.parametrize('method,path',[('GET','/product-requests'),('POST','/product-requests'),('GET','/admin/product-requests'),
-    ('POST','/product-requests/'+('0'*8+'-0000-0000-0000-'+'0'*12)+'/convert')])
+@pytest.mark.parametrize('method,path',[
+    ('POST','/product-requests/'+('0'*8+'-0000-0000-0000-'+'0'*12)+'/convert'),
+    ('POST','/admin/product-requests/'+('0'*8+'-0000-0000-0000-'+'0'*12)+'/quote')])
 async def test_request_feature_retired(clients,method,path):
     c=clients[0] if '/admin/' in path else clients[1]
     response=await c.request(method,path,{})
