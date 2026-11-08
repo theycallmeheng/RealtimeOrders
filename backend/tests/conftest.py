@@ -30,6 +30,8 @@ async def clients():
         r=await http.post('/api/v1/auth/login',headers={'Origin':ORIGIN},json={'identifier':a['phone'],'password':a['password']})
         assert r.status_code==200,r.text
         result.append(Client(http,r.json()))
+    staff=await result[0].post('/admin/staff',{'name':'Audit courier','phone':'+849'+str(int(uid().replace('-','')[:8],16)).zfill(10)[-8:],'password':'AuditCourier123!','role':'SHIPPER'})
+    DATA['testCourierId']=staff['id']
     # Reset only artifacts from earlier runs inside the audit database.
     async with Session.begin() as db:
         from sqlalchemy import update,select
@@ -45,12 +47,8 @@ async def clients():
         wh=await one(db,'system_settings',T['system_settings'].c.setting_key=='warehouse',required=False)
         if not wh: await add(db,'system_settings',setting_key='warehouse',value_json={'address':'Test warehouse (synthetic)','latitude':'20.98','longitude':'105.79','placeId':'test'},version=1,updated_by=result[0].user['id'],updated_at=now())
     from app.menus import today
-    products=await result[0].get('/admin/products')
-    menus=await result[0].get('/admin/menus')
-    menu=next((m for m in menus if m['sale_date']==str(today())),None)
-    if not menu:
-        await result[0].post('/admin/menus',{'saleDate':str(today()),'status':'OPEN','items':[
-            {'productId':p['id'],'availableQty':'100','costPrice':'10000','prices':[{'groupId':g,'unitPrice':'100000'} for g in DATA['groups'].values()]} for p in products[:5]]})
+    menu=await result[0].post('/admin/menus',{'saleDate':str(today()),'status':'DRAFT','items':[]})
+    DATA['testMenuId']=menu['id']
     yield result
     for c in result: await c.http.aclose()
     await engine.dispose()
@@ -60,8 +58,10 @@ async def sale(clients):
     admin=clients[0]; products=await admin.get('/admin/products'); template=products[0]
     product=await admin.post('/admin/products',{'name':'Audit item '+uid()[:8],'categoryId':template['category_id'],
         'unitId':template['unit_id'],'quantityStep':'.100','defaultCostPrice':'60000','defaultSalePrice':'100000'})
-    result=await admin.post('/admin/offers',{'productId':product['id'],'batchCode':'TEST-'+uid()[:8],
-        'opensAt':(now()-timedelta(hours=1)).isoformat()+'Z','closesAt':(now()+timedelta(days=1)).isoformat()+'Z',
+    from app.menus import bounds, today
+    starts_at = max(bounds(today())[0], now() - timedelta(hours=1))
+    result=await admin.post('/admin/offers',{'productId':product['id'],'menuId':DATA['testMenuId'],'batchCode':'TEST-'+uid()[:8],
+        'opensAt':starts_at.isoformat()+'Z','closesAt':(now()+timedelta(days=1)).isoformat()+'Z',
         'availableQty':'10','costPrice':'60000','status':'OPEN','prices':[{'groupId':id,'unitPrice':'100000'} for id in DATA['groups'].values()]})
     yield result
     async with Session.begin() as s:
@@ -92,5 +92,5 @@ async def quote_fixture(c,body):
         await change(s,'addresses',addr['id'],latitude='20.99',longitude='105.80')
         addr=await one(s,'addresses',T['addresses'].c.id==addr['id'])
         p=await one(s,'delivery_policies',T['delivery_policies'].c.group_id==c.user['group_id'],T['delivery_policies'].c.zone_id==addr['zone_id'],T['delivery_policies'].c.method=='INDIVIDUAL')
-        q=await record_quote(s,c.user,(addr,p,await warehouse(s),cart_hash(body['items'])),(3000,600,{'testOnly':True}))
+        q=await record_quote(s,c.user,(addr,p,await warehouse(s),cart_hash(body['items'])),(3000,600,{'testOnly':True,'provider':'FIXTURE','profile':'driving'}))
         return q['id']

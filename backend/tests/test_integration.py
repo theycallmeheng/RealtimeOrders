@@ -92,7 +92,8 @@ async def test_pending_does_not_deduct_and_deduplicates(clients,sale):
 
 async def test_price_change_requires_requote(clients,sale):
     a,c=clients[:2];body=await order_body(c,sale)
-    await a.request('PATCH','/admin/offers/'+sale['id'],{'expectedVersion':'1','prices':[{'groupId':c.user['group_id'],'unitPrice':'120000','expectedVersion':'1'}]})
+    changed=await a.request('PATCH','/admin/offers/'+sale['id'],{'expectedVersion':sale['version'],'costPrice':'80000'})
+    assert changed.status_code==200,changed.text
     r=await c.request('POST','/orders',body);assert r.status_code==409 and r.json()['error']['code']=='REQUOTE_REQUIRED'
 
 async def test_invalid_quantity_step(clients,sale):
@@ -112,8 +113,8 @@ async def test_multi_item_approval_is_atomic(clients,sale):
     admin,c=clients[:2]
     template=next(p for p in await admin.get('/admin/products') if p['id']==sale['product_id'])
     product=await admin.post('/admin/products',{'name':'Other atomic '+uid()[:8],'categoryId':template['category_id'],'unitId':template['unit_id'],'quantityStep':'.100','defaultCostPrice':'60000'})
-    other=await admin.post('/admin/offers',{'productId':product['id'],'batchCode':'TEST-'+uid()[:8],
-        'opensAt':(now()-timedelta(hours=1)).isoformat()+'Z','closesAt':(now()+timedelta(days=1)).isoformat()+'Z',
+    other=await admin.post('/admin/offers',{'productId':product['id'],'menuId':sale['menu_id'],'batchCode':'TEST-'+uid()[:8],
+        'opensAt':sale['opens_at'],'closesAt':(now()+timedelta(days=1)).isoformat()+'Z',
         'availableQty':'3','status':'OPEN','prices':[{'groupId':id,'unitPrice':'100000'} for id in DATA['groups'].values()]})
     o=await c.post('/orders',await order_body(c,sale,'2',other))
     await admin.post('/admin/inventory-adjustments',{'offerId':other['id'],'expectedVersion':'1','delta':'-2','reason':'Kiểm thử thiếu một dòng'})
@@ -136,6 +137,7 @@ async def test_cancellation_restores_exactly_once(clients,sale):
 
 async def test_shipping_blocked_by_open_cancellation(clients,sale):
     a,c=clients[:2];o=await c.post('/orders',await order_body(c,sale));o=await a.post('/admin/orders/'+o['id']+'/approve',{'expectedVersion':'1'})
+    o=await a.post('/admin/orders/'+o['id']+'/assign',{'expectedVersion':o['version'],'courierId':DATA['testCourierId']})
     o=await a.post('/admin/orders/'+o['id']+'/transition',{'expectedVersion':str(o['version']),'status':'PREPARING'})
     o=await c.post('/orders/'+o['id']+'/cancellation-requests',{'expectedVersion':str(o['version']),'reason':'Cần thay đổi'})
     r=await a.request('POST','/admin/orders/'+o['id']+'/transition',{'expectedVersion':str(o['version']),'status':'SHIPPING'})
@@ -144,8 +146,9 @@ async def test_shipping_blocked_by_open_cancellation(clients,sale):
 async def test_status_versions_and_revenue(clients,sale):
     a,c=clients[:2];o=await c.post('/orders',await order_body(c,sale));o=await a.post('/admin/orders/'+o['id']+'/approve',{'expectedVersion':'1'})
     assert (await a.request('POST','/admin/orders/'+o['id']+'/transition',{'expectedVersion':'1','status':'PREPARING'})).status_code==409
+    o=await a.post('/admin/orders/'+o['id']+'/assign',{'expectedVersion':o['version'],'courierId':DATA['testCourierId']})
     for target in ('PREPARING','SHIPPING','DELIVERED'):
-        o=await a.post('/admin/orders/'+o['id']+'/transition',{'expectedVersion':str(o['version']),'status':target})
+        o=await a.post('/admin/orders/'+o['id']+'/transition',{'expectedVersion':str(o['version']),'status':target,'codAmount':o['total']})
     report=await a.get('/admin/reports?start='+str(now().date())+'T00:00:00Z&end='+str((now()+timedelta(days=1)).date())+'T00:00:00Z')
     assert sum(int(r['merchandise']) for r in report['daily'])>=100000
     assert (await c.request('POST','/orders/'+o['id']+'/cancellation-requests',{'expectedVersion':str(o['version']),'reason':'Sau giao'})).status_code==409

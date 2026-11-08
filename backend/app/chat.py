@@ -4,16 +4,21 @@ from .db import T, now, uid, uuid, one, rows, add, check, text, digest, public
 from .commerce import lock_user
 from .moderation import sanitize
 from .events import emit, notify
+from .auth import is_shop
+from .marketplace import DEFAULT_SHOP, get_shop, shop_topic
 
-async def conversation(s,user,id=None):
+async def conversation(s,user,id=None,shop_id=None):
     if id:
         result=await one(s,'conversations',T['conversations'].c.id==id)
-        check(user['role']=='ADMIN' or result['customer_id']==user['id'],'FORBIDDEN','Hội thoại riêng tư',403)
+        check(user['role']=='ADMIN' or (user['role']=='SELLER' and user.get('shop_id')==result['shop_id'])
+              or (user['role']=='CUSTOMER' and result['customer_id']==user['id']),'FORBIDDEN','Hội thoại riêng tư',403)
         return result
+    check(user['role']=='CUSTOMER','FORBIDDEN','Chỉ khách được tạo hội thoại',403)
+    shop=await get_shop(s,uuid(shop_id) if shop_id else DEFAULT_SHOP,active=True)
     await lock_user(s,user['id'])
-    old=await one(s,'conversations',T['conversations'].c.customer_id==user['id'],required=False)
+    old=await one(s,'conversations',T['conversations'].c.customer_id==user['id'],T['conversations'].c.shop_id==shop['id'],required=False)
     if old: return old
-    return await add(s,'conversations',id=uid(),customer_id=user['id'],created_at=now())
+    return await add(s,'conversations',id=uid(),customer_id=user['id'],shop_id=shop['id'],created_at=now())
 
 async def messages(s,user,id,before=None):
     await conversation(s,user,id)
@@ -55,6 +60,6 @@ async def send(s,user,body):
     for position,asset in enumerate(assets): await add(s,'message_attachments',message_id=id,asset_id=asset,position=position)
     m.pop('request_hash')
     m['attachments']=[{'asset_id':a,'position':i} for i,a in enumerate(assets)]
-    for topic in ('user:'+conv['customer_id'],'admin:ops'): emit(s,topic,'CHAT_MESSAGE',public(m),id)
-    if user['role']=='ADMIN': await notify(s,conv['customer_id'],'CHAT_MESSAGE',{'conversationId':conv['id'],'message':'Người bán vừa gửi tin nhắn.'})
+    for topic in ('user:'+conv['customer_id'],'admin:ops',shop_topic(conv['shop_id'])): emit(s,topic,'CHAT_MESSAGE',public(m),id)
+    if is_shop(user): await notify(s,conv['customer_id'],'CHAT_MESSAGE',{'conversationId':conv['id'],'message':'Người bán vừa gửi tin nhắn.'})
     return public(m)

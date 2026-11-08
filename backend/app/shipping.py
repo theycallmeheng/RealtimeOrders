@@ -10,7 +10,7 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 import httpx
 from .config import settings
-from .db import T, now, uid, uuid, one, add, check, number, digest, public, Fault
+from .db import T, now, uid, uuid, one, add, change, check, number, digest, public, Fault
 
 
 NOMINATIM_URL = settings.nominatim_url.rstrip("/")
@@ -214,16 +214,30 @@ def pin_location(body):
     return {**location,'locationToken':location_token(location)}
 
 
-async def warehouse(s):
+async def warehouse(s, shop_id=None):
+    from .marketplace import DEFAULT_SHOP, get_shop
+    shop_id = shop_id or DEFAULT_SHOP
+    if shop_id != DEFAULT_SHOP:
+        shop = await get_shop(s, shop_id)
+        return {'address': shop['profile_json'].get('address', ''), **(shop['warehouse_json'] or {}),
+                'version': str(shop['warehouse_version']), 'configured': bool(shop['warehouse_json']), 'shop_id': shop_id}
     row=await one(s,'system_settings',T['system_settings'].c.setting_key=='warehouse',required=False)
-    return {'address':'96A Trần Phú, Hà Đông, Hà Nội','version':'0','configured':False} if not row else {
-        **row['value_json'],'version':str(row['version']),'configured':True}
+    return {'address':'96A Trần Phú, Hà Đông, Hà Nội','version':'0','configured':False,'shop_id':shop_id} if not row else {
+        **row['value_json'],'version':str(row['version']),'configured':True,'shop_id':shop_id}
 
 
 async def save_warehouse(s,user,body):
     from .commerce import audit
     from sqlalchemy import update
+    from .marketplace import DEFAULT_SHOP, manage_shop
     location=verify_location(body.get('locationToken'))
+    shop=await manage_shop(s,user,body.get('shopId'),lock=True)
+    if shop['id']!=DEFAULT_SHOP:
+        check(str(shop['warehouse_version'])==str(body.get('expectedVersion')),'VERSION_CONFLICT','Vị trí kho đã đổi',409)
+        values={k:location[k] for k in ('latitude','longitude','placeId','address')}
+        await change(s,'shops',shop['id'],warehouse_json=values,warehouse_version=shop['warehouse_version']+1,updated_at=now())
+        await audit(s,user,'warehouse.update','shop',shop['id'],None,values)
+        return await warehouse(s,shop['id'])
     old=await one(s,'system_settings',T['system_settings'].c.setting_key=='warehouse',required=False,lock=True)
     check(str(old['version'] if old else 0)==str(body.get('expectedVersion')),'VERSION_CONFLICT','Vị trí kho đã đổi',409)
     values={k:location[k] for k in ('latitude','longitude','placeId','address')}
@@ -274,10 +288,14 @@ async def prepare(s,user,body):
     policy=await one(s,'delivery_policies',T['delivery_policies'].c.group_id==user['group_id'],
         T['delivery_policies'].c.zone_id==addr['zone_id'],T['delivery_policies'].c.method=='INDIVIDUAL',T['delivery_policies'].c.active==True)
     fee_for(policy,0)
-    wh=await warehouse(s); check(wh['configured'],'WAREHOUSE_NOT_CONFIGURED','Người bán chưa xác nhận vị trí kho',409)
     items=body.get('items'); check(isinstance(items,list) and 0<len(items)<=20 and all(isinstance(i,dict) for i in items),'INVALID_ITEMS','Giỏ hàng không hợp lệ')
     ids=[uuid(i.get('offerId')) for i in items]; check(len(ids)==len(set(ids)),'DUPLICATE_ITEM','Mặt hàng bị lặp')
     offers={o['id']:o for o in await catalog(s,user,offer_ids=ids)}
+    check(len(offers)==len(ids),'PRODUCT_UNAVAILABLE','Mặt hàng không còn được phép mua',409)
+    shop_ids={offer['shop_id'] for offer in offers.values()}
+    check(len(shop_ids)==1,'MIXED_SHOPS','Mỗi báo phí chỉ chứa món của một shop',409)
+    wh=await warehouse(s,shop_ids.pop())
+    check(wh['configured'],'WAREHOUSE_NOT_CONFIGURED','Shop chưa xác nhận vị trí kho',409)
     subtotal=Decimal(0)
     from decimal import ROUND_HALF_UP
     for item in items:
@@ -299,6 +317,14 @@ async def route(addr, wh):
     check(-90 <= origin_lat <= 90 and -180 <= origin_lng <= 180
           and -90 <= destination_lat <= 90 and -180 <= destination_lng <= 180,
           "MAP_UNAVAILABLE", "Tọa độ kho hoặc địa chỉ không hợp lệ", 503)
+
+    if settings.map_provider == "vietmap":
+        from .vietmap import route as vietmap_route
+        return await vietmap_route(origin_lat, origin_lng, destination_lat, destination_lng)
+
+    if settings.map_provider == "google":
+        from .google_maps import route as google_route
+        return await google_route(origin_lat, origin_lng, destination_lat, destination_lng)
 
     cache_key = tuple(round(value, 6) for value in (origin_lat, origin_lng, destination_lat, destination_lng))
     cached = _cache_get(_route_cache, cache_key)
@@ -330,18 +356,19 @@ async def record_quote(s,user,prepared,routed):
     meters,seconds,route_info=routed
     id=uid(); expires=now()+timedelta(minutes=5)
     fee=fee_for(policy,meters)
-    await add(s,'delivery_quotes',id=id,user_id=user['id'],address_id=addr['id'],address_version=addr['version'],group_id=user['group_id'],
+    from .marketplace import DEFAULT_SHOP
+    await add(s,'delivery_quotes',id=id,shop_id=wh.get('shop_id',DEFAULT_SHOP),user_id=user['id'],address_id=addr['id'],address_version=addr['version'],group_id=user['group_id'],
         policy_id=policy['id'],policy_version=policy['version'],warehouse_version=int(wh['version']),cart_hash=fingerprint,
         distance_meters=meters,duration_seconds=seconds,shipping_fee=fee,expires_at=expires,created_at=now(),route_json=route_info)
     return public({'id':id,'distanceMeters':meters,'durationSeconds':seconds,'shippingFee':fee,'expiresAt':expires,
-                   'warehouseAddress':wh['address'],'destinationAddress':addr['address_line']})
+                   'warehouseAddress':wh['address'],'destinationAddress':addr['address_line'], 'routeProvider':route_info['provider'], 'routeProfile':route_info['profile']})
 
 
-async def validate_quote(s,user,body,address,policy):
+async def validate_quote(s,user,body,address,policy,shop_id=None):
     quote_id=uuid(body.get('deliveryQuoteId'))
     q=await one(s,'delivery_quotes',T['delivery_quotes'].c.id==quote_id,T['delivery_quotes'].c.user_id==user['id'])
-    wh=await warehouse(s)
-    check(q['expires_at']>now() and q['address_id']==address['id'] and q['address_version']==address['version']
+    wh=await warehouse(s,shop_id)
+    check(q['shop_id']==wh['shop_id'] and wh['configured'] and q['expires_at']>now() and q['address_id']==address['id'] and q['address_version']==address['version']
         and q['group_id']==user['group_id'] and q['policy_id']==policy['id'] and q['policy_version']==policy['version']
         and q['warehouse_version']==int(wh['version']) and q['cart_hash']==cart_hash(body['items']),
         'REQUOTE_REQUIRED','Địa chỉ, giỏ hàng hoặc phí đã đổi; lấy phí giao mới và xác nhận lại',409)

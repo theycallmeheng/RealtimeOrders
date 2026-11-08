@@ -35,7 +35,7 @@ def test_zero_comparison_has_no_percentage_and_losses_use_absolute_denominator()
     assert result['grossProfit']['percent']==50
 
 async def test_default_previous_month_crosses_year_and_same_month_is_zero():
-    async def fake(s,dates):
+    async def fake(s,dates,shop_id=None):
         return {str(d):dict(day=str(d),orders=0,merchandise=Decimal(0),shipping=Decimal(0),cost=Decimal(0),grossProfit=Decimal(0),missingCostLines=0) for d in set(dates)}
     with patch.object(analytics,'daily_records',AsyncMock(side_effect=fake)):
         result=await analytics.monthly_report(None,'2027-01')
@@ -45,7 +45,7 @@ async def test_default_previous_month_crosses_year_and_same_month_is_zero():
 
 
 async def test_daily_view_returns_exactly_seven_days_even_with_distant_comparison():
-    async def fake(s,dates):
+    async def fake(s,dates,shop_id=None):
         return {str(d):dict(day=str(d),orders=0,merchandise=Decimal(0),shipping=Decimal(0),cost=Decimal(0),grossProfit=Decimal(0),missingCostLines=0) for d in set(dates)}
     with patch.object(analytics,'daily_records',AsyncMock(side_effect=fake)):
         result=await analytics.report(None,'2026-10-31','2026-09-01')

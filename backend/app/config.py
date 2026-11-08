@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     zalo_access_token: str = ''
     zalo_otp_template_id: str = ''
     zalo_otp_code_field: str = 'otp'
+    map_provider: str = 'osm'
+    vietmap_api_key: str = ''
+    google_maps_server_key: str = ''
+    google_maps_browser_key: str = ''
     nominatim_url: str = 'https://nominatim.openstreetmap.org'
     photon_url: str = 'https://photon.komoot.io'
     osrm_url: str = 'https://router.project-osrm.org'
@@ -31,8 +35,14 @@ class Settings(BaseSettings):
     upload_dir: str = str(ROOT / 'runtime/uploads')
     idle_seconds: int = 1800
     session_seconds: int = 86400
+    payos_client_id: str = ''
+    payos_api_key: str = ''
+    payos_checksum_key: str = ''
+    payment_ttl_seconds: int = 900
 
 settings = Settings()
+if not 60 <= settings.payment_ttl_seconds <= 3600:
+    raise RuntimeError('PAYMENT_TTL_SECONDS phải từ 60 đến 3600 giây')
 if not Path(settings.upload_dir).is_absolute(): settings.upload_dir=str((ROOT/settings.upload_dir).resolve())
 if len(settings.app_secret) < 32:
     raise RuntimeError('APP_SECRET phải có ít nhất 32 ký tự')

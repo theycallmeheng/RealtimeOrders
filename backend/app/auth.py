@@ -45,7 +45,7 @@ def csrf(raw):
 
 def profile(user):
     return {k: user[k] for k in ('id', 'phone_e164', 'email_normalized', 'display_name',
-                               'role', 'status', 'group_id', 'default_address_id', 'version')}
+                               'role', 'status', 'group_id', 'default_address_id', 'version')} | {'shop_id': user.get('shop_id')}
 
 async def rate(key, limit, seconds):
     """Independent transaction: failed attempts cannot roll back their own limit."""
@@ -81,6 +81,12 @@ async def authenticate(s, raw, activity=False):
 
 def require_admin(user):
     check(user['role'] == 'ADMIN', 'FORBIDDEN', 'Thao tác dành cho quản trị viên', 403)
+
+def is_shop(user):
+    return user['role'] in ('ADMIN', 'SELLER')
+
+def require_shop(user):
+    check(is_shop(user), 'FORBIDDEN', 'Thao tác dành cho người bán', 403)
 
 async def send_code(subject, code, purpose):
     """Deliver an OTP and return the channel used; never log or persist the code."""

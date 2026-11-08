@@ -58,7 +58,7 @@ test("direct link before login returns to requested tab; customer cannot open ad
   await expect(page).toHaveURL(origin + "/profile");
   await expect(page.locator('aside.nav a[aria-current="page"]')).toHaveAttribute("href", "/profile");
   await page.goto(origin + "/admin/settings");
-  await expect(page).toHaveURL(origin + "/menu");
+  await expect(page).toHaveURL(origin + "/feed");
   await expect(page.locator('aside.nav a[href^="/admin"]')).toHaveCount(0);
   await page.getByRole("button", {name: "Đăng xuất", exact: true}).click();
   await expect(page).toHaveURL(origin + "/login");

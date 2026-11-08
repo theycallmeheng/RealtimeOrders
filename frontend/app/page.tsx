@@ -4,6 +4,11 @@ import { activityLabel, activityFields, changedFields } from "../lib/activity-la
 import { tabForPath, pathForTab } from "../lib/navigation";
 import { menuPrices } from "../lib/pricing";
 import PointMap, { type MapPoint } from "./point-map";
+import GooglePointMap from "./google-point-map";
+import BusinessScreen, { ProductReviews } from "./business-ui";
+import OverviewDashboard, { type OverviewData } from "./overview";
+import MarketplaceScreen, { ShopSelect } from "./marketplace-ui";
+import { DEFAULT_SHOP, storefrontShopKey, chatShopKey, shopOf, readCart, clearShopCart } from "../lib/marketplace";
 import React, {
   useState,
   useEffect,
@@ -42,7 +47,7 @@ type Row = Record<string, any>;
 type Session = { user: Row; csrfToken: string; demo: boolean };
 const TAB_STORAGE_KEY = "ro-tab-session";
 const defaultTab = (session: Session) =>
-  session.user.role === "ADMIN" ? "orders" : "catalog";
+  session.user.role === "CUSTOMER" ? "feed" : "orders";
 function restoreTab(session: Session) {
   const direct = tabForPath(session.user.role, window.location.pathname);
   if (direct) return direct;
@@ -61,6 +66,7 @@ class ApiError extends Error {
   }
 }
 let csrfToken = "";
+let activeRole = "";
 // The catalog model follows the socket cursor. HTTP refreshes cannot overwrite
 // a newer streamed state or race the snapshot/live boundary.
 let datasetEpoch = "";
@@ -74,6 +80,7 @@ async function api(
   body?: unknown,
   key?: string,
 ): Promise<any> {
+  if (activeRole === "SELLER" && path.startsWith("/admin/")) path = path.replace("/admin/", "/shop/");
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET") headers["X-CSRF-Token"] = csrfToken;
@@ -126,6 +133,8 @@ const statuses: Record<string, string> = {
   PREPARING: "Đang chuẩn bị",
   SHIPPING: "Đang giao",
   DELIVERED: "Đã giao",
+  READY_FOR_PICKUP: "Sẵn sàng lấy hàng",
+  DELIVERY_FAILED: "Giao chưa thành công",
   REJECTED: "Từ chối",
   CANCELLED: "Đã hủy",
   NEW: "Mới gửi",
@@ -325,6 +334,7 @@ export default function App() {
   }, [tab]);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  activeRole = session?.user.role ?? "";
   const tabRef = useRef(tab);
   tabRef.current = tab;
   const soundEnabledRef = useRef(soundEnabled);
@@ -523,7 +533,8 @@ export default function App() {
       };
       const durable =
         path === "/orders" ||
-        /^\/(admin\/)?orders\//.test(path) ||
+        /^\/((admin|shop|courier)\/)?orders\//.test(path) ||
+        /^\/(admin\/refunds|shop\/money)\//.test(path) ||
         path === "/admin/inventory-adjustments" ||
         /\/convert$/.test(path) ||
         /\/messages$/.test(path);
@@ -685,7 +696,7 @@ export default function App() {
               "Có nội dung vi phạm mới. Xem Nhật ký → Vi phạm nội dung.",
               true,
             );
-          if (m.eventType === "NOTIFICATION" && sessionRef.current?.user.role === "CUSTOMER" && m.payload?.kind !== "CHAT_MESSAGE") {
+          if (m.eventType === "NOTIFICATION" && m.payload?.kind !== "CHAT_MESSAGE") {
             setCustomerNotice({ id: String(m.payload?.id ?? crypto.randomUUID()), text: String(m.payload?.payload?.message ?? "Bạn có thông báo mới.") });
             playNotificationSound();
           }
@@ -703,7 +714,7 @@ export default function App() {
               id: crypto.randomUUID(),
               conversationId: String(payload.conversation_id ?? ""),
               title:
-                sessionRef.current?.user.role === "ADMIN"
+                ["ADMIN","SELLER"].includes(sessionRef.current?.user.role ?? "")
                   ? "Tin nhắn mới từ khách hàng"
                   : "Người bán vừa nhắn tin",
               preview:
@@ -716,7 +727,7 @@ export default function App() {
           if (
             m.eventType === "ORDER_CHANGED" &&
             m.payload?.status === "PENDING" &&
-            sessionRef.current?.user.role === "ADMIN"
+            ["ADMIN","SELLER"].includes(sessionRef.current?.user.role ?? "")
           ) {
             playNotificationSound(false, "order");
             setOrderNotice({
@@ -827,8 +838,10 @@ export default function App() {
     for (const e of pending) {
       try {
         const result = await api(e.path, e.method, e.body, e.key);
-        if (e.path === "/orders")
-          sessionStorage.removeItem("ro-daily-cart-" + sessionRef.current!.user.id);
+        if (e.path === "/orders") {
+          const storageKey = "ro-daily-cart-" + sessionRef.current!.user.id;
+          clearShopCart(storageKey, shopOf(result));
+        }
         window.dispatchEvent(
           new CustomEvent("ro:operation-resolved", {
             detail: { path: e.path, result },
@@ -874,9 +887,22 @@ export default function App() {
         )}
       </>
     );
-  const admin = session.user.role === "ADMIN";
-  const nav = admin
+  const seller = session.user.role === "SELLER";
+  const admin = session.user.role === "ADMIN" || seller;
+  const marketKind = tab === "shop" && !seller ? "shops" : ["apply", "balance", "withdrawals"].includes(tab) ? tab : "";
+  const nav = session.user.role === "SHIPPER" ? [["orders", "Đơn được giao", faListCheck], ["notifications", "Thông báo", faBell]] : seller
     ? [
+        ["reports", "Tổng quan", faChartColumn],
+        ["orders", "Đơn của shop", faListCheck],
+        ["offers", "Menu theo ngày", faBasketShopping],
+        ["products", "Sản phẩm của shop", faBoxOpen],
+        ["chat", "Tin nhắn khách", faCommentDots],
+        ["shop", "Hồ sơ cửa hàng", faBoxOpen],
+        ["balance", "Số dư và rút tiền", faChartColumn],
+        ["reviews", "Đánh giá", faListCheck],
+      ]
+    : admin ? [
+        ["reports", "Tổng quan", faChartColumn],
         ["orders", "Xử lý đơn", faListCheck],
         ["offers", "Menu theo ngày", faBasketShopping],
         ["products", "Sản phẩm", faBoxOpen],
@@ -884,10 +910,15 @@ export default function App() {
         ["chat", "Tin nhắn", faCommentDots],
         ["users", "Khách hàng", faUsers],
         ["config", "Cấu hình", faSliders],
-        ["reports", "Báo cáo", faChartColumn],
         ["audit", "Nhật ký", faListCheck],
+        ["shop", "Quản lý shop", faBoxOpen],
+        ["finance", "Thu / hoàn tiền", faChartColumn],
+        ["withdrawals", "Chi trả shop", faChartColumn],
+        ["staff", "Nhân viên", faUsers],
+        ["reviews", "Đánh giá", faListCheck],
       ]
     : [
+        ["feed", "Bảng tin cửa hàng", faBoxOpen],
         ["catalog", "Hàng trong ngày", faBasketShopping],
         ["checkout", "Giỏ hàng", faCartShopping],
         ["orders", "Đơn của tôi", faListCheck],
@@ -895,6 +926,7 @@ export default function App() {
         ["chat", "Nhắn người bán", faCommentDots],
 
         ["profile", "Hồ sơ & địa chỉ", faUser],
+        ["apply", "Đăng ký mở shop", faBoxOpen],
       ];
   return (
     <AppContext.Provider
@@ -909,6 +941,7 @@ export default function App() {
       }}
     >
       <header className="app-header">
+        <a className="skip-link" href="#main-content">Đến nội dung chính</a>
         <button
           className="ghost nav-toggle"
           aria-label="Đóng mở thanh điều hướng"
@@ -927,7 +960,7 @@ export default function App() {
           <span className="brand-mark">
             <Icon icon={faBasketShopping} />
           </span>
-          RealtimeOrders
+          <span className="brand-copy">RealtimeOrders<small>Thực phẩm cho mỗi ngày</small></span>
         </div>
         <div className="header-meta">
           <span className="connection" role="status">
@@ -940,7 +973,7 @@ export default function App() {
               soundEnabled && soundReady
                 ? "Tắt âm thanh thông báo"
                 : soundEnabled
-                  ? "Thử và bật âm thanh thông báo"
+                  ? "Kích hoạt âm thanh thông báo"
                   : "Bật âm thanh thông báo"
             }
             aria-pressed={soundEnabled}
@@ -948,8 +981,8 @@ export default function App() {
               soundEnabled
                 ? soundReady
                   ? "Âm thanh thông báo đang bật · nhấn để tắt"
-                  : "Nhấn để mở quyền phát và thử âm thanh"
-                : "Nhấn để bật và thử âm thanh thông báo"
+                  : "Nhấn để kích hoạt âm thanh thông báo"
+                : "Nhấn để bật âm thanh thông báo"
             }
             onClick={async () => {
               if (
@@ -965,8 +998,7 @@ export default function App() {
               setSoundEnabled(true);
               soundEnabledRef.current = true;
               localStorage.setItem("ro-notification-sound", "on");
-              if (await unlockNotificationSound()) playNotificationSound(true);
-              else
+              if (!(await unlockNotificationSound()))
                 notify(
                   "Trình duyệt chưa cho phép phát âm thanh. Hãy kiểm tra chế độ im lặng và âm lượng thiết bị.",
                   true,
@@ -983,22 +1015,6 @@ export default function App() {
             </span>
           </button>
           <button
-            className="ghost notification-sound-test"
-            aria-label="Thử âm báo"
-            title="Phát thử âm báo đơn hàng"
-            onClick={async () => {
-              if (await unlockNotificationSound())
-                playNotificationSound(true, "order");
-              else
-                notify(
-                  "Trình duyệt chưa cho phép phát âm thanh. Hãy kiểm tra chế độ im lặng và âm lượng thiết bị.",
-                  true,
-                );
-            }}
-          >
-            Thử
-          </button>
-          <button
             className="ghost"
             aria-label="Thông báo"
             onClick={() => navigateTo("notifications")}
@@ -1006,7 +1022,8 @@ export default function App() {
             <Icon icon={faBell} />
           </button>
           <span className="user-name">
-            {session.user.display_name} · {admin ? "Quản trị" : "Khách hàng"}
+            <span className="user-avatar" aria-hidden="true">{String(session.user.display_name).trim().split(/\s+/).at(-1)?.charAt(0)}</span>
+            <span>{session.user.display_name}<small>{{ADMIN:"Người quản trị",SELLER:"Người bán",SHIPPER:"Người giao hàng",CUSTOMER:"Khách hàng"}[session.user.role as string]}</small></span>
           </span>
           <button
             className="ghost"
@@ -1037,16 +1054,16 @@ export default function App() {
       )}
       <div
         className={
-          "shell" +
+          "shell role-" + session.user.role.toLowerCase() +
           (navCollapsed ? " nav-collapsed" : "") +
           (navOpen ? " nav-open" : "")
         }
       >
         <aside className="nav">
           <div className="nav-label">
-            {admin ? "Điều hành bán hàng" : "Mua sắm & hỗ trợ"}
+            {seller ? "Kênh người bán" : admin ? "Quản trị sàn" : session.user.role === "SHIPPER" ? "Giao nhận hàng" : "Cửa hàng của bạn"}
           </div>
-          {nav.map(([id, label, icon]) => (
+          {nav.filter(([id]) => !!pathForTab(session.user.role,String(id))).map(([id, label, icon]) => (
             <a
               key={String(id)}
               href={pathForTab(session.user.role, String(id))}
@@ -1075,9 +1092,9 @@ export default function App() {
             Dữ liệu lưu trên máy chủ
           </div>
         </aside>
-        <main>
+        <main id="main-content" tabIndex={-1} data-role={session.user.role} data-screen={tab}>
           {session.demo && (
-            <div className="notice warn">
+            <div className="notice warn demo-notice">
               Môi trường học tập · không dùng để bán hàng thật.
             </div>
           )}
@@ -1098,14 +1115,16 @@ export default function App() {
           {(tab === "catalog" || tab === "checkout") && (
             <DailyCatalog mode={tab === "checkout" ? "checkout" : "catalog"} />
           )}
-          {tab === "orders" && <Orders admin={admin} />}{" "}
+          {!marketKind && ["orders","feed","shop","staff","finance","reviews"].includes(tab) && <BusinessScreen kind={tab} user={session.user} online={online && pending.length===0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} />}{" "}
+          {marketKind && <MarketplaceScreen kind={marketKind} user={session.user} online={online && pending.length === 0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} money={money} />}
+          {tab === "shop" && seller && <WarehouseSettings />}
           {tab === "chat" && <Chat admin={admin} />}{" "}
           {tab === "notifications" && <Notifications />}{" "}
           {tab === "profile" && <Profile />}{" "}
           {tab === "offers" && <DailyMenus />}{" "}
           {tab === "products" && <Products />} {tab === "users" && <Users />}{" "}
           {tab === "config" && <Configuration />}{" "}
-          {tab === "reports" && <DailyReports />} {tab === "audit" && <Audit />}
+          {tab === "reports" && <Overview />} {tab === "audit" && <Audit />}
         </main>
       </div>
       {(messageNotice || orderNotice || customerNotice) && (
@@ -1327,20 +1346,21 @@ function Auth({ onLogin }: { onLogin: (s: Session) => void }) {
           RealtimeOrders
         </div>
         <h1>
-          Đặt hàng rõ ràng.
+          Bữa ăn mỗi ngày,
           <br />
-          Nhận hàng đúng hẹn.
+          mua sắm nhẹ nhàng.
         </h1>
         <p>
-          Xem hàng đang bán, theo dõi đơn và trao đổi trực tiếp với người bán
-          trong cùng một nơi.
+          Chọn thực phẩm, đặt hàng và theo dõi giao nhận.
+          Mọi thông tin bạn cần, trong cùng một cửa hàng.
         </p>
+        <img className="auth-grocery-art" src="/grocery-basket.svg" alt="" />
         <div className="auth-workflow" aria-label="Cách mua hàng">
           <div><span>01</span><strong>Chọn món hôm nay</strong><small>Sản phẩm, giá và lượng còn rõ ràng</small></div>
           <div><span>02</span><strong>Đặt hàng thuận tiện</strong><small>Chọn nơi nhận, kiểm tra phí giao</small></div>
           <div><span>03</span><strong>Theo dõi trực tiếp</strong><small>Cập nhật khi người bán xử lý đơn</small></div>
         </div>
-        <div className="muted">Bài tập lớn Lập trình mạng · Nhóm 17</div>
+        <div className="muted">Bài tập lớn Lập trình mạng · Nhóm 15</div>
       </section>
       <section className="auth-form">
         <div className="auth-inner">
@@ -1538,7 +1558,7 @@ function useData(path: string) {
   const previousPath = useRef(path);
   const [catalogRevision, setCatalogRevision] = useState(0);
   useEffect(() => {
-    if (path !== "/catalog/upcoming") return;
+    if (!path.startsWith("/catalog/upcoming")) return;
     const update = () => setCatalogRevision(value => value + 1);
     window.addEventListener("ro:catalog", update);
     return () => window.removeEventListener("ro:catalog", update);
@@ -1611,500 +1631,6 @@ function Heading({
       </div>
       {children}
     </div>
-  );
-}
-
-function Orders({ admin }: { admin: boolean }) {
-  const { mutate, online, notify } = useApp();
-  const [page, setPage] = useState(0),
-    [filter, setFilter] = useState(""),
-    [selected, setSelected] = useState<Row | null>(null),
-    [busy, setBusy] = useState(false),
-    [reason, setReason] = useState(""),
-    [quickAction, setQuickAction] = useState<Row | null>(null);
-  const { data: orders } = useData(
-    (admin ? "/admin" : "") +
-      "/orders?page=" +
-      page +
-      (filter ? "&status=" + filter : ""),
-  );
-  useEffect(() => {
-    if (selected && orders) {
-      const fresh = orders.find((o: Row) => o.id === selected.id);
-      if (fresh) setSelected(fresh);
-    }
-  }, [orders]);
-  const action = async (o: Row, act: string, extra: Row = {}) => {
-    setBusy(true);
-    try {
-      const result = await mutate(
-        (admin ? "/admin" : "") + "/orders/" + o.id + "/" + act,
-        { expectedVersion: String(o.version), reason, ...extra },
-      );
-      if (selected?.id === o.id) setSelected(result);
-      setQuickAction(null);
-      setReason("");
-      notify("Đã cập nhật đơn");
-    } catch {
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <Heading
-        title={admin ? "Xử lý đơn hàng" : "Đơn của tôi"}
-        sub={
-          admin
-            ? "Kiểm tra tồn kho, duyệt đơn và theo dõi quá trình giao."
-            : "Theo dõi xác nhận, giao hàng và các yêu cầu hủy."
-        }
-      />
-      <div className="toolbar">
-        <select
-          aria-label="Lọc trạng thái đơn"
-          value={filter}
-          onChange={(e) => {
-            setFilter(e.target.value);
-            setPage(0);
-          }}
-        >
-          <option value="">Tất cả trạng thái</option>
-          {[
-            "PENDING",
-            "APPROVED",
-            "PREPARING",
-            "SHIPPING",
-            "DELIVERED",
-            "CANCELLED",
-            "REJECTED",
-          ].map((s) => (
-            <option key={s} value={s}>
-              {statuses[s]}
-            </option>
-          ))}
-        </select>
-        <span className="muted">Trang {page + 1}</span>
-      </div>
-      <div className="panel table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>Đơn / thời gian</th>
-              <th>Mặt hàng</th>
-              <th>Thanh toán COD</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders?.map((o: Row) => (
-              <tr key={o.id}>
-                <td>
-                  <strong>#{o.id.slice(0, 8).toUpperCase()}</strong>
-                  <div className="date">{date(o.created_at)}</div>
-                  {admin && (
-                    <div className="muted">
-                      {o.address_snapshot.recipient_name}
-                    </div>
-                  )}
-                </td>
-                <td>
-                  {o.items.map((i: Row) => (
-                    <div key={i.id}>
-                      {i.product_name_snapshot}{" "}
-                      <span className="muted">
-                        × {qty(i.quantity)} {i.unit_snapshot}
-                      </span>
-                    </div>
-                  ))}
-                </td>
-                <td className="money">{money(o.total)}</td>
-                <td>
-                  <Status value={o.status} />
-                  {o.cancellation_requests.some(
-                    (x: Row) => x.state === "OPEN",
-                  ) && <div className="status PENDING">Có yêu cầu hủy</div>}
-                </td>
-                <td>
-                  <div className="actions order-actions">
-                    {admin && o.status === "PENDING" && (
-                      <>
-                        <button
-                          className="primary small"
-                          disabled={!online || busy}
-                          onClick={() => action(o, "approve")}
-                        >
-                          Duyệt
-                        </button>
-                        <button
-                          className="small"
-                          disabled={!online || busy}
-                          onClick={() => {
-                            setReason("");
-                            setQuickAction({
-                              order: o,
-                              act: "reject",
-                              title: "Từ chối đơn",
-                            });
-                          }}
-                        >
-                          Từ chối
-                        </button>
-                      </>
-                    )}
-                    {admin &&
-                    o.cancellation_requests.some(
-                      (c: Row) => c.state === "OPEN",
-                    ) ? (
-                      <>
-                        <button
-                          className="small danger"
-                          disabled={!online || busy}
-                          onClick={() => {
-                            setReason("");
-                            setQuickAction({
-                              order: o,
-                              act: "decide-cancel",
-                              extra: { accept: true },
-                              title: "Chấp thuận hủy và hoàn kho",
-                            });
-                          }}
-                        >
-                          Chấp thuận hủy
-                        </button>
-                        <button
-                          className="small"
-                          disabled={!online || busy}
-                          onClick={() => {
-                            setReason("");
-                            setQuickAction({
-                              order: o,
-                              act: "decide-cancel",
-                              extra: { accept: false },
-                              title: "Từ chối yêu cầu hủy",
-                            });
-                          }}
-                        >
-                          Không chấp thuận hủy
-                        </button>
-                      </>
-                    ) : (
-                      admin &&
-                      ["APPROVED", "PREPARING", "SHIPPING"].includes(
-                        o.status,
-                      ) && (
-                        <button
-                          className="primary small"
-                          disabled={!online || busy}
-                          onClick={() =>
-                            action(o, "transition", {
-                              status: (
-                                {
-                                  APPROVED: "PREPARING",
-                                  PREPARING: "SHIPPING",
-                                  SHIPPING: "DELIVERED",
-                                } as Row
-                              )[o.status],
-                            })
-                          }
-                        >
-                          {
-                            (
-                              {
-                                APPROVED: "Chuẩn bị",
-                                PREPARING: "Bàn giao",
-                                SHIPPING: "Đã giao",
-                              } as Row
-                            )[o.status]
-                          }
-                        </button>
-                      )
-                    )}
-                    {!admin &&
-                      ["PENDING", "APPROVED", "PREPARING"].includes(o.status) &&
-                      !o.cancellation_requests.some(
-                        (c: Row) => c.state === "OPEN",
-                      ) && (
-                        <button
-                          className="small danger"
-                          disabled={!online || busy}
-                          onClick={() => {
-                            setReason("");
-                            setQuickAction({
-                              order: o,
-                              act:
-                                o.status === "PENDING"
-                                  ? "cancel"
-                                  : "cancellation-requests",
-                              title:
-                                o.status === "PENDING"
-                                  ? "Hủy đơn"
-                                  : "Gửi yêu cầu hủy",
-                            });
-                          }}
-                        >
-                          Hủy đơn
-                        </button>
-                      )}
-                    <button
-                      className="small"
-                      onClick={() => {
-                        setSelected(o);
-                        setReason("");
-                      }}
-                    >
-                      Chi tiết
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {orders?.length === 0 && <Empty title="Chưa có đơn phù hợp" />}
-        {!orders && <div className="spinner">Đang lấy đơn…</div>}
-      </div>
-      <div className="toolbar">
-        <button disabled={!page} onClick={() => setPage(page - 1)}>
-          Trang trước
-        </button>
-        <button
-          disabled={!orders || orders.length < 50}
-          onClick={() => setPage(page + 1)}
-        >
-          Trang sau
-        </button>
-      </div>
-      {quickAction && (
-        <Modal title={quickAction.title} close={() => setQuickAction(null)}>
-          <div className="form">
-            <p>Đơn #{quickAction.order.id.slice(0, 8).toUpperCase()}</p>
-            <Field label="Lý do / ghi chú">
-              <textarea
-                maxLength={1000}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </Field>
-            <button
-              className="primary"
-              disabled={
-                !online ||
-                busy ||
-                (quickAction.act === "cancellation-requests" && !reason.trim())
-              }
-              onClick={() =>
-                action(
-                  quickAction.order,
-                  quickAction.act,
-                  quickAction.extra ?? {},
-                )
-              }
-            >
-              Xác nhận
-            </button>
-          </div>
-        </Modal>
-      )}
-      {selected && (
-        <Modal
-          title={"Đơn #" + selected.id.slice(0, 8).toUpperCase()}
-          close={() => setSelected(null)}
-        >
-          <div className="row-heading">
-            <Status value={selected.status} />
-            <span className="muted">Phiên bản {selected.version}</span>
-          </div>
-          <div className="detail-grid">
-            <div>
-              <strong>Người nhận</strong>
-              <p>{selected.address_snapshot.recipient_name}</p>
-              <p>{selected.address_snapshot.phone_e164}</p>
-              <p>{selected.address_snapshot.address_line}</p>
-            </div>
-            <div>
-              <strong>Giao hàng</strong>
-              <p>
-                {selected.delivery_method === "COLLECTIVE"
-                  ? "Giao tập trung"
-                  : "Giao riêng"}
-              </p>
-              <p>{selected.delivery_snapshot.pickupSlot?.name}</p>
-              <p>Giá nhóm: {selected.group_snapshot.name}</p>
-            </div>
-          </div>
-          <div className="panel table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Mặt hàng</th>
-                  <th>Số lượng</th>
-                  <th>Đơn giá</th>
-                  <th>Thành tiền</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selected.items.map((i: Row) => (
-                  <tr key={i.id}>
-                    <td>{i.product_name_snapshot}</td>
-                    <td>
-                      {qty(i.quantity)} {i.unit_snapshot}
-                    </td>
-                    <td>{money(i.unit_price)}</td>
-                    <td>{money(i.line_total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="summary-row">
-            <span>Phí giao</span>
-            <span>{money(selected.shipping_fee)}</span>
-          </div>
-          <div className="summary-row total">
-            <span>Tổng COD</span>
-            <span>{money(selected.total)}</span>
-          </div>
-          {selected.note && <p>Ghi chú: {selected.note}</p>}
-          <h3 style={{ marginTop: 20 }}>Lịch sử xử lý</h3>
-          <div className="timeline">
-            {selected.history.map((h: Row) => (
-              <div key={h.id}>
-                <Status value={h.to_status} /> · {date(h.created_at)}
-                {h.reason && <p>{h.reason}</p>}
-              </div>
-            ))}
-          </div>
-          {selected.cancellation_requests.map((c: Row) => (
-            <div className="notice warn" key={c.id}>
-              Yêu cầu hủy: {c.reason}
-              <br />
-              {c.state === "OPEN"
-                ? "Đang chờ quản trị xác nhận"
-                : c.state === "ACCEPTED"
-                  ? "Đã chấp thuận và hoàn kho"
-                  : "Đã từ chối hủy"}
-              {c.decision_note && <p>{c.decision_note}</p>}
-            </div>
-          ))}
-          {["PENDING", "APPROVED", "PREPARING", "SHIPPING"].includes(
-            selected.status,
-          ) && (
-            <>
-              <Field label="Lý do / ghi chú xử lý">
-                <textarea
-                  value={reason}
-                  maxLength={1000}
-                  onChange={(e) => setReason(e.target.value)}
-                />
-              </Field>
-              <div className="actions" style={{ marginTop: 14 }}>
-                {admin ? (
-                  <>
-                    {selected.status === "PENDING" && (
-                      <>
-                        <button
-                          className="primary"
-                          disabled={!online || busy}
-                          onClick={() => action(selected, "approve")}
-                        >
-                          Duyệt toàn bộ đơn
-                        </button>
-                        <button
-                          disabled={!online || busy}
-                          onClick={() => action(selected, "reject")}
-                        >
-                          Từ chối
-                        </button>
-                      </>
-                    )}
-                    {selected.cancellation_requests.some(
-                      (x: Row) => x.state === "OPEN",
-                    ) ? (
-                      <>
-                        <button
-                          className="danger"
-                          disabled={!online || busy}
-                          onClick={() =>
-                            action(selected, "decide-cancel", { accept: true })
-                          }
-                        >
-                          Chấp thuận hủy & hoàn kho
-                        </button>
-                        <button
-                          disabled={!online || busy}
-                          onClick={() =>
-                            action(selected, "decide-cancel", { accept: false })
-                          }
-                        >
-                          Từ chối yêu cầu hủy
-                        </button>
-                      </>
-                    ) : (
-                      ["APPROVED", "PREPARING", "SHIPPING"].includes(
-                        selected.status,
-                      ) && (
-                        <button
-                          className="primary"
-                          disabled={!online || busy}
-                          onClick={() =>
-                            action(selected, "transition", {
-                              status: (
-                                {
-                                  APPROVED: "PREPARING",
-                                  PREPARING: "SHIPPING",
-                                  SHIPPING: "DELIVERED",
-                                } as Row
-                              )[selected.status],
-                            })
-                          }
-                        >
-                          {
-                            (
-                              {
-                                APPROVED: "Bắt đầu chuẩn bị",
-                                PREPARING: "Bàn giao vận chuyển",
-                                SHIPPING: "Xác nhận đã giao",
-                              } as Row
-                            )[selected.status]
-                          }
-                        </button>
-                      )
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {selected.status === "PENDING" && (
-                      <button
-                        className="danger"
-                        disabled={!online || busy}
-                        onClick={() => action(selected, "cancel")}
-                      >
-                        Hủy đơn đang chờ
-                      </button>
-                    )}
-                    {["APPROVED", "PREPARING"].includes(selected.status) &&
-                      !selected.cancellation_requests.some(
-                        (x: Row) => x.state === "OPEN",
-                      ) && (
-                        <button
-                          disabled={!online || busy || !reason.trim()}
-                          onClick={() =>
-                            action(selected, "cancellation-requests")
-                          }
-                        >
-                          Gửi yêu cầu hủy
-                        </button>
-                      )}
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </Modal>
-      )}
-    </>
   );
 }
 
@@ -2447,11 +1973,13 @@ function Chat({ admin }: { admin: boolean }) {
     [busy, setBusy] = useState(false),
     [more, setMore] = useState(true);
   const bottom = useRef<HTMLDivElement>(null);
+  const { data: shops } = useData("/marketplace/shops");
+  const [chatShop, setChatShop] = useState(() => sessionStorage.getItem(chatShopKey(session.user.id)) || DEFAULT_SHOP);
   useEffect(() => {
     let live = true;
     (admin
       ? api("/admin/conversations")
-      : api("/conversations/me").then((c) => [c])
+      : api("/conversations/me?shopId=" + chatShop).then(() => api("/marketplace/conversations"))
     )
       .then((c) => {
         if (live) {
@@ -2461,8 +1989,8 @@ function Chat({ admin }: { admin: boolean }) {
           const requestedConversation = c.find(
             (conversation: Row) => conversation.id === requested,
           );
-          const next = requestedConversation?.id ?? c[0]?.id ?? "";
-          setSelected((old) => old || next);
+          const next = requestedConversation?.id ?? c.find((conversation: Row) => conversation.shop_id === chatShop)?.id ?? c[0]?.id ?? "";
+          setSelected((old) => requestedConversation ? next : c.some((conversation: Row) => conversation.id === old) ? old : next);
           if (requestedConversation) sessionStorage.removeItem(targetKey);
         }
       })
@@ -2470,7 +1998,7 @@ function Chat({ admin }: { admin: boolean }) {
     return () => {
       live = false;
     };
-  }, [admin, refresh, notify]);
+  }, [admin, chatShop, refresh, notify, session.user.id]);
   useEffect(() => {
     const openConversation = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
@@ -2524,6 +2052,14 @@ function Chat({ admin }: { admin: boolean }) {
         title={admin ? "Tin nhắn khách hàng" : "Nhắn người bán"}
         sub="Hội thoại riêng, lưu lịch sử và nhận cập nhật khi có kết nối."
       />
+      {!admin && shops && <div className="toolbar"><ShopSelect shops={shops} value={chatShop} label="Nhắn cho shop" onChange={(id) => {
+        sessionStorage.setItem(chatShopKey(session.user.id), id);
+        setChatShop(id);
+        setSelected("");
+        setMessages([]);
+        setContent("");
+        setAssets([]);
+      }} /></div>}
       <div className="panel chat-layout">
         <div className="chat-sidebar">
           {conversations.map((c) => (
@@ -2533,9 +2069,11 @@ function Chat({ admin }: { admin: boolean }) {
               onClick={() => {
                 setSelected(c.id);
                 setMessages([]);
+                setContent("");
+                setAssets([]);
               }}
             >
-              {admin ? c.display_name : "Người bán"}
+              {admin ? `${c.display_name}${session.user.role === "ADMIN" && c.shop_name ? " · " + c.shop_name : ""}` : c.shop_name}
             </button>
           ))}
           {!conversations.length && <p className="muted">Chưa có hội thoại</p>}
@@ -2703,11 +2241,14 @@ function Notifications() {
 }
 
 function Products() {
-  const { data } = useData("/admin/products"),
+  const { session, mutate, notify, online } = useApp();
+  const adminView = session.user.role === "ADMIN";
+  const [shopId, setShopId] = useState(DEFAULT_SHOP);
+  const { data: shops } = useData("/marketplace/shops");
+  const { data } = useData("/admin/products" + (adminView ? "?shopId=" + shopId : "")),
     { data: categories } = useData("/admin/config/categories"),
     { data: units } = useData("/admin/config/units"),
     { data: groups } = useData("/admin/config/groups");
-  const { mutate, notify, online } = useApp();
   const [form, setForm] = useState<Row | null>(null),
     [busy, setBusy] = useState(false),
     [imageUrlDraft, setImageUrlDraft] = useState(""),
@@ -2737,6 +2278,7 @@ function Products() {
             ),
           }
         : {
+            shopId: adminView ? shopId : undefined,
             name: "",
             description: "",
             categoryId: categories?.[0]?.id,
@@ -2781,6 +2323,7 @@ function Products() {
       : "Đã thêm ảnh vào danh sách. Bấm Lưu sản phẩm để lưu.");
   };
   const filteredProducts = (data ?? []).filter((p: Row) => {
+    if (adminView && shopOf(p) !== shopId) return false;
     const matchesCategory =
       catalogCategory === "all" || p.category_id === catalogCategory;
     const matchesSearch =
@@ -2803,6 +2346,10 @@ function Products() {
       </Heading>
       <section className="panel">
         <div className="form-grid">
+          {adminView && <ShopSelect shops={shops ?? []} value={shopId} onChange={(id) => {
+            setForm(null);
+            setShopId(id);
+          }} />}
           <Field label="Lọc theo danh mục">
             <select
               value={catalogCategory}
@@ -3237,14 +2784,14 @@ function Users() {
                 <td>
                   <strong>{u.display_name}</strong>
                   <div className="product-subtitle">
-                    {u.role === "ADMIN" ? "Người quản trị" : "Khách hàng"}
+                    {({ADMIN:"Người quản trị",SELLER:"Người bán",SHIPPER:"Người giao hàng",CUSTOMER:"Khách hàng"} as Row)[u.role]}
                   </div>
                 </td>
                 <td>
                   {u.phone_e164}
                   <div className="muted">{u.email_normalized}</div>
                 </td>
-                <td>{u.role === "ADMIN" ? "Người quản trị" : groups?.find((g: Row) => g.id === u.group_id)?.name ?? "Chưa phân nhóm"}</td>
+                <td>{u.role !== "CUSTOMER" ? ({ADMIN:"Người quản trị",SELLER:"Người bán",SHIPPER:"Người giao hàng"} as Row)[u.role] : groups?.find((g: Row) => g.id === u.group_id)?.name ?? "Chưa phân nhóm"}</td>
                 <td>
                   <Status value={u.status} />
                 </td>
@@ -3315,7 +2862,7 @@ function Users() {
             }}
           >
             <Field label="Nhóm khách hàng">
-              {selected.role === "ADMIN" ? <input value="Người quản trị" readOnly /> : <select
+              {selected.role !== "CUSTOMER" ? <input value={({ADMIN:"Người quản trị",SELLER:"Người bán",SHIPPER:"Người giao hàng"} as Row)[selected.role]} readOnly /> : <select
                 value={selected.groupId}
                 onChange={(e) =>
                   setSelected({ ...selected, groupId: e.target.value })
@@ -3417,6 +2964,7 @@ const configSpecs: Record<string, { title: string; fields: ConfigField[] }> = {
 };
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
 function Configuration() {
+  const {session: configSession} = useApp();
   const [kind, setKind] = useState("groups"),
     [form, setForm] = useState<Row | null>(null),
     [busy, setBusy] = useState(false);
@@ -3496,9 +3044,9 @@ function Configuration() {
         sub="Quản lý nhóm, chính sách giao, danh mục và kiểm duyệt nội dung."
       />
       <WarehouseSettings />
-      <VerifiedLocations />
+      {configSession.user.role === "ADMIN" && <VerifiedLocations />}
       <div className="tabs">
-        {Object.entries(configSpecs).map(([id, s]) => (
+        {Object.entries(configSpecs).filter(([id])=>configSession.user.role==="ADMIN" || id!=="moderation-rules").map(([id, s]) => (
           <button
             key={id}
             className={kind === id ? "active" : ""}
@@ -3902,11 +3450,11 @@ function LocationPicker({ onSelect, initial = "", initialPoint = null }: {
         setApproximate(!!loc.approximate); setMatchType(loc.matchType ?? "NEARBY"); setSource(loc.source ?? "NOMINATIM"); setMapOpen(true); setResults([]); setSearched(false);
         setConfirmed(false); onSelect({ locationToken: null });
       } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-    }}>{r.label}<small className="location-result-hint">{locationMatchLabels[r.matchType] ?? (r.approximate ? locationMatchLabels.STREET : locationMatchLabels.NEARBY)} · {r.source === "LOCAL" ? "Danh sách công cộng" : r.source === "PHOTON" ? "Photon / OpenStreetMap" : "Nominatim / OpenStreetMap"}</small></button>)}</div>}
+    }}>{r.label}<small className="location-result-hint">{r.source === "VIETMAP" ? "Kiểm tra vị trí và số nhà" : (locationMatchLabels[r.matchType] ?? (r.approximate ? locationMatchLabels.STREET : locationMatchLabels.NEARBY))} · {r.source === "VIETMAP" ? "VIETMAP" : r.source === "GOOGLE" ? "Google Maps" : r.source === "LOCAL" ? "Danh sách công cộng" : r.source === "PHOTON" ? "Photon / OpenStreetMap" : "Nominatim / OpenStreetMap"}</small></button>)}</div>}
     {mapOpen && <>
-      {matchType && !approximate && <p className="notice">{locationMatchLabels[matchType]}{source === "LOCAL" && ". Vẫn kiểm tra cổng/điểm nhận trước khi xác nhận."}</p>}
+      {matchType && !approximate && <p className="notice">{source === "VIETMAP" ? "Kiểm tra số nhà và vị trí trước khi xác nhận." : locationMatchLabels[matchType]}{source === "LOCAL" && ". Vẫn kiểm tra cổng/điểm nhận trước khi xác nhận."}</p>}
       {approximate && <p className="notice warn">Kết quả này là đoạn đường/khu vực, chưa phải số nhà. Hãy đặt lại ghim trước khi xác nhận.</p>}
-      {mapConfig ? <PointMap value={point} center={mapConfig.center} tileUrl={mapConfig.tileUrl} disabled={busy || !online} onChange={movePoint} /> : <p>Đang tải cấu hình bản đồ…</p>}
+      {mapConfig ? mapConfig.provider === "google" ? <GooglePointMap value={point} center={mapConfig.center} browserKey={mapConfig.browserKey} disabled={busy || !online} onChange={movePoint} /> : <PointMap value={point} center={mapConfig.center} tileUrl={mapConfig.tileUrl} disabled={busy || !online} onChange={movePoint} /> : <p>Đang tải cấu hình bản đồ…</p>}
       {point && <p className="muted">Điểm đã chọn: {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</p>}
       <button type="button" className="primary" disabled={!point || busy || !online} onClick={async () => {
         if (!point) return;
@@ -3918,25 +3466,25 @@ function LocationPicker({ onSelect, initial = "", initialPoint = null }: {
       }}>Xác nhận điểm nhận này</button>
     </>}
     {confirmed && <p className="notice" role="status">Đã xác nhận điểm trên bản đồ. Lưu thay đổi để hoàn tất.</p>}
-    <p className="muted osm-attribution">OpenStreetMap có thể thiếu số nhà. Tìm địa danh gần đó rồi chọn ghim; địa chỉ chi tiết vẫn nhập riêng bên dưới. Tìm kiếm qua Photon/Nominatim và tải bản đồ sử dụng dịch vụ công cộng; chỉ dùng địa điểm thử nghiệm.</p>
+    <p className="muted osm-attribution">{mapConfig?.provider === "vietmap" ? "Địa chỉ tìm bằng VIETMAP. Bản đồ nền © OpenStreetMap contributors. Vui lòng kiểm tra vị trí trước khi xác nhận." : mapConfig?.provider === "google" ? "Google Maps · Kiểm tra vị trí trên bản đồ trước khi xác nhận." : <>OpenStreetMap có thể thiếu số nhà. Tìm địa danh gần đó rồi chọn ghim; địa chỉ chi tiết vẫn nhập riêng bên dưới. Tìm kiếm qua Photon/Nominatim và tải bản đồ sử dụng dịch vụ công cộng; chỉ dùng địa điểm thử nghiệm.</>}</p>
   </div>;
 }
 
 function WarehouseSettings() {
   const { data: warehouse } = useData("/admin/warehouse");
-  const { mutate, online, notify } = useApp();
+  const { mutate, online, notify, session } = useApp();
   const [location, setLocation] = useState<Row | null>(null);
   return (
     <section className="panel warehouse">
       <h2>Kho xuất hàng</h2>
-      <p>{warehouse?.address ?? "96A Trần Phú, Hà Đông, Hà Nội"}</p>
+      <p>{warehouse?.address || "Chưa chọn địa chỉ lấy hàng"}</p>
       <p className="muted">
         {warehouse?.configured
           ? "Đã xác nhận vị trí kho"
           : "Cần xác nhận vị trí kho để tính phí giao riêng."}
       </p>
       <LocationPicker
-        initial="96A Trần Phú, Hà Đông, Hà Nội"
+        initial={warehouse?.address ?? (session.user.role === "ADMIN" ? "96A Trần Phú, Hà Đông, Hà Nội" : "")}
         initialPoint={warehouse?.latitude != null ? { latitude: Number(warehouse.latitude), longitude: Number(warehouse.longitude) } : null}
         onSelect={setLocation}
       />
@@ -4073,10 +3621,14 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   const [promoIds, setPromoIds] = useState<string[] | null>(null);
   useEffect(() => { setPromoClosed(sessionStorage.getItem(promoKey) === "1"); }, [promoKey]);
 
-  const { data: upcoming } = useData("/catalog/upcoming");
-  const { data: offers } = useData("/catalog/offers"),
-    { data: addresses } = useData("/me/addresses"),
-    { data: delivery } = useData("/delivery/options");
+  const { data: shops } = useData("/marketplace/shops");
+  const [storeShop, setStoreShop] = useState(() => sessionStorage.getItem(storefrontShopKey(session.user.id)) ?? "");
+  const { data: upcomingData } = useData("/catalog/upcoming" + (storeShop ? "?shopId=" + storeShop : ""));
+  const { data: allOffers } = useData("/catalog/offers"),
+    { data: checkoutConfig } = useData("/checkout/config"),
+    { data: addresses } = useData("/me/addresses");
+  const offers = storeShop ? allOffers?.filter((offer: Row) => shopOf(offer) === storeShop) : allOffers;
+  const upcoming = storeShop ? upcomingData?.filter((product: Row) => shopOf(product) === storeShop) : upcomingData;
   useEffect(() => {
     if (!offers || promoIds !== null) return;
     const eligible = offers.filter((o: Row) => milli(o.available_qty) > BigInt(0)).map((o: Row) => o.id);
@@ -4099,13 +3651,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   }, []);
   const cartKey = "ro-daily-cart-" + session.user.id;
   const [previousFee, setPreviousFee] = useState<string | null>(null);
-  const [cart, setCart] = useState<Row[]>(() => {
-      try {
-        return JSON.parse(sessionStorage.getItem(cartKey) ?? "[]");
-      } catch {
-        return [];
-      }
-    }),
+  const [allCart, setAllCart] = useState<Row[]>(() => readCart<Row>(cartKey)),
     [requestedView, setRequestedView] = useState<"cart" | "checkout" | null>(
       null,
     ),
@@ -4119,6 +3665,23 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     [nowMs, setNowMs] = useState(Date.now()),
     [search, setSearch] = useState(""),
     [category, setCategory] = useState("ALL");
+  const [chosenCartShop, setChosenCartShop] = useState(() => sessionStorage.getItem(cartKey + "-shop") || DEFAULT_SHOP);
+  const activeCartShop = allCart.some((item) => shopOf(item) === chosenCartShop) ? chosenCartShop : allCart[0] ? shopOf(allCart[0]) : chosenCartShop;
+  const cart = allCart.filter((item) => shopOf(item) === activeCartShop);
+  const cartShops = [...new Map(allCart.map((item) => [shopOf(item), { id: shopOf(item), name: item.shop_name ?? "RealtimeOrders", address: "" }])).values()];
+  const chooseCart = (id: string) => {
+    setChosenCartShop(id);
+    sessionStorage.setItem(cartKey + "-shop", id);
+    setQuote(null);
+    setPreviousFee(null);
+    setConfirmed(false);
+  };
+  const setCart = (update: (items: Row[]) => Row[]) => setAllCart((old) => [
+    ...old.filter((item) => shopOf(item) !== activeCartShop),
+    ...update(old.filter((item) => shopOf(item) === activeCartShop)),
+  ]);
+  const { data: delivery } = useData("/delivery/options?shopId=" + activeCartShop);
+  const [paymentMethod,setPaymentMethod] = useState("COD");
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const view =
     mode === "checkout" && requestedView === null ? "checkout" : requestedView;
@@ -4151,17 +3714,15 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     chosenAddress?.version,
     policy?.id,
     policy?.version,
+    checkoutConfig?.vatVersion,
+    paymentMethod,
   ]);
   useEffect(() => {
     setConfirmed(false);
   }, [fingerprint]);
   useEffect(() => {
-    sessionStorage.setItem(cartKey, JSON.stringify(cart));
-  }, [cart, cartKey]);
-  useEffect(() => {
-    if (!offers) return;
-    setCart((old) => old.filter((c) => offers.some((o: Row) => o.id === c.id)));
-  }, [offers]);
+    sessionStorage.setItem(cartKey, JSON.stringify(allCart));
+  }, [allCart, cartKey]);
   useEffect(() => {
     const timer = setInterval(() => {
       setNowMs(Date.now());
@@ -4179,8 +3740,8 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   useEffect(() => {
     const handler = (e: Event) => {
       if ((e as CustomEvent).detail.path === "/orders") {
-        sessionStorage.removeItem(cartKey);
-        setCart([]);
+        const order = (e as CustomEvent).detail.result;
+        setAllCart((old) => old.filter((item) => shopOf(item) !== shopOf(order)));
         setQuantityDrafts({});
         setView(null);
       }
@@ -4190,7 +3751,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   }, []);
   const stale = cart.some(
     (c) =>
-      !offers?.some(
+      !allOffers?.some(
         (o: Row) =>
           o.id === c.id &&
           o.price_version === c.price_version &&
@@ -4201,6 +3762,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     (sum: bigint, c) => sum + lineMoney(c.unit_price, c.quantity),
     BigInt(0),
   );
+  const vatAmount=(subtotal * BigInt(Math.round(Number(checkoutConfig?.vatRate ?? 0)*100))+BigInt(5000))/BigInt(10000);
   const quantityError = (c: Row, raw: string): string | null => {
     if (!raw.trim()) return "Nhập số lượng.";
     let normalized = raw.trim().replace(",", ".");
@@ -4215,7 +3777,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     if (amount % step !== BigInt(0)) {
       return `Số lượng phải theo bước ${qty(c.quantity_step)} ${c.unit}.`;
     }
-    const live = offers?.find((o: Row) => o.id === c.id);
+    const live = allOffers?.find((o: Row) => o.id === c.id);
     if (!live) return "Sản phẩm hiện không còn mở bán.";
     if (amount > milli(live.available_qty)) {
       return `Chỉ còn ${qty(live.available_qty)} ${c.unit}.`;
@@ -4262,6 +3824,11 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
         .filter(Boolean),
     ),
   ).sort((a, b) => a.localeCompare(b, "vi"));
+  useEffect(() => {
+    if (offers && category !== "ALL" && !offers.some((o: Row) => String(o.category_name ?? "").trim() === category)) {
+      setCategory("ALL");
+    }
+  }, [offers, category]);
   const searchTerm = search.trim().toLocaleLowerCase("vi-VN");
   const filteredOffers = (offers ?? []).filter((o: Row) => {
     const matchesCategory =
@@ -4280,17 +3847,15 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     }));
   const add = (o: Row) => {
     clearQuantityDraft(o.id);
-    const prev = cart.find((c) => c.id === o.id);
+    const prev = allCart.find((c) => c.id === o.id);
     const quantity =
       (prev ? milli(prev.quantity) : BigInt(0)) + milli(o.quantity_step);
     if (quantity > milli(o.available_qty)) {
       notify("Số lượng vượt lượng còn trong kho", true);
       return;
     }
-    setCart((old) => [
-      ...old.filter((c) => c.id !== o.id),
-      { ...o, quantity: fromMilli(quantity) },
-    ]);
+    setAllCart((old) => [...old.filter((c) => c.id !== o.id), { ...o, quantity: fromMilli(quantity) }]);
+    if (activeCartShop !== shopOf(o)) chooseCart(shopOf(o));
     setView("cart");
   };
   const adjust = (c: Row, delta: bigint) => {
@@ -4300,7 +3865,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
       setCart((old) => old.filter((x) => x.id !== c.id));
       return;
     }
-    const live = offers?.find((o: Row) => o.id === c.id);
+    const live = allOffers?.find((o: Row) => o.id === c.id);
     if (!live || quantity > milli(live.available_qty)) {
       notify("Lượng còn lại không đủ", true);
       return;
@@ -4319,6 +3884,8 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
         clientOrderId: crypto.randomUUID(),
         addressId: chosenAddress.id,
         deliveryMethod: policy.method,
+        paymentMethod,
+        vatVersion: checkoutConfig?.vatVersion,
         policyVersion: String(policy.version),
         pickupSlotId: slot?.id,
         pickupSlotVersion: String(slot?.version ?? ""),
@@ -4326,8 +3893,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
         items: items(),
         note,
       });
-      sessionStorage.removeItem(cartKey);
-      setCart([]);
+      setAllCart(clearShopCart<Row>(cartKey, activeCartShop));
       setQuantityDrafts({});
       setView(null);
       notify("Đã gửi đơn, đang chờ người bán duyệt");
@@ -4377,16 +3943,28 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               }}
             >
               <Icon icon={faCartShopping} />
-              <span>Giỏ hàng ({cart.length})</span>
+              <span>Giỏ hàng ({allCart.length})</span>
               {cart.length > 0 && <strong>{money(subtotal)}</strong>}
             </button>
           </Heading>
+          {shops && <section className="storefront-shops" aria-label="Chọn cửa hàng">
+            <div className="storefront-shops-label">Cửa hàng</div>
+            <div className="storefront-shop-list" role="group" aria-label="Lọc theo shop">
+              {[{ id: "", name: "Tất cả cửa hàng", logoUrl: "" }, ...shops].map((shop: Row) => <button type="button" key={shop.id} className="storefront-shop-choice" aria-pressed={storeShop === shop.id} onClick={() => {
+                sessionStorage.setItem(storefrontShopKey(session.user.id), shop.id);
+                setStoreShop(shop.id); setCategory("ALL"); setPromoIds(null);
+              }}>
+                <span className="storefront-shop-mark" aria-hidden="true">{shop.id ? String(shop.name).trim().charAt(0).toUpperCase() : <Icon icon={faBasketShopping} />}{shop.logoUrl && <img src={shop.logoUrl} alt="" loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} />}</span>
+                <span>{shop.name}<small>{shop.id ? "Xem sản phẩm" : "Khám phá các shop"}</small></span>
+              </button>)}
+            </div>
+          </section>}
           {!promoClosed && promoOffers.length > 0 && <section className="menu-promotion" aria-label="Gợi ý sản phẩm đang mở bán">
             <div className="row-heading"><div><div className="eyebrow">Đang mở bán</div><h2>Gợi ý hôm nay</h2></div>
               <button className="ghost small" aria-label="Đóng gợi ý sản phẩm" onClick={() => { setPromoClosed(true); sessionStorage.setItem(promoKey, "1"); }}>✕</button>
             </div>
             <div className="promotion-products">{promoOffers.map((o: Row) => <article key={o.id} className="promotion-product">
-              {o.images?.length > 0 && <img src={productImageSrc(o.images[0])} alt={o.name} loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} />}
+              <div className="promotion-thumb"><Icon icon={faImage} aria-hidden="true" />{o.images?.length > 0 && <img src={productImageSrc(o.images[0])} alt={o.name} loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} />}</div>
               <strong>{o.name}</strong><span>{money(o.unit_price)} / {o.unit}</span>
               <button className="small" disabled={!online} onClick={() => add(o)}>Thêm vào giỏ</button>
             </article>)}</div>
@@ -4432,6 +4010,8 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                 />
               </div>
             </div>
+            <div className="daily-category-control">
+            <span className="daily-category-label">Danh mục hàng</span>
             <div
               className="daily-category-filter"
               role="group"
@@ -4453,14 +4033,10 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                   aria-pressed={category === name}
                   onClick={() => setCategory(name)}
                 >
-                  {name} (
-                  {
-                    offers.filter(
-                      (o: Row) => String(o.category_name ?? "").trim() === name,
-                    ).length
-                  }
+                  {`${name} (${offers.filter((o: Row) => String(o.category_name ?? "").trim() === name).length})`}
                 </button>
               ))}
+            </div>
             </div>
             {(search || category !== "ALL") && (
               <button
@@ -4474,9 +4050,10 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               </button>
             )}
           </div>
+          <p className="muted daily-filter-count" role="status">Hiển thị {filteredOffers.length} / {offers.length} mặt hàng{category !== "ALL" ? ` · ${category}` : ""}</p>
           {!filteredOffers.length ? (
-            <Empty title="Không tìm thấy món phù hợp">
-              Thử từ khóa hoặc danh mục khác.
+            <Empty title={offers.length ? "Không tìm thấy món phù hợp" : "Hiện chưa có món đang mở bán"}>
+              {offers.length ? "Thử từ khóa hoặc danh mục khác." : "Xem mặt hàng sắp mở bán và theo dõi để nhận thông báo khi có đợt mới."}
             </Empty>
           ) : (
             <div className="daily-products">
@@ -4489,8 +4066,10 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                   <ProductImageGallery images={o.images ?? []} name={o.name} />
                   <div className="daily-product-info">
                     <h2>{o.name}</h2>
-                    <small className="offer-round-label">Đợt {String(o.menu_id).slice(-6).toUpperCase()} · {date(o.opens_at)} → {date(o.closes_at)}</small>
+                    {o.shop_name && <small className="product-shop-name"><Icon icon={faBasketShopping} aria-hidden="true" /> {o.shop_name}</small>}
+                    <details className="offer-round-details"><summary>Thông tin đợt bán</summary><small className="offer-round-label">Đợt {String(o.menu_id).slice(-6).toUpperCase()} · {date(o.opens_at)} → {date(o.closes_at)}</small></details>
                     <p className="muted">{o.description}</p>
+                    <ProductReviews productId={o.product_id} request={api} />
                     <p className="stock-note">
                       Số lượng còn lại: <strong>{qty(o.available_qty)} {o.unit}</strong>
                     </p>
@@ -4553,6 +4132,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               if (mode === "checkout") goTo("catalog");
             }}
           >
+            {cartShops.length > 0 && <div className="cart-shop-select"><ShopSelect shops={cartShops} value={activeCartShop} onChange={(id) => { if (!busy) chooseCart(id); }} label="Giỏ hàng của shop" /></div>}
             {!cart.length ? (
               <Empty title="Giỏ hàng chưa có món" />
             ) : (
@@ -4847,7 +4427,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                                   di chuyển
                                 </p>
                                 <p className="muted">
-                                  Tuyến tham khảo do <a href="https://project-osrm.org/" target="_blank" rel="noreferrer">OSRM</a> tính theo mô hình ô tô; có thể khác tuyến xe máy thực tế. Dữ liệu © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a>.
+                                  Tuyến đường tham khảo theo mô hình {quote.routeProfile === "motorcycle" ? "xe máy" : "ô tô"}; thực tế có thể khác.
                                 </p>
                                 <p>
                                   Phí giao:{" "}
@@ -4865,6 +4445,12 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                         )}
                       </>
                     )}
+                    <Field label="Thanh toán">
+                      <select value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}>
+                        <option value="COD">COD · Thu đủ khi nhận hàng</option>
+                        <option value="PAYOS" disabled={!checkoutConfig?.payosAvailable}>payOS VietQR · Trả đủ sau khi shop duyệt{!checkoutConfig?.payosAvailable ? " (chưa cấu hình)" : ""}</option>
+                      </select>
+                    </Field>
                     <Field label="Ghi chú giao hàng">
                       <textarea
                         value={note}
@@ -4879,11 +4465,14 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                       </strong>
                     </div>
                     <div className="summary-line">
-                      <strong>Tổng thanh toán COD</strong>
+                      <strong>VAT {Number(checkoutConfig?.vatRate ?? 0)}%</strong><strong>{checkoutConfig ? money(vatAmount) : "Đang tải…"}</strong>
+                    </div>
+                    <div className="summary-line">
+                      <strong>Tổng thanh toán</strong>
                       <strong>
                         {fee === undefined
                           ? "Chưa tính"
-                          : money(subtotal + BigInt(String(fee)))}
+                          : money(subtotal + vatAmount + BigInt(String(fee)))}
                       </strong>
                     </div>
                     {policy &&
@@ -4899,7 +4488,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                         checked={confirmed}
                         onChange={(e) => setConfirmed(e.target.checked)}
                       />
-                      Tôi đã kiểm tra món, địa chỉ và phí giao.
+                      Tôi đã kiểm tra món, địa chỉ, VAT, phí giao và cách thanh toán.
                     </label>
                     <div className="actions">
                       <button
@@ -4917,6 +4506,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                           busy ||
                           stale ||
                           invalidQuantity ||
+                          !checkoutConfig ||
                           !confirmed ||
                           !chosenAddress ||
                           !policy ||
@@ -4942,22 +4532,65 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   );
 }
 
+function MenuStock({ menu, products, state }: { menu: Row; products: Row[]; state: string }) {
+  const { data, loading } = useData("/admin/menus/" + menu.id);
+  const { online } = useApp();
+  return <section className="menu-stock" aria-label="Tồn kho và trạng thái sản phẩm">
+    <div className="menu-stock-heading">
+      <strong>Sản phẩm trong đợt {menu.sale_date}</strong>
+      <span className="muted">{loading ? "Đang cập nhật…" : `${data?.items?.length ?? 0} sản phẩm`}</span>
+    </div>
+    <p className="muted">Lượng còn thuộc riêng đợt này. Đơn chờ duyệt chưa giữ hàng; tồn được trừ khi duyệt và hoàn khi chấp nhận hủy.</p>
+    {!online && <p role="status">Mất kết nối. Số lượng dưới đây là dữ liệu đã nhận gần nhất.</p>}
+    {!data ? <p role="status">{loading ? "Đang tải sản phẩm…" : "Chưa tải được dữ liệu. Đóng và mở lại để thử lại."}</p> : data.items.length === 0 ? <Empty title="Đợt chưa có sản phẩm" /> :
+      <div className="table-scroll"><table className="menu-stock-table">
+        <thead><tr><th>Sản phẩm</th><th>Lượng còn</th><th>Chờ duyệt</th><th>Trạng thái bán</th></tr></thead>
+        <tbody>{data.items.map((item: Row) => {
+          const product = products.find((p: Row) => p.id === item.product_id);
+          const inactive = product && (!product.active || product.deleted_at);
+          const itemState = !["OPEN", "SOLD_OUT", "SCHEDULED"].includes(state) ? state : inactive ? "INACTIVE" : item.status !== "OPEN" ? "PAUSED" : state === "OPEN" || state === "SOLD_OUT"
+            ? Number(item.available_qty) > 0 ? "OPEN" : "SOLD_OUT" : state;
+          const label = itemState === "INACTIVE" ? "Ngừng sử dụng" : itemState === "PAUSED" ? "Tạm ngừng bán" : itemState === "OPEN" ? "Đang mở bán" : statuses[itemState] ?? itemState;
+          return <tr key={item.id}>
+            <td><div className="menu-stock-product">
+              <span className="menu-stock-image">
+                <Icon icon={faImage} aria-hidden="true" />
+                {item.images?.[0] && <img src={productImageSrc(item.images[0])} alt={item.name} loading="lazy" onError={(e) => { e.currentTarget.hidden = true; }} />}
+              </span>
+              <div><strong>{item.name}</strong><div className="muted">{item.sku}</div></div>
+            </div></td>
+            <td><strong className={Number(item.available_qty) <= 0 ? "menu-stock-empty" : ""}>{qty(item.available_qty)} {item.unit}</strong></td>
+            <td>{qty(item.pending_qty)} {item.unit}</td>
+            <td><span className={"status " + itemState}>{label}</span></td>
+          </tr>;
+        })}</tbody>
+      </table></div>}
+  </section>;
+}
+
 function DailyMenus() {
-  const { data: menus } = useData("/admin/menus"),
-    { data: products } = useData("/admin/products"),
+  const { session, mutate, online, notify } = useApp();
+  const adminView = session.user.role === "ADMIN";
+  const [shopId, setShopId] = useState(DEFAULT_SHOP);
+  const { data: shops } = useData("/marketplace/shops");
+  const scope = adminView ? "?shopId=" + shopId : "";
+  const { data: menus } = useData("/admin/menus" + scope),
+    { data: products } = useData("/admin/products" + scope),
     { data: categories } = useData("/admin/config/categories"),
     { data: units } = useData("/admin/config/units"),
     { data: groups } = useData("/admin/config/groups"),
     { data: priceRules } = useData("/admin/pricing-rules");
-  const { mutate, online, notify } = useApp();
   const [form, setForm] = useState<Row | null>(null),
+    [stockMenuId, setStockMenuId] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [copying, setCopying] = useState<Row | null>(null),
     [targetDay, setTargetDay] = useState(
       vnDay(new Date(Date.now() + 86400000)),
     ),
     [productSearch, setProductSearch] = useState(""),
-    [productCategory, setProductCategory] = useState("all");
+    [productCategory, setProductCategory] = useState("all"),
+    [selectedOnly, setSelectedOnly] = useState(false),
+    [roundFilter, setRoundFilter] = useState("all");
   const editorRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (form) editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4979,8 +4612,10 @@ function DailyMenus() {
     }
     setProductSearch("");
     setProductCategory("all");
+    setSelectedOnly(false);
     if (!m) {
       setForm({
+        shopId: adminView ? shopId : undefined,
         saleDate: vnDay(),
         closeDate: "",
         closeTime: "",
@@ -5008,6 +4643,7 @@ function DailyMenus() {
           productId: o.product_id,
           availableQty: o.available_qty,
           costPrice: o.cost_price ?? "",
+          salePrice: o.sale_price_override ?? "",
           allowedGroupIds:
             products?.find((p: Row) => p.id === o.product_id)
               ?.allowed_group_ids == null
@@ -5019,6 +4655,10 @@ function DailyMenus() {
         }));
       setForm({
         ...full,
+        postTitle: full.post_title ?? "",
+        postBody: full.post_body ?? "",
+        postImageUrl: full.post_image_url ?? "",
+        receivingNote: full.receiving_note ?? "",
         audienceMode: full.audience_mode ?? "MENU",
         saleDate: full.sale_date,
         closeDate:
@@ -5089,7 +4729,9 @@ function DailyMenus() {
       if (checked) {
         const item = cached ?? {
           productId: product.id, availableQty: "0",
-          costPrice: product.default_cost_price ?? "", allowedGroupIds: null,
+          costPrice: product.default_cost_price ?? "",
+          salePrice: "",
+          allowedGroupIds: null,
           prices: menuPrices(product.default_cost_price ?? "", groups ?? [], priceRules),
         };
         return { ...f, items: [...f.items, { ...item, enabled: true,
@@ -5113,6 +4755,7 @@ function DailyMenus() {
     .map((id: string) => groups?.find((g: Row) => g.id === id)?.name ?? "Nhóm đã ngừng dùng").join(", ");
   const filteredProducts = (products ?? [])
     .filter((p: Row) => {
+      if (adminView && shopOf(p) !== shopId) return false;
       const selected = form?.items.some((i: Row) => i.productId === p.id);
       const matchesCategory =
         productCategory === "all" || p.category_id === productCategory;
@@ -5122,18 +4765,29 @@ function DailyMenus() {
           .join(" ")
           .toLocaleLowerCase("vi-VN")
           .includes(productSearch.toLocaleLowerCase("vi-VN"));
-      return p.active && !p.deleted_at && (selected || (matchesCategory && matchesSearch));
+      return p.active && !p.deleted_at && (selectedOnly ? selected : selected || (matchesCategory && matchesSearch));
     })
     .sort(
       (a: Row, b: Row) =>
         Number(form?.items.some((i: Row) => i.productId === b.id)) -
         Number(form?.items.some((i: Row) => i.productId === a.id)),
     );
+  const roundGroups = [
+    { id: "all", label: "Tất cả", states: [] },
+    { id: "live", label: "Đang diễn ra", states: ["OPEN", "SOLD_OUT"] },
+    { id: "scheduled", label: "Sắp mở", states: ["SCHEDULED"] },
+    { id: "draft", label: "Bản nháp", states: ["DRAFT"] },
+    { id: "ended", label: "Đã kết thúc", states: ["CLOSED", "EXPIRED"] },
+  ];
+  const visibleMenus = (menus ?? []).filter((menu: Row) =>
+    (!adminView || shopOf(menu) === shopId) &&
+    (roundFilter === "all" || roundGroups.find((group) => group.id === roundFilter)?.states.includes(effectiveStatus(menu))),
+  );
   return (
     <>
       <Heading
         title="Menu theo ngày"
-        sub="Có thể mở nhiều đợt cùng thời gian, nhưng không trùng sản phẩm giữa các đợt."
+        sub="Lên lịch bán, chọn món và theo dõi tồn kho theo từng đợt."
       >
         <button
           className="primary"
@@ -5143,16 +4797,23 @@ function DailyMenus() {
           Tạo menu ngày
         </button>
       </Heading>
+      {adminView && <div className="toolbar">
+        <ShopSelect shops={shops ?? []} value={shopId} onChange={(id) => {
+          setForm(null);
+          setStockMenuId(null);
+          setShopId(id);
+        }} />
+      </div>}
       {form && (
         <section className="panel menu-editor" ref={editorRef} aria-label={form.id ? "Sửa menu" : "Tạo menu"}>
-          <div className="panel-head">
-            <h2>{form.id ? "Sửa menu" : "Tạo menu"}</h2>
+          <div className="panel-head menu-editor-head">
+            <div><h2>{form.id ? "Sửa menu" : "Tạo menu"}</h2><p className="muted">{form.saleDate} · {form.id ? "Cập nhật đợt bán" : "Đợt bán mới"}</p></div>
             <button onClick={() => setForm(null)}>Đóng biểu mẫu</button>
           </div>
           <div className="form">
             <div className="menu-editor-layout">
             <aside className="menu-settings" aria-label="Thiết lập menu">
-            <h3>Lịch bán và khách hàng</h3>
+            <h3>Lịch bán</h3>
             <div className="form-grid menu-schedule-grid">
               <Field label="Ngày bắt đầu bán">
                 <input
@@ -5247,7 +4908,23 @@ function DailyMenus() {
                 Tùy chỉnh theo từng sản phẩm
               </label>
             </fieldset>
-            <div className="form-grid">
+            <details className="menu-form-disclosure" open={!!(form.id && form.postTitle)}>
+              <summary>Bài đăng và lịch nhận hàng <small>Tùy chọn</small></summary>
+              <div className="form">
+              <Field label="Tiêu đề bài trên bảng tin"><input value={form.postTitle ?? ""} maxLength={150} onChange={e=>setForm({...form,postTitle:e.target.value})}/></Field>
+              <Field label="Nội dung giới thiệu"><textarea value={form.postBody ?? ""} maxLength={2000} onChange={e=>setForm({...form,postBody:e.target.value})}/></Field>
+              <Field label="Ảnh bài đăng (URL HTTPS)"><input type="url" value={form.postImageUrl ?? ""} onChange={e=>setForm({...form,postImageUrl:e.target.value})}/></Field>
+              <Field label="Thời gian / hướng dẫn nhận hàng"><textarea value={form.receivingNote ?? ""} maxLength={500} onChange={e=>setForm({...form,receivingNote:e.target.value})}/></Field>
+              </div>
+            </details>
+            </aside>
+            <section className="menu-products-area" aria-label="Chọn sản phẩm mở bán">
+              <div className="menu-products-heading">
+                <h3>Sản phẩm mở bán</h3>
+                <span className="muted">Đã chọn {form.items.length} sản phẩm</span>
+              </div>
+              <p className="muted">Chọn món để nhập lượng bán, giá nhập và nhóm khách. Các món đã chọn nằm ở đầu danh sách.</p>
+            <div className="form-grid menu-product-filters">
               <Field label="Lọc theo danh mục">
                 <select
                   value={productCategory}
@@ -5271,36 +4948,7 @@ function DailyMenus() {
                 />
               </Field>
             </div>
-            <p className="muted">
-              Món đã chọn vẫn hiển thị khi đổi danh mục hoặc từ khóa.
-            </p>
-            <div className="actions menu-editor-actions">
-              <button disabled={!online || busy || !priceRules} onClick={() => save("DRAFT")}>
-                Lưu nháp
-              </button>
-              <button
-                className="primary"
-                disabled={!online || busy || !form.items.length || !priceRules}
-                onClick={() => save("OPEN")}
-              >
-                Lưu và mở bán
-              </button>
-              {form.id && (
-                <button
-                  disabled={!online || busy || !priceRules}
-                  onClick={() => save("CLOSED")}
-                >
-                  Lưu và đóng bán
-                </button>
-              )}
-            </div>
-            </aside>
-            <section className="menu-products-area" aria-label="Chọn sản phẩm mở bán">
-              <div className="menu-products-heading">
-                <h3>Sản phẩm mở bán</h3>
-                <span className="muted">Đã chọn {form.items.length} sản phẩm</span>
-              </div>
-              <p className="muted">Tích chọn sản phẩm để xem ảnh và thiết lập lượng bán, giá, nhóm khách. Bỏ chọn để ngừng bán món trong đợt; đơn đã tạo vẫn giữ nguyên.</p>
+            <label className="check menu-selected-filter"><input type="checkbox" checked={selectedOnly} onChange={(e) => setSelectedOnly(e.target.checked)} /> Chỉ hiện sản phẩm đã chọn</label>
             <div className="menu-product-list">
               {filteredProducts.map((p: Row) => {
                   const item = form.items.find(
@@ -5315,9 +4963,12 @@ function DailyMenus() {
                           disabled={!online || busy}
                           onChange={(e) => toggleMenuItem(p, e.target.checked)}
                         />
-                        <strong>{p.name}</strong>
+                        <span className="menu-stock-image" aria-hidden="true">
+                          <Icon icon={faImage} />
+                          {!!p.images?.length && <img src={productImageSrc(p.images[0])} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                        </span>
+                        <span className="menu-pick-title"><strong>{p.name}</strong><small>{p.sku} · {units?.find((u: Row) => u.id === p.unit_id)?.label ?? "đơn vị"}</small></span>
                       </label>
-                      <p className="muted menu-product-meta">{p.sku} · {units?.find((u: Row) => u.id === p.unit_id)?.label ?? "đơn vị"}</p>
                       {item && (
                         <div className="menu-selected-product">
                           <ProductImageGallery images={p.images ?? []} name={p.name} />
@@ -5375,7 +5026,11 @@ function DailyMenus() {
                               }
                             />
                           </Field>
-                          <p className="muted menu-pricing-note">Giá bán tự tính theo quy tắc giá hiện hành và làm tròn đến 1 đồng.</p>
+                          <Field label="Giá bán chung của món (đ)">
+                            <input type="number" min="0" step="1" placeholder="Theo quy tắc giá"
+                              value={item.salePrice} onChange={(e) => changeItem(p.id, { salePrice: e.target.value })} />
+                          </Field>
+                          <p className="muted menu-pricing-note">Để trống để tính giá bán theo quy tắc từng nhóm. Giá bán chung áp dụng cho các nhóm được mua món.</p>
                           {groups
                             ?.filter((g: Row) => g.active)
                             .map((g: Row) => (
@@ -5385,7 +5040,7 @@ function DailyMenus() {
                                   min="0"
                                   step="1"
                                   value={
-                                    item.prices.find(
+                                    item.salePrice !== "" ? item.salePrice : item.prices.find(
                                       (x: Row) => x.groupId === g.id,
                                     )?.unitPrice ?? ""
                                   }
@@ -5413,42 +5068,76 @@ function DailyMenus() {
                   );
                 })}
               {!filteredProducts.length && (
-                <p className="muted">Không có sản phẩm phù hợp với bộ lọc.</p>
+                <p className="empty">{selectedOnly ? "Chưa có sản phẩm được chọn." : "Không có sản phẩm phù hợp với bộ lọc."}</p>
               )}
             </div>
             </section>
             </div>
-
+            <footer className="menu-save-bar">
+              <span><strong>{form.items.length} sản phẩm đã chọn</strong><small>Kiểm tra lịch bán và lượng hàng trước khi lưu.</small></span>
+            <div className="actions menu-editor-actions">
+              <button disabled={!online || busy || !priceRules} onClick={() => save("DRAFT")}>
+                Lưu nháp
+              </button>
+              <button
+                className="primary"
+                disabled={!online || busy || !form.items.length || !priceRules}
+                onClick={() => save("OPEN")}
+              >
+                Lưu và mở bán
+              </button>
+              {form.id && (
+                <button
+                  disabled={!online || busy || !priceRules}
+                  onClick={() => save("CLOSED")}
+                >
+                  Lưu và đóng bán
+                </button>
+              )}
+            </div>
+            </footer>
           </div>
         </section>
       )}
       <section className="menu-history" aria-label="Lịch sử mở bán">
-        <h2>Lịch sử mở bán</h2>
+        <div className="menu-history-heading"><div><h2>Lịch sử mở bán</h2><p className="muted">Theo dõi lịch, trạng thái và lượng hàng từng đợt.</p></div>{menus && <span className="muted">{visibleMenus.length} / {menus.length} đợt</span>}</div>
+        <div className="menu-round-filters" role="group" aria-label="Lọc đợt bán theo trạng thái">
+          {roundGroups.map((group) => (
+            <button key={group.id} type="button" aria-pressed={roundFilter === group.id} onClick={() => setRoundFilter(group.id)}>
+              {group.label}{menus ? ` (${group.id === "all" ? menus.length : menus.filter((menu: Row) => group.states.includes(effectiveStatus(menu))).length})` : ""}
+            </button>
+          ))}
+        </div>
         <div className="panel table-scroll">
-        <table>
+        <table className="menu-round-table">
           <thead>
             <tr>
-              <th>Ngày bắt đầu</th>
+              <th>Đợt bán</th>
               <th>Trạng thái</th>
               <th>Thời gian</th>
               <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
-            {menus?.map((m: Row) => (
-              <tr key={m.id}>
-                <td>
-                  <strong>{m.sale_date}</strong>
-                  <div className="muted">ID: {m.id}</div>
+            {visibleMenus.map((m: Row) => (
+              <React.Fragment key={m.id}><tr className="menu-round-row">
+                <td className="menu-round-name">
+                  <strong>{m.post_title || `Đợt ${m.sale_date}`}</strong>
+                  <small>ID {m.id}</small>
                 </td>
-                <td>
+                <td data-label="Trạng thái">
                   <Status value={effectiveStatus(m)} />
                 </td>
-                <td>
-                  {date(m.opens_at)} → {date(m.closes_at)}
+                <td className="menu-round-time" data-label="Lịch bán">
+                  <small>Mở {date(m.opens_at)}</small>
+                  <small>Đóng {date(m.closes_at)}</small>
                 </td>
-                <td>
-                  <div className="actions">
+                <td className="menu-round-action-cell">
+                  <div className="actions menu-round-actions">
+                    <button aria-expanded={stockMenuId === m.id} aria-controls={"menu-stock-" + m.id}
+                      onClick={() => setStockMenuId(stockMenuId === m.id ? null : m.id)}>
+                      {stockMenuId === m.id ? "Ẩn tồn / trạng thái" : "Xem tồn / trạng thái"}
+                    </button>
                     <button disabled={!online || busy || !priceRules} onClick={() => edit(m)}>
                       Sửa món / giá / kho
                     </button>
@@ -5477,10 +5166,14 @@ function DailyMenus() {
                   </div>
                 </td>
               </tr>
+              {stockMenuId === m.id && <tr className="menu-stock-row"><td colSpan={4} id={"menu-stock-" + m.id}>
+                <MenuStock menu={m} products={products ?? []} state={effectiveStatus(m)} />
+              </td></tr>}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
-        {menus?.length === 0 && <Empty title="Chưa có menu" />}
+        {!menus ? <p className="spinner">Đang tải đợt bán…</p> : !visibleMenus.length && <Empty title={menus.length ? "Không có đợt bán phù hợp" : "Chưa có menu"} />}
       </div>
       </section>
       {copying && (
@@ -5524,7 +5217,71 @@ function DailyMenus() {
   );
 }
 
-function DailyReports() {
+const overviewPresets = [
+  { id: "today", label: "Hôm nay" },
+  { id: "week", label: "7 ngày gần nhất" },
+  { id: "month", label: "Tháng này" },
+] as const;
+
+function Overview() {
+  const { session } = useApp();
+  const isSeller = session.user.role === "SELLER";
+  const [selectedShop, setSelectedShop] = useState("");
+  const shopId = isSeller ? String(session.user.shop_id ?? "") : selectedShop;
+  const { data: shops } = useData("/marketplace/shops");
+  const shopName = isSeller ? "Shop của bạn" : shops?.find((shop: Row) => shop.id === shopId)?.name ?? "Tất cả shop";
+  const reportPrefix = isSeller ? "/shop/reports" : "/admin/reports";
+  const [range, setRange] = useState(() => {
+    const end = vnDay();
+    return { start: vnDateOffset(end, -6), end };
+  });
+  const [draft, setDraft] = useState(range);
+  const [preset, setPreset] = useState("week");
+  const [details, setDetails] = useState(false);
+  const { reload } = useApp();
+  const query = new URLSearchParams({ from: range.start, to: range.end, ...(shopId ? { shopId } : {}) });
+  const { data: response, loading } = useData(reportPrefix + "/overview?" + query);
+  const data: OverviewData | null = response?.from === range.start && response?.to === range.end && (response?.shopId ?? "") === shopId ? response : null;
+  const applyPreset = (id: string) => {
+    const end = vnDay();
+    const start = id === "today" ? end : id === "month" ? end.slice(0, 7) + "-01" : vnDateOffset(end, -6);
+    setPreset(id);
+    setDraft({ start, end });
+    setRange({ start, end });
+  };
+  return (
+    <>
+      <Heading title="Tổng quan" sub="Doanh thu hàng ghi nhận khi giao thành công; phí giao, VAT và phí sàn được tách riêng." />
+      <div className="toolbar report-shop-filter">{!isSeller && <ShopSelect shops={shops ?? []} value={selectedShop} allLabel="Tất cả shop · tổng hợp toàn sàn" label="Shop báo cáo" onChange={setSelectedShop} />}<p className="muted">Đang xem: <strong>{shopName}</strong></p></div>
+      <div className="overview-controls">
+        <div className="overview-presets" role="group" aria-label="Khoảng thời gian thống kê">
+          {overviewPresets.map(({ id, label }) => <button key={id} type="button" aria-pressed={preset === id} onClick={() => applyPreset(id)}>{label}</button>)}
+        </div>
+        <form className="overview-range" onSubmit={(e) => { e.preventDefault(); setPreset("custom"); setRange(draft); }}>
+          <Field label="Từ ngày"><input type="date" required value={draft.start} max={draft.end || vnDay()} onChange={(e) => setDraft({ ...draft, start: e.target.value })} /></Field>
+          <Field label="Đến ngày"><input type="date" required value={draft.end} min={draft.start} max={vnDay()} onChange={(e) => setDraft({ ...draft, end: e.target.value })} /></Field>
+          <button type="submit">Áp dụng</button>
+        </form>
+      </div>
+      {data ? <OverviewDashboard data={data} money={money} statusLabels={statuses} afterPlatformFee={isSeller} /> : loading ? <p className="spinner" role="status">Đang tải tổng quan…</p> : <div className="notice warn" role="status">Chưa tải được tổng quan. Chọn khoảng tối đa 366 ngày hoặc <button className="small" type="button" onClick={reload}>Tải lại</button>.</div>}
+      {data && response?.shops && <section className="panel overview-shop-breakdown" aria-label="Doanh thu theo từng shop">
+        <header className="panel-head"><div><h2>Doanh thu theo từng shop</h2><p className="muted">Cùng khoảng ngày đã chọn. Phí sàn là phần ghi nhận cho nền tảng, không cộng thêm vào doanh thu hàng.</p></div></header>
+        <div className="table-scroll"><table><thead><tr><th>Shop</th><th>Đơn đã giao</th><th>Doanh thu trước phí</th><th>Giá vốn</th><th>Lãi gộp</th><th>Phí nền tảng</th><th>Doanh thu sau phí</th><th>Lãi sau phí</th>{!isSeller && <th>Chi tiết</th>}</tr></thead>
+          <tbody>{response.shops.map((shop: Row) => <tr key={shop.shopId}><td><strong>{shop.name}</strong></td><td>{shop.orders}</td><td>{money(shop.merchandise)}</td><td>{shop.cost === null ? "Chưa đủ dữ liệu" : money(shop.cost)}</td><td>{shop.grossProfit === null ? "Chưa đủ dữ liệu" : money(shop.grossProfit)}</td><td>{money(shop.platformFees)}</td><td>{money(shop.afterPlatformFees)}</td><td>{shop.profitAfterFees === null ? "Chưa đủ dữ liệu" : money(shop.profitAfterFees)}</td>{!isSeller && <td><button type="button" className="small" onClick={() => setSelectedShop(shop.shopId)}>Xem shop</button></td>}</tr>)}</tbody>
+        </table></div>
+      </section>}
+      <details className="panel overview-report-details" onToggle={(e) => setDetails(e.currentTarget.open)}>
+        <summary>Báo cáo chi tiết theo ngày và tháng</summary>
+        {details && <div className="panel-body"><DailyReports key={shopId} shopId={shopId} shopName={shopName} /></div>}
+      </details>
+    </>
+  );
+}
+
+function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }) {
+  const { session } = useApp();
+  const prefix = session.user.role === "SELLER" ? "/shop/reports" : "/admin/reports";
+  const shopQuery = shopId ? "&shopId=" + encodeURIComponent(shopId) : "";
   const [day, setDay] = useState(vnDay()),
     [compare, setCompare] = useState(vnDay(new Date(Date.now() - 86400000)));
   const [period, setPeriod] = useState("day");
@@ -5536,13 +5293,14 @@ function DailyReports() {
   const selectedPeriod = period === "month" ? month : day;
   const comparisonPeriod = period === "month" ? compareMonth : compare;
   const { data: reportData } = useData(period === "month"
-    ? "/admin/reports/monthly?month=" + month + "&compare=" + compareMonth
-    : "/admin/reports/daily?date=" + day + "&compare=" + compare);
+    ? prefix + "/monthly?month=" + month + "&compare=" + compareMonth + shopQuery
+    : prefix + "/daily?date=" + day + "&compare=" + compare + shopQuery);
   const data = reportData?.selected?.[period === "month" ? "month" : "day"] === selectedPeriod
-    && reportData?.comparison?.[period === "month" ? "month" : "day"] === comparisonPeriod ? reportData : null;
+    && reportData?.comparison?.[period === "month" ? "month" : "day"] === comparisonPeriod && (reportData?.shopId ?? "") === shopId ? reportData : null;
   const exportCSV = () => {
     const rows = [
       [
+        "Shop",
         "Ngày",
         "Đơn đã giao",
         "Doanh thu hàng",
@@ -5550,8 +5308,13 @@ function DailyReports() {
         "Giá vốn",
         "Lãi gộp",
         "Dòng thiếu giá vốn",
+        "VAT",
+        "Phí sàn",
+        "Doanh thu sau phí",
+        "Lãi sau phí",
       ],
       ...(data?.daily ?? []).map((r: Row) => [
+        shopName,
         r.day,
         r.orders,
         r.merchandise,
@@ -5559,25 +5322,29 @@ function DailyReports() {
         r.cost ?? "",
         r.grossProfit ?? "",
         r.missingCostLines,
+        r.vat,
+        r.platformFees,
+        r.afterPlatformFees,
+        r.profitAfterFees ?? "",
       ]),
     ];
     const url = URL.createObjectURL(
-      new Blob(["\ufeff" + rows.map((r) => r.join(",")).join("\n")], {
+      new Blob(["\ufeff" + rows.map((r) => r.map((cell: unknown) => '"' + String(cell ?? "").replaceAll('"', '""') + '"').join(",")).join("\n")], {
         type: "text/csv;charset=utf-8",
       }),
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "lai-gop-" + selectedPeriod + ".csv";
+    a.download = "lai-gop-" + (shopId || "tat-ca-shop") + "-" + selectedPeriod + ".csv";
     a.click();
     URL.revokeObjectURL(url);
   };
   return (
     <>
-      <Heading
-        title="Doanh thu và lãi gộp"
-        sub="Ghi nhận theo ngày giao thành công, giờ Việt Nam. Phí giao được tách riêng."
-      />
+      <div className="page-heading"><div>
+        <h2>Doanh thu và lãi gộp · {shopName}</h2>
+        <p>Ghi nhận theo ngày giao thành công, giờ Việt Nam. Phí giao được tách riêng.</p>
+      </div></div>
       <div className="tabs" role="group" aria-label="Kỳ báo cáo">
         <button className={period === "day" ? "active" : ""} aria-pressed={period === "day"} onClick={() => setPeriod("day")}>Theo ngày</button>
         <button className={period === "month" ? "active" : ""} aria-pressed={period === "month"} onClick={() => setPeriod("month")}>Theo tháng</button>
@@ -5611,7 +5378,11 @@ function DailyReports() {
               ["merchandise", "Doanh thu hàng"],
               ["cost", "Giá vốn"],
               ["grossProfit", "Lãi gộp"],
+              ["platformFees", "Phí nền tảng"],
+              ["afterPlatformFees", "Doanh thu sau phí"],
+              ["profitAfterFees", "Lãi sau phí"],
               ["shipping", "Phí giao"],
+              ["vat", "VAT"],
             ].map(([field, label]) => (
               <div key={field}>
                 <p className="muted">{label}</p>
@@ -5645,6 +5416,7 @@ function DailyReports() {
               giá vốn; chưa thể tính lãi gộp đầy đủ.
             </p>
           )}
+          {data.selected.legacyPaymentOrders > 0 && <p className="notice warn">Có {data.selected.legacyPaymentOrders} đơn lịch sử chưa có thông tin thanh toán; không tự ghi nhận đã thu hoặc đang nợ.</p>}
           <div className="panel table-scroll">
             <table>
               <thead>
@@ -5655,6 +5427,10 @@ function DailyReports() {
                   <th>Giá vốn</th>
                   <th>Lãi gộp</th>
                   <th>Phí giao</th>
+                  <th>VAT</th>
+                  <th>Phí nền tảng</th>
+                  <th>Doanh thu sau phí</th>
+                  <th>Lãi sau phí</th>
                 </tr>
               </thead>
               <tbody>
@@ -5672,6 +5448,10 @@ function DailyReports() {
                         : money(r.grossProfit)}
                     </td>
                     <td>{money(r.shipping)}</td>
+                    <td>{money(r.vat)}</td>
+                    <td>{money(r.platformFees)}</td>
+                    <td>{money(r.afterPlatformFees)}</td>
+                    <td>{r.profitAfterFees === null ? "Chưa đủ dữ liệu" : money(r.profitAfterFees)}</td>
                   </tr>
                 ))}
               </tbody>

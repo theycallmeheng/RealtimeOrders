@@ -8,6 +8,11 @@ export function activityLabel(r: Log): string {
  }
  if(r.action==="product.update") return a.deleted_at ? "Xóa mềm sản phẩm" : !r.before_data ? "Thêm sản phẩm" : "Cập nhật sản phẩm";
  if(r.action==="menu.save") return a.status==="CLOSED" ? "Đóng đợt bán" : a.status==="OPEN" && b.status!=="OPEN" ? "Mở đợt bán" : !r.before_data ? "Tạo đợt bán nháp" : "Cập nhật đợt bán";
+ const business:Record<string,string>={"order.assign":"Phân công giao / trao hàng","order.delivery-failed":"Ghi nhận giao không thành công","order.retry-delivery":"Điều phối giao lại","order.confirm-return":"Nhận hàng hoàn và hủy đơn","order.payment-expired":"Hủy do hết hạn thanh toán","shop.shop_profile":"Cập nhật hồ sơ cửa hàng","shop.vat_policy":"Cập nhật thuế suất VAT","staff.create":"Tạo nhân viên","payment.refund":"Xác nhận hoàn tiền","money.remit":"Xác nhận nhận tiền COD","review.hide":"Ẩn đánh giá vi phạm"};
+ if(business[r.action])return business[r.action];
+ if(r.kind==="PAYMENT_EXPIRED")return "Hoàn kho do hết hạn thanh toán";
+ if(r.kind==="DELIVERY_RETURN")return "Hoàn kho khi nhận lại hàng giao thất bại";
+ if(r.kind==="OPENING")return "Nhập tồn ban đầu";
  const labels:Record<string,string>={"menu.item.remove":"Ngừng bán sản phẩm trong đợt","inventory.adjust":"Điều chỉnh tồn kho","order.approve":"Duyệt đơn hàng","order.reject":"Từ chối đơn hàng","order.cancel":"Hủy đơn hàng","order.request-cancel":"Gửi yêu cầu hủy đơn","order.decide-cancel":"Xử lý yêu cầu hủy đơn","order.transition":"Chuyển trạng thái đơn","warehouse.update":"Cập nhật vị trí kho","verified_location.update":"Cập nhật địa chỉ đã xác nhận"};
  if(labels[r.action]) return labels[r.action];
  if(r.action?.endsWith(".update") && entities[r.entity_type]) return (r.before_data ? "Cập nhật " : "Thêm ")+entities[r.entity_type];

@@ -26,6 +26,8 @@ def forget_rolled_back_outbox(session):
 
 def emit(s, topic, kind, payload, entity=None, version=None):
     s.info.setdefault('events', []).append((topic, kind, public(payload), entity, version))
+    if topic=='admin:ops' and kind in ('CATALOG_CHANGED','CONFIG_CHANGED'):
+        s.info['events'].append(('shops:refresh',kind,{'refresh':True},None,None))
 
 async def flush_events(s):
     pending = s.info.pop('events', [])
@@ -181,9 +183,16 @@ async def notification_batch():
         if not job: return
         sub = T['product_subscriptions']
         q = select(sub.c.user_id).where(sub.c.product_id == job['product_id'])
-        if job['after_user_id']: q = q.where(sub.c.user_id > job['after_user_id'])
-        users = (await s.execute(q.order_by(sub.c.user_id).limit(100))).scalars().all()
+        if job['kind']=='MENU_OPENED':
+            u=T['users'];q=select(u.c.id).where(u.c.role=='CUSTOMER',u.c.status=='ACTIVE')
+        cursor=T['users'].c.id if job['kind']=='MENU_OPENED' else sub.c.user_id
+        if job['after_user_id']: q = q.where(cursor > job['after_user_id'])
+        users = (await s.execute(q.order_by(cursor).limit(100))).scalars().all()
         for id in users:
+            if job['kind']=='MENU_OPENED':
+                from .commerce import catalog
+                user=await one(s,'users',T['users'].c.id==id)
+                if not await catalog(s,user,menu_id=job['payload']['menuId']):continue
             if job['kind']=='PRODUCT_OPENED':
                 from .commerce import catalog
                 user=await one(s,'users',T['users'].c.id==id)

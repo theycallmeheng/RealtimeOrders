@@ -18,6 +18,7 @@ const day = () =>
     day: "2-digit",
   }).format(new Date());
 let product: any, offer: any, menu: any;
+let courier: any;
 
 async function login(context: BrowserContext, index: number) {
   const a = data.accounts[index];
@@ -60,6 +61,7 @@ test.beforeAll(async ({ browser }) => {
     throw new Error("Browser acceptance must use isolated_validation.py");
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const a = await login(context, 0);
+  courier = await call(context,a,"POST","/admin/staff",{name:"Browser courier",phone:"+849"+String(crypto.randomInt(10000000,99999999)),password:"IsolatedBrowser123!",role:"SHIPPER"});
   const products = await call(context, a, "GET", "/admin/products");
   const p = products[0];
   product = await call(context, a, "POST", "/admin/products", {
@@ -118,19 +120,20 @@ test("customer cart opens on add, merges, closes and restores focus", async ({
   page,
 }) => {
   await login(context, 1);
-  await page.goto("/");
+  await page.setViewportSize({width:900,height:900});
+  await page.goto("/menu");
   await expect(
     page.getByRole("heading", { name: "Menu hôm nay" }),
   ).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const item = page.locator(`[data-offer-id="${offer.id}"]`);
-  const add = item.getByRole("button", { name: "Thêm 1" });
+  const add = item.getByRole("button", { name: "Thêm vào giỏ" });
   await add.click();
   await expect(page.getByRole("dialog", { name: "Giỏ hàng" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(add).toBeFocused();
   await add.click();
-  await expect(page.locator(".quantity-controls")).toContainText("2");
+  await expect(page.locator(".cart-quantity-input")).toHaveValue("2");
   await shot(page, "daily-cart-desktop");
   await page.getByRole("button", { name: "Mua tiếp" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -145,11 +148,11 @@ test("collective checkout, direct admin actions, real WebSocket stock updates", 
   await login(admin, 0);
   const cp = await customer.newPage(),
     ap = await admin.newPage();
-  await cp.goto("/");
+  await cp.goto("/menu");
   await ap.goto("/");
   await cp
     .locator(`[data-offer-id="${offer.id}"]`)
-    .getByRole("button", { name: "Thêm 1" })
+    .getByRole("button", { name: "Thêm vào giỏ" })
     .click();
   await cp.getByRole("button", { name: "Tiếp tục đặt hàng" }).click();
   const options = await call(customer, c, "GET", "/delivery/options");
@@ -161,7 +164,9 @@ test("collective checkout, direct admin actions, real WebSocket stock updates", 
   await cp.getByLabel("Tôi đã kiểm tra").check();
   await cp.getByRole("button", { name: "Đặt hàng · Chờ duyệt" }).click();
   await expect(cp.getByRole("heading", { name: "Đơn của tôi" })).toBeVisible();
-  const row = ap.locator("tbody tr").filter({ hasText: product.name }).first();
+  const orderButton = ap.locator(".order-queue-row").filter({ hasText: product.name }).first().getByRole("button", { name: /Xem đơn/ });
+  await orderButton.click();
+  const row = ap.locator(".order-detail-pane .business-order");
   await expect(
     row.getByRole("button", { name: "Duyệt", exact: true }),
   ).toBeVisible();
@@ -170,10 +175,14 @@ test("collective checkout, direct admin actions, real WebSocket stock updates", 
     row.getByRole("button", { name: "Chuẩn bị", exact: true }),
   ).toBeVisible();
   await expect(ap.getByRole("dialog")).toHaveCount(0);
-  for (const button of ["Chuẩn bị", "Bàn giao", "Đã giao"])
+  await row.getByRole("combobox",{name:"Người giao / trao hàng"}).selectOption(courier.id);
+  await row.getByRole("button",{name:"Phân công",exact:true}).click();
+  for (const button of ["Chuẩn bị", "Báo khách đến lấy"])
     await row.getByRole("button", { name: button, exact: true }).click();
+  ap.once("dialog",dialog=>dialog.accept());
+  await row.getByRole("button",{name:"Xác nhận giao / nhận",exact:true}).click();
   await expect(
-    cp.locator("tbody tr").filter({ hasText: product.name }).first(),
+    cp.locator(".business-order").filter({ hasText: product.name }).first(),
   ).toContainText("Đã giao");
   await shot(ap, "direct-order-actions");
   await customer.close();
@@ -186,7 +195,7 @@ test("mobile navigation, Vietnamese address picker, reconnect and cart layout", 
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await login(context, 1);
-  await page.goto("/");
+  await page.goto("/menu");
   await expect(page.locator("aside.nav")).toBeHidden();
   await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
   await expect(page.locator("aside.nav")).toBeVisible();
@@ -195,7 +204,7 @@ test("mobile navigation, Vietnamese address picker, reconnect and cart layout", 
     .click();
   const first = page.locator(".list-row").first();
   await first.getByRole("button", { name: "Sửa", exact: true }).click();
-  await expect(page.getByLabel("Tìm và xác nhận vị trí")).toBeVisible();
+  await expect(page.getByLabel("Tìm địa danh hoặc đường gần điểm nhận")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Đóng mở thanh điều hướng" }).click();
   await page
@@ -203,7 +212,7 @@ test("mobile navigation, Vietnamese address picker, reconnect and cart layout", 
     .click();
   await page
     .locator(`[data-offer-id="${offer.id}"]`)
-    .getByRole("button", { name: "Thêm 1" })
+    .getByRole("button", { name: "Thêm vào giỏ" })
     .click();
   await expect(page.getByRole("dialog", { name: "Giỏ hàng" })).toBeVisible();
   expect(
@@ -223,9 +232,9 @@ test("mobile navigation, Vietnamese address picker, reconnect and cart layout", 
   });
   await page
     .locator(`[data-offer-id="${offer.id}"]`)
-    .getByRole("button", { name: "Thêm 1" })
+    .getByRole("button", { name: "Thêm vào giỏ" })
     .click();
-  await expect(page.locator(".quantity-controls")).toContainText("2");
+  await expect(page.locator(".cart-quantity-input")).toHaveValue("2");
 });
 
 test("admin menu editor, sidebar collapse, gross profit report and retired navigation", async ({
@@ -247,9 +256,9 @@ test("admin menu editor, sidebar collapse, gross profit report and retired navig
   await expect(page.locator(".menu-editor")).toBeVisible();
   await expect(page.getByText(product.name, { exact: true })).toBeVisible();
   await shot(page, "daily-menu-admin");
-  await page.getByRole("link", { name: "Báo cáo", exact: true }).click();
+  await page.getByRole("link", { name: "Tổng quan", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Doanh thu và lãi gộp" }),
+    page.getByRole("heading", { name: "Tổng quan" }),
   ).toBeVisible();
   await expect(
     page.getByText("Lãi gộp", { exact: true }).first(),
@@ -310,16 +319,17 @@ test("price change keeps old cart until explicit customer confirmation", async (
   await login(customer, 1);
   const a = await login(admin, 0);
   const page = await customer.newPage();
-  await page.goto("/");
+  await page.setViewportSize({width:900,height:900});
+  await page.goto("/menu");
   await page
     .locator(`[data-offer-id="${offer.id}"]`)
-    .getByRole("button", { name: "Thêm 1" })
+    .getByRole("button", { name: "Thêm vào giỏ" })
     .click();
   const current = await call(admin, a, "GET", "/admin/menus/" + menu.id);
   const items = current.items.map((i: any) => ({
     productId: i.product_id,
     availableQty: i.available_qty,
-    costPrice: i.cost_price,
+    costPrice: i.id === offer.id ? "30000" : i.cost_price,
     enabled: i.status === "OPEN",
     expectedVersion: i.version,
     prices: i.prices.map((p: any) => ({
@@ -339,7 +349,7 @@ test("price change keeps old cart until explicit customer confirmation", async (
     page.getByRole("button", { name: "Tiếp tục đặt hàng" }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Cập nhật giỏ hàng" }).click();
-  await expect(page.getByRole("dialog")).toContainText("31.000");
+  await expect(page.getByRole("dialog")).toContainText("42.750");
   await expect(
     page.getByRole("button", { name: "Tiếp tục đặt hàng" }),
   ).toBeEnabled();

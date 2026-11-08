@@ -29,9 +29,13 @@ def fingerprint(data):
 async def preview(s,cutoff):
     cutoff_time=bounds(cutoff)[0]
     orders=sorted((await s.execute(select(T['orders'].c.id).where(T['orders'].c.created_at<cutoff_time))).scalars())
+    protected=set()
+    for name in ('money_entries','payment_requests','refund_requests','reviews'):
+        if name in T:protected.update((await s.execute(select(T[name].c.order_id))).scalars())
+    orders=[id for id in orders if id not in protected]
     old=sorted((await s.execute(select(T['offers'].c.id).where(T['offers'].c.sale_date<cutoff))).scalars())
     referenced=set((await s.execute(select(T['order_items'].c.offer_id).where(~T['order_items'].c.order_id.in_(orders)))).scalars())
-    referenced.update((await s.execute(select(T['request_quotes'].c.offer_id))).scalars())
+    if 'request_quotes' in T:referenced.update((await s.execute(select(T['request_quotes'].c.offer_id))).scalars())
     purge=[id for id in old if id not in referenced]
     manifest={'cutoff':str(cutoff),'orderIds':orders,'offerIds':purge,'archiveIds':[id for id in old if id in referenced]}
     return manifest
@@ -71,7 +75,13 @@ async def apply(s,cutoff,expected):
     n=T['notifications']
     await s.execute(delete(n).where(or_(n.c.payload['id'].as_string().in_(order_ids),n.c.payload['offerId'].as_string().in_(manifest['offerIds']+archive_ids))))
     # No old queued fact or cursor can reintroduce deleted entities.
-    await s.execute(delete(T['outbox']));await s.execute(delete(T['stream_events']))
+    # Purge the same captured event set in FK order. Background writers may
+    # append a new event/outbox pair between statements in isolated tests.
+    events=list((await s.execute(select(T['stream_events'].c.event_id))).scalars())
+    for offset in range(0,len(events),500):
+        batch=events[offset:offset+500]
+        await s.execute(delete(T['outbox']).where(T['outbox'].c.event_id.in_(batch)))
+        await s.execute(delete(T['stream_events']).where(T['stream_events'].c.event_id.in_(batch)))
     admin=dict((await s.execute(select(T['users']).where(T['users'].c.role=='ADMIN').limit(1))).mappings().one())
     await invalidate(s,admin)
     check(fingerprint(before)==fingerprint(await preserved(s,cutoff)),'PRESERVATION_FAILED','Đơn cần giữ đã thay đổi; rollback')

@@ -17,7 +17,7 @@ from sqlalchemy import select, update, func, or_
 from sqlalchemy.exc import IntegrityError, OperationalError
 from .config import settings
 from .db import T, Session, engine, reflect, now, uid, uuid, one, rows, add, change, check, text, public, Fault
-from . import auth, commerce, accounts, admin, chat, menus, shipping, analytics, geocoding
+from . import auth, commerce, accounts, admin, chat, menus, shipping, analytics, geocoding, shop, payments, marketplace
 from . import activity as activity_log
 from .events import emit, flush_events, outbox_worker, session_monitor, hub, Subscriber, event_wire
 from .moderation import sanitize
@@ -30,13 +30,16 @@ async def lifespan(app):
     task=asyncio.create_task(outbox_worker())
     monitor=asyncio.create_task(session_monitor())
     schedule=asyncio.create_task(menus.boundary_monitor())
+    payment_schedule=asyncio.create_task(payments.expiry_worker())
     yield
     task.cancel()
     monitor.cancel()
     schedule.cancel()
+    payment_schedule.cancel()
     with suppress(asyncio.CancelledError): await task
     with suppress(asyncio.CancelledError): await monitor
     with suppress(asyncio.CancelledError): await schedule
+    with suppress(asyncio.CancelledError): await payment_schedule
     await engine.dispose()
 
 app=FastAPI(title='RealtimeOrders API',version='1.0.0',lifespan=lifespan)
@@ -103,6 +106,15 @@ def csrf_check(request):
     check(bool(raw) and hmac.compare_digest(request.headers.get('x-csrf-token',''),auth.csrf(raw)),
           'CSRF_REJECTED','Phiên xác nhận không hợp lệ; vui lòng tải lại',403)
 
+def shop_alias(method,path):
+    if any(path==prefix or path.startswith(prefix+'/') for prefix in (
+        '/admin/products','/admin/orders','/admin/menus','/admin/inventory-adjustments',
+        '/admin/conversations','/admin/warehouse','/admin/reports',
+    )):
+        return True
+    return method=='GET' and path in ('/admin/config/{kind}','/admin/pricing-rules')
+
+
 def route(method,path,anonymous=False,idempotent=False):
     def decorator(handler):
         async def endpoint(request:Request):
@@ -115,9 +127,17 @@ def route(method,path,anonymous=False,idempotent=False):
             async with Session.begin() as s:
                 s.info['request_id']=request.state.request_id
                 user=None if anonymous else await auth.authenticate(s,request.cookies.get('ro_session'),activity=method!='GET')
-                if path.startswith('/admin'): auth.require_admin(user)
+                if request.url.path.startswith('/api/v1/shop/'):
+                    auth.require_shop(user)
+                    if '/config/' in path:check(request.path_params.get('kind') in ('groups','categories','units','zones','policies','pickup-slots'),'FORBIDDEN','Cấu hình chỉ dành cho quản trị',403)
+                elif path.startswith('/admin'): auth.require_admin(user)
+                elif path.startswith('/courier'):check(user['role']=='SHIPPER','FORBIDDEN','Dành cho người giao hàng',403)
+                if path.startswith('/catalog'):check(user['role']!='SHIPPER','FORBIDDEN','Người giao chỉ xem đơn được phân công',403)
                 key=request.headers.get('idempotency-key') if idempotent else None
                 scope='http:'+method+':'+path
+                if path in ('/admin/withdrawals/{id}', '/admin/shop-applications/{id}'):
+                    scope += ':'+uuid(request.path_params['id'])
+                if user and user['role']=='SELLER': scope += ':'+str(user.get('shop_id'))
                 prior=await commerce.idem(s,user,scope,key,body) if key is not None else None
                 if prior is not None:
                     result=prior
@@ -128,6 +148,7 @@ def route(method,path,anonymous=False,idempotent=False):
             return result if isinstance(result,(JSONResponse,FileResponse)) else JSONResponse(public(result))
         endpoint.__name__=handler.__name__
         app.add_api_route('/api/v1'+path,endpoint,methods=[method],name=handler.__name__)
+        if shop_alias(method,path):app.add_api_route('/api/v1'+path.replace('/admin/','/shop/',1),endpoint,methods=[method],name='shop_'+handler.__name__)
         return handler
     return decorator
 
@@ -245,10 +266,11 @@ async def edit_address(s,u,b,r): return await accounts.addresses(s,u,'PATCH',uui
 async def delete_address(s,u,b,r): return await accounts.addresses(s,u,'DELETE',uuid(r.path_params['id']),b)
 
 @route('GET','/catalog/offers')
-async def offers(s,u,b,r): return await commerce.catalog(s,u)
+async def offers(s,u,b,r): return await commerce.catalog(s,u,shop_id=r.query_params.get('shopId'))
 @route('GET','/delivery/options')
 async def delivery_options(s,u,b,r):
-    warehouse=await shipping.warehouse(s)
+    shop_id=r.query_params.get('shopId')
+    warehouse=await shipping.warehouse(s,uuid(shop_id) if shop_id else None)
     return {'zones':await rows(s,'delivery_zones',T['delivery_zones'].c.active==True),
             'policies':await rows(s,'delivery_policies',T['delivery_policies'].c.group_id==u['group_id'],T['delivery_policies'].c.active==True),
             'pickupSlots':await rows(s,'pickup_slots',T['pickup_slots'].c.active==True,T['pickup_slots'].c.ends_at>now()),
@@ -264,6 +286,7 @@ def page_offset(r):
 async def order_list(s,u,r,all=False):
     t=T['orders']; q=select(t.c.id).order_by(t.c.created_at.desc(),t.c.id.desc()).limit(50).offset(page_offset(r))
     if not all: q=q.where(t.c.customer_id==u['id'])
+    else: q=q.where(*marketplace.scope(t,u,r.query_params.get('shopId')))
     if r.query_params.get('status'): q=q.where(t.c.status==r.query_params['status'])
     ids=(await s.execute(q)).scalars().all()
     return [await commerce.get_order(s,u,id) for id in ids]
@@ -276,6 +299,13 @@ async def order_by_client(s,u,b,r):
     return await commerce.get_order(s,u,o['id'])
 @route('GET','/orders/{id}')
 async def order_detail(s,u,b,r): return await commerce.get_order(s,u,uuid(r.path_params['id']))
+@app.post('/api/v1/orders/{id}/payment-link')
+async def payment_link(id:str,request:Request):
+    csrf_check(request)
+    async with Session.begin() as s:user=await auth.authenticate(s,request.cookies.get('ro_session'),activity=True)
+    await auth.rate('payment-link:'+user['id'],10,60)
+    return JSONResponse(await payments.link(user,uuid(id)))
+
 @route('POST','/orders/{id}/{action}')
 async def customer_order_action(s,u,b,r):
     action=r.path_params['action']; action='request-cancel' if action=='cancellation-requests' else action
@@ -285,6 +315,8 @@ async def customer_order_action(s,u,b,r):
 async def admin_orders(s,u,b,r): return await order_list(s,u,r,all=True)
 @route('POST','/admin/orders/{id}/{action}')
 async def admin_order_action(s,u,b,r):
+    if r.path_params['action'] in ('assign','delivery-failed','retry-delivery','confirm-return'):
+        return await shop.order_command(s,u,uuid(r.path_params['id']),r.path_params['action'],b,r.headers.get('idempotency-key'))
     check(r.path_params['action'] in ('approve','reject','transition','decide-cancel'),'NOT_FOUND','Thao tác không tồn tại',404)
     return await commerce.order_action(s,u,uuid(r.path_params['id']),r.path_params['action'],b,r.headers.get('idempotency-key'))
 
@@ -298,7 +330,14 @@ async def retired_requests(s,u,b,r):
     raise Fault('FEATURE_RETIRED','Chức năng yêu cầu hàng và báo giá đã ngừng hỗ trợ',410)
 
 @route('GET','/conversations/me')
-async def my_conversation(s,u,b,r): return await chat.conversation(s,u)
+async def my_conversation(s,u,b,r): return await chat.conversation(s,u,shop_id=r.query_params.get('shopId'))
+@route('GET','/marketplace/conversations')
+async def my_conversations(s,u,b,r):
+    check(u['role']=='CUSTOMER','FORBIDDEN','Dành cho khách hàng',403)
+    c,shops=T['conversations'],T['shops']
+    return [dict(row) for row in (await s.execute(select(c,shops.c.name.label('shop_name')).join(shops,c.c.shop_id==shops.c.id)
+        .where(c.c.customer_id==u['id']).order_by(c.c.created_at.desc()).limit(100))).mappings()]
+
 @route('GET','/conversations/{id}/messages')
 async def conversation_messages(s,u,b,r): return await chat.messages(s,u,uuid(r.path_params['id']),r.query_params.get('before'))
 @route('POST','/conversations/{id}/messages')
@@ -308,7 +347,8 @@ async def chat_message(s,u,b,r):
 @route('GET','/admin/conversations')
 async def admin_conversations(s,u,b,r):
     c,users=T['conversations'],T['users']
-    return [dict(x) for x in (await s.execute(select(c,users.c.display_name).join(users,c.c.customer_id==users.c.id)
+    return [dict(x) for x in (await s.execute(select(c,users.c.display_name,T['shops'].c.name.label('shop_name')).join(users,c.c.customer_id==users.c.id)
+        .join(T['shops'],c.c.shop_id==T['shops'].c.id).where(*marketplace.scope(c,u,r.query_params.get('shopId')))
         .order_by(c.c.created_at.desc()).limit(50).offset(page_offset(r)))).mappings()]
 
 @route('GET','/notifications')
@@ -352,7 +392,7 @@ async def config_delete(s,u,b,r):
     return await admin.configuration(s,u,table,uuid(r.path_params['id']),b,'DELETE')
 @route('GET','/admin/products')
 async def products(s,u,b,r):
-    data=await rows(s,'products',limit=1000,order=[T['products'].c.active.desc(),T['products'].c.name])
+    data=await rows(s,'products',*marketplace.scope(T['products'],u,r.query_params.get('shopId')),limit=1000,order=[T['products'].c.active.desc(),T['products'].c.name])
     images=await rows(s,'product_images',T['product_images'].c.product_id.in_([p['id'] for p in data]),
                       limit=5000,order=T['product_images'].c.position)
     by_product={}
@@ -376,6 +416,7 @@ async def adjust_inventory(s,u,b,r): return await admin.adjustment(s,u,b,r.heade
 @route('GET','/admin/users')
 async def users_list(s,u,b,r):
     q=select(T['users']).order_by(T['users'].c.created_at.desc()).limit(50).offset(page_offset(r))
+    if u['role']=='SELLER':q=q.where(T['users'].c.role=='CUSTOMER')
     status=r.query_params.get('status')
     if status and status!='ALL': q=q.where(T['users'].c.status==status)
     elif status!='ALL': q=q.where(T['users'].c.status!='DELETED')
@@ -400,19 +441,19 @@ async def report(s,u,b,r):
                                admin.date_time(r.query_params.get('end',str((now()+timedelta(days=1)).date())+'T00:00:00Z')))
 
 @route('GET','/catalog/upcoming')
-async def upcoming_catalog(s,u,b,r): return await menus.upcoming(s,u)
+async def upcoming_catalog(s,u,b,r): return await menus.upcoming(s,u,r.query_params.get('shopId'))
 
 @route('GET','/catalog/menu')
-async def daily_catalog(s,u,b,r): return await menus.current(s,u)
+async def daily_catalog(s,u,b,r): return await menus.current(s,u,r.query_params.get('shopId'))
 
 @route('GET','/admin/menus')
 async def menu_list(s,u,b,r):
-    data=await rows(s,'daily_menus',limit=100,order=[T['daily_menus'].c.sale_date.desc(),T['daily_menus'].c.opens_at.desc()])
+    data=await rows(s,'daily_menus',*marketplace.scope(T['daily_menus'],u,r.query_params.get('shopId')),limit=100,order=[T['daily_menus'].c.sale_date.desc(),T['daily_menus'].c.opens_at.desc()])
     at=now()
     return public(await menus.stock_status(s,data,at))
 
 @route('GET','/admin/menus/{id}')
-async def menu_detail(s,u,b,r): return await menus.detail(s,uuid(r.path_params['id']))
+async def menu_detail(s,u,b,r): return await menus.detail(s,uuid(r.path_params['id']),u)
 
 @route('POST','/admin/menus',idempotent=True)
 async def menu_create(s,u,b,r): return await menus.save(s,u,None,b)
@@ -424,7 +465,9 @@ async def menu_update(s,u,b,r): return await menus.save(s,u,uuid(r.path_params['
 async def menu_copy(s,u,b,r): return await menus.copy(s,u,uuid(r.path_params['id']),b)
 
 @route('GET','/admin/warehouse')
-async def warehouse_get(s,u,b,r): return await shipping.warehouse(s)
+async def warehouse_get(s,u,b,r):
+    own=await marketplace.manage_shop(s,u,r.query_params.get('shopId'))
+    return await shipping.warehouse(s,own['id'])
 
 @route('PATCH','/admin/warehouse')
 async def warehouse_save(s,u,b,r): return await shipping.save_warehouse(s,u,b)
@@ -434,11 +477,15 @@ async def pricing_rules(s,u,b,r):
     from .pricing import load_rules
     return await load_rules(s)
 
+@route('GET','/admin/reports/overview')
+async def overview_report(s,u,b,r):
+    return await analytics.overview(s, r.query_params.get('from'), r.query_params.get('to'), await analytics.report_scope(s,u,r.query_params.get('shopId')))
+
 @route('GET','/admin/reports/monthly')
-async def monthly_report(s,u,b,r): return await analytics.monthly_report(s,r.query_params.get('month'),r.query_params.get('compare'))
+async def monthly_report(s,u,b,r): return await analytics.monthly_report(s,r.query_params.get('month'),r.query_params.get('compare'),await analytics.report_scope(s,u,r.query_params.get('shopId')))
 
 @route('GET','/admin/reports/daily')
-async def daily_report(s,u,b,r): return await analytics.report(s,r.query_params.get('date'),r.query_params.get('compare'))
+async def daily_report(s,u,b,r): return await analytics.report(s,r.query_params.get('date'),r.query_params.get('compare'),await analytics.report_scope(s,u,r.query_params.get('shopId')))
 
 @route('GET','/maps/search')
 async def location_search(s,u,b,r):
@@ -466,7 +513,7 @@ async def verified_remove(s,u,b,r): return await geocoding.save_verified(s,u,uui
 @route('GET','/maps/config')
 async def map_config(s,u,b,r):
     wh=await shipping.warehouse(s)
-    return {'tileUrl':settings.osm_tile_url,'center':{'latitude':float(wh.get('latitude',20.9809427)),
+    return {'provider':settings.map_provider, 'browserKey':settings.google_maps_browser_key if settings.map_provider == 'google' else '', 'tileUrl':settings.osm_tile_url,'center':{'latitude':float(wh.get('latitude',20.9809427)),
             'longitude':float(wh.get('longitude',105.7870861))}}
 
 @route('POST','/maps/pin')
@@ -503,7 +550,7 @@ async def upload(request:Request):
     async with request.form(max_files=1,max_fields=3,max_part_size=6*1024*1024) as form:
         purpose=form.get('purpose','CHAT')
         check(purpose in ('CHAT','PRODUCT'),'INVALID_PURPOSE','Mục đích ảnh không hợp lệ')
-        if purpose=='PRODUCT': auth.require_admin(user)
+        if purpose=='PRODUCT': auth.require_shop(user)
         file=form.get('file'); check(hasattr(file,'read'),'FILE_REQUIRED','Vui lòng chọn ảnh')
         raw=await file.read(5*1024*1024+1)
     check(len(raw)<=5*1024*1024,'FILE_TOO_LARGE','Ảnh tối đa 5 MiB',413)
@@ -534,15 +581,169 @@ async def media(s,u,b,r):
     id=uuid(r.path_params['id']); asset=await one(s,'media_assets',T['media_assets'].c.id==id,T['media_assets'].c.state=='READY')
     allowed=u['role']=='ADMIN' or asset['owner_id']==u['id']
     if not allowed and asset['purpose']=='PRODUCT':
-        allowed=any(id in offer['images'] for offer in await commerce.catalog(s,u))
+        if u['role']=='SELLER':
+            image,product=T['product_images'],T['products']
+            allowed=bool((await s.execute(select(image.c.asset_id).join(product,image.c.product_id==product.c.id)
+                .where(image.c.asset_id==id,product.c.shop_id==u['shop_id']).limit(1))).first())
+        elif u['role']=='CUSTOMER':
+            allowed=any(id in offer['images'] for offer in await commerce.catalog(s,u)) or any(id in product['images'] for product in await menus.upcoming(s,u))
     if not allowed and asset['purpose']=='CHAT':
         a,m,c=T['message_attachments'],T['messages'],T['conversations']
+        condition=c.c.shop_id==u['shop_id'] if u['role']=='SELLER' else c.c.customer_id==u['id']
         allowed=bool((await s.execute(select(a.c.asset_id).join(m,a.c.message_id==m.c.id).join(c,m.c.conversation_id==c.c.id)
-                     .where(a.c.asset_id==id,c.c.customer_id==u['id']).limit(1))).first())
+                     .where(a.c.asset_id==id,condition).limit(1))).first())
     check(allowed,'FORBIDDEN','Ảnh thuộc hội thoại riêng tư',403)
     path=Path(settings.upload_dir)/asset['storage_key']
     check(path.is_file(),'NOT_FOUND','Không tìm thấy ảnh',404)
     return FileResponse(path,media_type=asset['mime_type'],headers={'Cache-Control':'private, max-age=60','X-Content-Type-Options':'nosniff'})
+
+@route('GET','/shop/profile')
+async def shop_profile(s,u,b,r):return await shop.profile(s,u,r.query_params.get('shopId'))
+@route('PATCH','/shop/profile')
+async def shop_profile_save(s,u,b,r):return await shop.save_profile(s,u,b)
+@route('GET','/shop/staff')
+async def shop_staff(s,u,b,r):return await shop.staff(s,u)
+@route('GET','/admin/staff')
+async def admin_staff(s,u,b,r):return await shop.staff(s,u)
+@route('POST','/admin/staff',idempotent=True)
+async def create_staff(s,u,b,r):return await shop.staff(s,u,b)
+@route('GET','/admin/vat')
+async def vat_get(s,u,b,r):return await shop.setting(s,'vat_policy')
+@route('PATCH','/admin/vat')
+async def vat_save(s,u,b,r):return await shop.save_setting(s,u,'vat_policy',b)
+@route('GET','/checkout/config')
+async def checkout_config(s,u,b,r):
+    value,version=await payments.vat_policy(s)
+    return {'vatRate':value['rate'],'vatVersion':str(version),'payosAvailable':payments.configured()}
+@route('GET','/feed')
+async def newsfeed(s,u,b,r):return await shop.feed(s,u,r.query_params.get('shopId'))
+@route('GET','/courier/orders')
+async def courier_orders(s,u,b,r):
+    orders=await rows(s,'orders',T['orders'].c.courier_id==u['id'],limit=100,order=T['orders'].c.updated_at.desc())
+    return [await commerce.get_order(s,u,o['id']) for o in orders]
+@route('POST','/courier/orders/{id}/{action}')
+async def courier_action(s,u,b,r):
+    action=r.path_params['action']
+    if action=='delivery-failed':return await shop.order_command(s,u,uuid(r.path_params['id']),action,b,r.headers.get('idempotency-key'))
+    check(action=='transition','NOT_FOUND','Không có thao tác này',404)
+    return await commerce.order_action(s,u,uuid(r.path_params['id']),action,b,r.headers.get('idempotency-key'))
+@route('GET','/shop/finance')
+async def shop_finance(s,u,b,r):return await shop.finance(s,u,r.query_params)
+@route('POST','/shop/money/{id}/remit',idempotent=True)
+async def remit_cod(s,u,b,r):
+    auth.require_admin(u)
+    entry=await one(s,'money_entries',T['money_entries'].c.id==uuid(r.path_params['id']),lock=True)
+    check(entry['method']=='COD' and entry['kind']=='PAYMENT','INVALID_PAYMENT','Chỉ xác nhận bàn giao tiền COD')
+    if entry['remitted_at'] is None:
+        check(b.get('received') is True,'RECEIPT_REQUIRED','Xác nhận thực nhận tiền COD')
+        await change(s,'money_entries',entry['id'],remitted_by=u['id'],remitted_at=now())
+        await commerce.audit(s,u,'money.remit','money',entry['id'],None,{'amount':entry['amount']})
+    order=await one(s,'orders',T['orders'].c.id==entry['order_id'])
+    emit(s,'admin:ops','MONEY_CHANGED',{'id':entry['id']})
+    emit(s,marketplace.shop_topic(order['shop_id']),'MONEY_CHANGED',{'refresh':True})
+    return {'ok':True}
+@route('POST','/admin/refunds/{id}/confirm',idempotent=True)
+async def confirm_refund(s,u,b,r):return await shop.refund(s,u,uuid(r.path_params['id']),b)
+@app.post('/api/v1/payments/payos/webhook')
+async def payos_webhook(request:Request):
+    await auth.rate('payos-webhook:'+request.client.host,600,60)
+    body=await body_json(request)
+    async with Session.begin() as s:
+        result=await payments.webhook(s,body);await flush_events(s)
+    return result
+@route('POST','/reviews')
+async def create_review(s,u,b,r):return await shop.review(s,u,uuid(b.get('orderId')),b)
+@route('GET','/reviews/order/{id}')
+async def order_reviews(s,u,b,r):
+    id=uuid(r.path_params['id']);await commerce.get_order(s,u,id)
+    return await rows(s,'reviews',T['reviews'].c.order_id==id)
+@route('GET','/reviews/product/{id}')
+async def product_reviews(s,u,b,r):
+    id=uuid(r.path_params['id']);p=await one(s,'products',T['products'].c.id==id)
+    if u['role']=='SELLER': marketplace.assert_owner(u,p['shop_id'])
+    if not auth.is_shop(u):
+        check(u['role']=='CUSTOMER','FORBIDDEN','Không có quyền xem đánh giá',403)
+        o,i,f=T['orders'],T['order_items'],T['offers']
+        owned=bool((await s.execute(select(i.c.id).join(o,i.c.order_id==o.c.id).join(f,i.c.offer_id==f.c.id).where(o.c.customer_id==u['id'],f.c.product_id==id).limit(1))).first())
+        if not owned:
+            visible=any(row['product_id']==id for row in await commerce.catalog(s,u))
+            if not visible:visible=any(row['product_id']==id for row in await menus.upcoming(s,u))
+            check(visible,'FORBIDDEN','Sản phẩm không thuộc danh sách được phép xem',403)
+    t=T['reviews'];conditions=[t.c.product_id==id,t.c.hidden==False]
+    stats=(await s.execute(select(func.avg(t.c.rating),func.count()).where(*conditions))).one()
+    data=await rows(s,'reviews',*conditions,limit=50,order=t.c.created_at.desc())
+    return public({'rating':stats[0],'count':stats[1],'reviews':[{k:v for k,v in row.items() if k in ('id','rating','comment','created_at')} for row in data]})
+@route('GET','/shop/reviews')
+async def shop_reviews(s,u,b,r):
+    table,orders=T['reviews'],T['orders']
+    filters=marketplace.scope(orders,u,r.query_params.get('shopId'))
+    return await rows(s,'reviews',table.c.order_id.in_(select(orders.c.id).where(*filters)),limit=100,order=table.c.created_at.desc())
+@route('POST','/admin/reviews/{id}/hide',idempotent=True)
+async def hide_review(s,u,b,r):
+    id=uuid(r.path_params['id']);await one(s,'reviews',T['reviews'].c.id==id,lock=True)
+    reason=text(b.get('reason'),500,1)
+    await change(s,'reviews',id,hidden=True,hidden_reason=reason)
+    await commerce.audit(s,u,'review.hide','review',id,None,{'reason':reason})
+    return {'ok':True}
+
+@route('GET','/marketplace/shops')
+async def marketplace_shops(s,u,b,r):
+    return await marketplace.list_shops(s)
+
+@route('GET','/marketplace/application')
+async def marketplace_application(s,u,b,r):
+    return {'application':await marketplace.my_application(s,u)}
+
+@route('POST','/marketplace/application',idempotent=True)
+async def marketplace_apply(s,u,b,r):
+    return await marketplace.apply(s,u,b)
+
+@route('GET','/admin/shop-applications')
+async def marketplace_applications(s,u,b,r):
+    return await rows(s,'shop_applications',limit=200,order=T['shop_applications'].c.created_at.desc())
+
+@route('PATCH','/admin/shop-applications/{id}',idempotent=True)
+async def marketplace_review(s,u,b,r):
+    return await marketplace.review_application(s,u,uuid(r.path_params['id']),b)
+
+@route('GET','/admin/platform-fee')
+async def platform_fee(s,u,b,r):
+    return await marketplace.fee_policy(s)
+
+@route('PATCH','/admin/platform-fee',idempotent=True)
+async def platform_fee_save(s,u,b,r):
+    return await marketplace.save_fee(s,u,b)
+
+@route('GET','/shop/balance')
+async def shop_balance(s,u,b,r):
+    check(u['role']=='SELLER','FORBIDDEN','Dành cho shop',403)
+    own=await marketplace.manage_shop(s,u)
+    table=T['shop_withdrawals']
+    return {'balance':await marketplace.balance(s,own['id']),'bank':own['payout_json'],
+            'withdrawals':await rows(s,'shop_withdrawals',table.c.shop_id==own['id'],limit=100,order=table.c.created_at.desc())}
+
+@route('PATCH','/shop/bank',idempotent=True)
+async def shop_bank(s,u,b,r):
+    return await marketplace.save_bank(s,u,b)
+
+@route('POST','/shop/withdrawals',idempotent=True)
+async def shop_withdraw(s,u,b,r):
+    return await marketplace.withdraw(s,u,b)
+
+@route('GET','/admin/shop-balance')
+async def admin_shop_balance(s,u,b,r):
+    own=await marketplace.manage_shop(s,u,r.query_params.get('shopId'))
+    return {'shopId':own['id'],'balance':await marketplace.balance(s,own['id'])}
+
+@route('GET','/admin/withdrawals')
+async def platform_withdrawals(s,u,b,r):
+    w,shops=T['shop_withdrawals'],T['shops']
+    return [dict(row) for row in (await s.execute(select(w,shops.c.name.label('shop_name')).join(shops,w.c.shop_id==shops.c.id)
+        .where(*marketplace.scope(w,u,r.query_params.get('shopId'))).order_by(w.c.created_at.desc()).limit(200))).mappings()]
+
+@route('PATCH','/admin/withdrawals/{id}',idempotent=True)
+async def platform_withdrawal_decide(s,u,b,r):
+    return await marketplace.decide_withdrawal(s,u,uuid(r.path_params['id']),b)
 
 # WebSocket implementation is kept separate so transport cannot change domain rules.
 from .realtime import serve_socket

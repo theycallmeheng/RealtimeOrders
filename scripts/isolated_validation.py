@@ -57,6 +57,14 @@ def network_values(mode='configured'):
     config = json.loads(config_path.read_text(encoding='utf-8-sig'))
     if config.get('mode') == 'local':
         return {'networkMode': 'configured', 'origin': 'https://localhost:3443'}
+    if config.get('mode') == 'remote':
+        from urllib.parse import urlsplit
+        origin = config.get('origin', '')
+        parsed = urlsplit(origin)
+        require(parsed.scheme == 'https' and parsed.hostname and parsed.hostname not in ('localhost', '127.0.0.1')
+                and not parsed.username and not parsed.password and parsed.path in ('', '/') and not parsed.query and not parsed.fragment,
+                'Invalid configured remote origin')
+        return {'networkMode': 'remote', 'origin': origin.rstrip('/')}
     from configure_lan import validate_address
     address = str(validate_address(config.get('address')))
     require(config.get('mode') == 'lan' and config.get('origin') == 'https://' + address + ':3443',
@@ -72,9 +80,29 @@ def context_env(context):
             'ZALO_ACCESS_TOKEN': '', 'ZALO_OTP_TEMPLATE_ID': '',
             'TWILIO_ACCOUNT_SID': '', 'TWILIO_AUTH_TOKEN': '', 'TWILIO_FROM': '',
             'SMTP_HOST': '', 'SMTP_USER': '', 'SMTP_PASSWORD': '', 'SMTP_FROM': '',
+            'PAYOS_CLIENT_ID': '', 'PAYOS_API_KEY': '', 'PAYOS_CHECKSUM_KEY': '',
+            'MAP_PROVIDER': 'osm', 'VIETMAP_API_KEY': '',
+            'GOOGLE_MAPS_SERVER_KEY': '', 'GOOGLE_MAPS_BROWSER_KEY': '',
             'APP_SECRET': context['appSecret'],
             'REALTIMEORDERS_NETWORK_MODE': context.get('networkMode', 'local'),
             'APP_ORIGIN': context.get('origin', 'https://localhost:3443')}
+
+
+
+async def reset_test_rate_limits(context):
+    """Each suite starts fresh; production throttling is never modified."""
+    import asyncmy
+    from sqlalchemy.engine import make_url
+    url = make_url(context['databaseUrl'])
+    require(url.database == context['database'] and re.fullmatch(r'realtimeorders_audit_[A-Za-z0-9_]+', url.database),
+            'Refusing to reset rate limits outside the audit database')
+    connection = await asyncmy.connect(host=url.host, port=url.port or 3306, user=url.username,
+                                       password=url.password, db=url.database, autocommit=True)
+    try:
+        async with connection.cursor() as cursor:
+            await cursor.execute('DELETE FROM rate_limit_buckets')
+    finally:
+        await connection.ensure_closed()
 
 
 def save_running(context):
@@ -124,7 +152,7 @@ def wait_ready(origin='https://localhost:3443'):
     raise RuntimeError('Application did not become ready')
 
 
-async def prepare(network_mode='local'):
+async def prepare(network_mode='local', upgrade_schema=False):
     import asyncmy
     from sqlalchemy.engine import make_url
     from app.config import settings
@@ -189,6 +217,9 @@ async def prepare(network_mode='local'):
                   'topology': 'Single Windows machine, loopback HTTPS/WSS and MySQL/InnoDB; no external SMS/email.'})
     finally:
         await connection.ensure_closed()
+    if upgrade_schema:
+        subprocess.run([str(PYTHON), '-m', 'alembic', 'upgrade', 'head'],
+                       cwd=ROOT / 'backend', env=context_env(context), check=True)
     services('start', context)
     ready = wait_ready(context['origin'])
     save_running(context)
@@ -196,7 +227,7 @@ async def prepare(network_mode='local'):
     print(json.dumps({'testDatabase': database, 'copiedTables': len(restored), **ready}), flush=True)
 
 
-async def finish(context):
+async def finish(context, leave_stopped=False):
     import asyncmy
     from app.config import settings
     from sqlalchemy.engine import make_url
@@ -209,8 +240,8 @@ async def finish(context):
         unchanged = current == context['baseline']
     finally:
         await connection.ensure_closed()
-    services('start')
-    result = {**wait_ready(network_values()['origin']), 'sourceDatabaseUnchanged': unchanged, 'testDatabaseRetained': context['database']}
+    if not leave_stopped: services('start')
+    result = {**({} if leave_stopped else wait_ready(network_values()['origin'])), 'sourceDatabaseUnchanged': unchanged, 'testDatabaseRetained': context['database'], 'applicationStopped':leave_stopped}
     dump_json(Path(context['evidence']) / 'final-startup.json', result)
     context['state'] = 'FINISHED'
     dump_json(CONTEXT, context)
@@ -222,16 +253,20 @@ async def finish(context):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--network-mode', choices=['local', 'configured'], default=None)
+    parser.add_argument('--upgrade-schema', action='store_true', help='Migrate the isolated copy before starting it')
+    parser.add_argument('--leave-stopped',action='store_true',help='Verify source data and finish without starting the normal application')
     parser.add_argument('action', choices=['prepare', 'backend', 'browser', 'run', 'restart', 'stop', 'finish'])
     parser.add_argument('--cwd', choices=['root', 'backend', 'frontend'], default='root')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if args.action == 'prepare':
-        asyncio.run(prepare(args.network_mode or 'local'))
+        asyncio.run(prepare(args.network_mode or 'local', args.upgrade_schema))
         return
     context = json.loads(CONTEXT.read_text(encoding='utf-8'))
     check_context(context, args.action)
     if args.action in ('run', 'backend', 'browser'):
+        if args.action in ('backend', 'browser'):
+            asyncio.run(reset_test_rate_limits(context))
         if args.action == 'backend':
             command = [str(PYTHON), '-m', 'pytest', '-q', '--junitxml=' + str(Path(context['evidence']) / 'integration.xml')]
             cwd = ROOT / 'backend'
@@ -262,7 +297,7 @@ def main():
         context['state'] = 'STOPPED'
         dump_json(CONTEXT, context)
     elif args.action == 'finish':
-        asyncio.run(finish(context))
+        asyncio.run(finish(context,args.leave_stopped))
 
 
 if __name__ == '__main__':

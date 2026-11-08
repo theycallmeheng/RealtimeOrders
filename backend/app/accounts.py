@@ -49,6 +49,18 @@ async def user_action(s,admin,id,body):
     user=await lock_user(s,id)
     version(user,body)
     values={'version':user['version']+1,'updated_at':now()}
+    if 'role' in body:
+        require_admin(admin)
+        check(body['role'] in ('CUSTOMER','SELLER','SHIPPER'),'INVALID_ROLE','Vai trò không hợp lệ')
+        check(user['role']!='ADMIN','FORBIDDEN','Không hạ quyền quản trị viên qua màn hình này',403)
+        values['role']=body['role']
+    if 'role' in body or 'shopId' in body:
+        from .marketplace import manage_shop
+        if values.get('role',user['role'])=='SELLER':
+            shop=await manage_shop(s,admin,body.get('shopId') or user.get('shop_id'))
+            values['shop_id']=shop['id']
+        else:
+            values['shop_id']=None
     if 'groupId' in body:
         group=await one(s,'customer_groups',T['customer_groups'].c.id==uuid(body['groupId']),T['customer_groups'].c.active==True)
         values['group_id']=group['id']

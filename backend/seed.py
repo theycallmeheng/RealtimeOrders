@@ -6,7 +6,8 @@ import secrets
 from datetime import timedelta
 from pathlib import Path
 from sqlalchemy import select, func, update
-from app.db import T, Session, engine, reflect, now, uid, add
+from app.db import T, Session, engine, reflect, now, uid, add, change
+from app.marketplace import DEFAULT_SHOP
 from app.auth import password_hash
 from app.config import ROOT
 from app.pricing import DEFAULT_RULES, menu_prices
@@ -34,6 +35,15 @@ async def seed(output_dir=None):
                           status='ACTIVE',group_id=groups[group],phone_verified_at=now(),security_version=1,version=1,created_at=now(),updated_at=now())
                 accounts.append({'id':id,'name':name,'role':role,'group':group,'phone':phone,'password':password})
             await add(s,'system_settings',setting_key='price_rules',value_json=DEFAULT_RULES,version=1,updated_by=accounts[0]['id'],updated_at=now())
+            from app.shop import DEFAULT_PROFILE
+            for key,value in [('shop_profile',DEFAULT_PROFILE),('vat_policy',{'rate':0}),('platform_fee',{'rate':'10'})]:
+                await add(s,'system_settings',setting_key=key,value_json=value,version=1,updated_by=accounts[0]['id'],updated_at=now())
+            await change(s,'shops',DEFAULT_SHOP,name=DEFAULT_PROFILE['name'],profile_json=DEFAULT_PROFILE,updated_at=now())
+            staff_accounts=[]
+            for index,(name,role) in enumerate([('Người bán mẫu','SELLER'),('Người giao mẫu','SHIPPER')],5):
+                id=uid();password=secrets.token_urlsafe(12)+'aA1';phone=f'+8490000000{index}'
+                await add(s,'users',id=id,phone_e164=phone,password_hash=await password_hash(password),display_name=name,role=role,shop_id=DEFAULT_SHOP if role=='SELLER' else None,status='ACTIVE',group_id=groups['WORKER'],phone_verified_at=now(),security_version=1,version=1,created_at=now(),updated_at=now())
+                staff_accounts.append({'id':id,'name':name,'role':role,'phone':phone,'password':password})
             await add(s,'system_settings',setting_key='warehouse',value_json={
                 'latitude':'20.9809427','longitude':'105.7870861','placeId':'pin:20.9809427,105.7870861',
                 'address':'96A Trần Phú, Học viện Công nghệ Bưu chính Viễn thông, Hà Đông, Hà Nội'},
@@ -80,7 +90,7 @@ async def seed(output_dir=None):
                 await add(s,'stream_heads',topic=topic,last_seq=0)
         target=Path(output_dir) if output_dir is not None else ROOT/'runtime'
         target.mkdir(parents=True,exist_ok=True)
-        (target/'demo-accounts.local.json').write_text(json.dumps({'accounts':accounts,'products':products,'groups':groups,'zoneId':zone,'pickupSlotId':slot},ensure_ascii=False,indent=2),encoding='utf-8')
+        (target/'demo-accounts.local.json').write_text(json.dumps({'accounts':accounts,'staffAccounts':staff_accounts,'products':products,'groups':groups,'zoneId':zone,'pickupSlotId':slot},ensure_ascii=False,indent=2),encoding='utf-8')
         print(f'Sample catalog ready: {len(products)} products. Credentials saved locally.')
         return True
     finally:

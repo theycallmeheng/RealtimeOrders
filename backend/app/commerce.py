@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import select, func, and_, update
 from sqlalchemy.dialects.mysql import insert
 from .db import T, now, uid, uuid, one, rows, add, change, check, text, number, digest, public
-from .auth import require_admin
+from .auth import require_shop as require_admin, is_shop
 from .events import emit, notify
 from .moderation import sanitize
 
@@ -36,18 +36,25 @@ async def complete(s, user, scope, key, response):
 
 async def lock_user(s, id): return await one(s, 'users', T['users'].c.id == id, lock=True)
 
-async def catalog(s, user, admin=False, offer_ids=None, menu_id=None):
+async def catalog(s, user, admin=False, offer_ids=None, menu_id=None, shop_id=None):
+    from .marketplace import scope
     from .menus import audience
     o, p, u, price, groups = T['offers'], T['products'], T['units'], T['offer_prices'], T['customer_groups']
-    q = select(o, p.c.name, p.c.sku, p.c.description, p.c.quantity_step, p.c.category_id,
+    categories, shops = T['categories'], T['shops']
+    q = select(o, shops.c.name.label('shop_name'), p.c.name, p.c.sku, p.c.description, p.c.quantity_step, p.c.category_id,
+               categories.c.name.label('category_name'),
                p.c.allowed_group_ids.label('product_allowed_group_ids'),
                u.c.label.label('unit'), price.c.unit_price, price.c.version.label('price_version')).join(p, o.c.product_id==p.c.id)\
-        .join(u, p.c.unit_id==u.c.id).outerjoin(price, and_(price.c.offer_id==o.c.id, price.c.group_id==user['group_id']))
-    if admin:q=q.where(o.c.archived_at==None)
+        .join(u, p.c.unit_id==u.c.id).join(shops, o.c.shop_id==shops.c.id).outerjoin(categories, p.c.category_id==categories.c.id)\
+        .outerjoin(price, and_(price.c.offer_id==o.c.id, price.c.group_id==user['group_id']))
+    if admin:
+        q = q.where(o.c.archived_at.is_(None), *scope(o, user, shop_id))
+    elif shop_id:
+        q = q.where(o.c.shop_id == uuid(shop_id))
     if not admin:
         m=T['daily_menus']
         q=q.join(m,o.c.menu_id==m.c.id).join(groups,groups.c.id==price.c.group_id).where(o.c.status=='OPEN',o.c.archived_at==None,
-            p.c.active==True,p.c.deleted_at==None,groups.c.active==True,
+            p.c.active==True,p.c.deleted_at==None,groups.c.active==True,shops.c.active.is_(True),
             m.c.status=='OPEN',m.c.opens_at<=now(),m.c.closes_at>now(),price.c.unit_price!=None,
             audience(p.c.allowed_group_ids,user['group_id']),audience(o.c.allowed_group_ids,user['group_id']),
             audience(m.c.allowed_group_ids,user['group_id']))
@@ -85,7 +92,7 @@ async def catalog(s, user, admin=False, offer_ids=None, menu_id=None):
         offer['subscribed'] = offer['product_id'] in followed
         if admin: offer['prices'] = prices_by_offer.get(offer['id'],[])[:100]
         else:
-            for key in ('cost_price','batch_code','archived_at','allowed_group_ids','product_allowed_group_ids'): offer.pop(key,None)
+            for key in ('cost_price','sale_price_override','batch_code','archived_at','allowed_group_ids','product_allowed_group_ids'): offer.pop(key,None)
     return public(offers)
 
 async def catalog_event(s, ids):
@@ -106,13 +113,27 @@ async def catalog_event(s, ids):
         emit(s,'catalog:'+group['id'],'CATALOG_CHANGED',{'offers':batch,'removedOfferIds':missing})
     emit(s, 'admin:ops', 'CATALOG_CHANGED', {'offerIds': sorted(set(ids))})
 
+def can_read_order(user, order):
+    if user['role'] == 'ADMIN':
+        return True
+    if user['role'] == 'SELLER':
+        return user.get('shop_id') == order['shop_id']
+    if user['role'] == 'SHIPPER':
+        return order.get('courier_id') == user['id']
+    return order['customer_id'] == user['id']
+
+
 async def get_order(s, user, id):
     order = await one(s, 'orders', T['orders'].c.id==id)
-    check(user['role']=='ADMIN' or order['customer_id']==user['id'], 'FORBIDDEN', 'Không có quyền xem đơn', 403)
+    check(can_read_order(user, order), 'FORBIDDEN', 'Không có quyền xem đơn', 403)
     order.pop('request_hash', None)
     order['items'] = await rows(s, 'order_items', T['order_items'].c.order_id==id)
-    if user['role']!='ADMIN':
+    if not is_shop(user):
+        order.pop('platform_fee',None)
+        order.pop('platform_fee_rate',None)
         for item in order['items']: item.pop('cost_price_snapshot',None)
+    from .payments import summary
+    order['payment'] = public(await summary(s,order))
     order['history'] = await rows(s, 'order_status_history', T['order_status_history'].c.order_id==id,
                                  order=T['order_status_history'].c.order_version)
     order['cancellation_requests'] = await rows(s, 'cancellation_requests', T['cancellation_requests'].c.order_id==id)
@@ -121,25 +142,35 @@ async def get_order(s, user, id):
 async def get_orders(s,user,ids):
     """Load authorized snapshot orders with a fixed number of child queries."""
     if not ids: return []
-    orders=[dict(row) for row in (await s.execute(select(T['orders']).where(T['orders'].c.id.in_(ids)))).mappings()]
+    t,money=T['orders'],T['money_entries']
+    totals=select(money.c.order_id,func.sum(func.if_(money.c.kind=='PAYMENT',money.c.amount,0)).label('_received'),
+                  func.sum(func.if_(money.c.kind=='REFUND',money.c.amount,0)).label('_refunded')).where(money.c.order_id.in_(ids)).group_by(money.c.order_id).subquery()
+    query=select(t,totals.c._received,totals.c._refunded).outerjoin(totals,t.c.id==totals.c.order_id).where(t.c.id.in_(ids))
+    orders=[dict(row) for row in (await s.execute(query)).mappings()]
+    for o in orders:
+        paid=o.pop('_received') or Decimal(0);refunded=o.pop('_refunded') or Decimal(0)
+        o['payment']={'received':paid,'refunded':refunded,'remaining':Decimal(0) if o['status'] in ('CANCELLED','REJECTED') else max(Decimal(0),o['total']-paid+refunded),'tracked':o['payment_method']!='LEGACY'}
     by_id={order['id']:order for order in orders}
     check(all(id in by_id for id in ids),'NOT_FOUND','Không tìm thấy dữ liệu',404)
-    check(user['role']=='ADMIN' or all(order['customer_id']==user['id'] for order in orders),
+    check(all(can_read_order(user, order) for order in orders),
           'FORBIDDEN','Không có quyền xem đơn',403)
     for order in orders:
         order.pop('request_hash',None)
+        if not is_shop(user):
+            order.pop('platform_fee',None)
+            order.pop('platform_fee_rate',None)
         order.update(items=[],history=[],cancellation_requests=[])
     for table,key in (('order_items','items'),('order_status_history','history'),('cancellation_requests','cancellation_requests')):
         query=select(T[table]).where(T[table].c.order_id.in_(ids))
         if key=='history':query=query.order_by(T[table].c.order_version)
         for row in (await s.execute(query)).mappings():
             row=dict(row)
-            if user['role']!='ADMIN': row.pop('cost_price_snapshot',None)
+            if not is_shop(user): row.pop('cost_price_snapshot',None)
             values=by_id[row['order_id']][key]
             if len(values)<100: values.append(dict(row))
     return public([by_id[id] for id in ids])
 
-async def delivery(s, user, body, subtotal):
+async def delivery(s, user, body, subtotal, shop_id=None):
     address = await one(s, 'addresses', T['addresses'].c.id==uuid(body.get('addressId')),
                         T['addresses'].c.user_id==user['id'], T['addresses'].c.deleted_at==None)
     method = body.get('deliveryMethod', 'INDIVIDUAL')
@@ -162,12 +193,13 @@ async def delivery(s, user, body, subtotal):
     else:
         from .shipping import validate_quote
         check(body.get('deliveryQuoteId'),'REQUOTE_REQUIRED','Lấy phí giao và xác nhận trước khi đặt đơn',409)
-        quote=await validate_quote(s,user,body,address,policy)
+        quote=await validate_quote(s,user,body,address,policy,shop_id)
         snapshot.update(shippingFee=str(quote['shipping_fee']),distanceMeters=quote['distance_meters'],
             durationSeconds=quote['duration_seconds'],deliveryQuoteId=quote['id'])
     return address, policy, snapshot
 
 async def create_order(s, user, body, key):
+    check(user['role']=='CUSTOMER','FORBIDDEN','Chỉ khách hàng được đặt đơn',403)
     scope='create-order'
     prior=await idem(s,user,scope,key,body)
     if prior: return prior
@@ -187,6 +219,11 @@ async def create_order(s, user, body, key):
     for menu_id in sorted({m for m in menu_ids if m}):
         await one(s,'daily_menus',T['daily_menus'].c.id==menu_id,lock=True)
     locked={id:await one(s,'offers',T['offers'].c.id==id,lock=True) for id in sorted(ids)}
+    from .marketplace import get_shop, order_fee, shop_topic
+    shops = {offer['shop_id'] for offer in locked.values()}
+    check(len(shops) == 1, 'MIXED_SHOPS', 'Mỗi đơn chỉ đặt món của một shop', 409)
+    shop_id = shops.pop()
+    shop = await get_shop(s, shop_id, active=True)
     items=[]
     for line,id in zip(lines,ids):
         offer=locked[id]
@@ -208,33 +245,47 @@ async def create_order(s, user, body, key):
                           quantity=qty,unit_price=unitprice,price_version=price['version'],
                           line_total=(unitprice*qty).quantize(Decimal('1'),rounding=ROUND_HALF_UP)))
     subtotal=sum(i['line_total'] for i in items)
-    address,policy,shipping=await delivery(s,user,body,subtotal)
+    address,policy,shipping=await delivery(s,user,body,subtotal,shop_id)
+    platform_rate, platform_fee = await order_fee(s, subtotal)
     fee=Decimal(shipping['shippingFee'])
-    check(subtotal+fee<=Decimal('999999999999999999'),'ORDER_TOO_LARGE','Tổng đơn vượt giới hạn xử lý')
+    from .payments import vat_policy,tax,configured
+    policy_data,policy_version=await vat_policy(s)
+    vat_rate=number(policy_data['rate'],places=2,maximum=Decimal(100));vat_amount=tax(subtotal,vat_rate)
+    check(str(body.get('vatVersion',policy_version if vat_rate==0 else ''))==str(policy_version),'REQUOTE_REQUIRED','Thuế đã thay đổi; kiểm tra lại tổng tiền',409)
+    method=body.get('paymentMethod','COD')
+    check(method in ('COD','PAYOS'),'INVALID_PAYMENT','Chọn COD hoặc payOS')
+    check(method!='PAYOS' or configured(),'PAYMENT_NOT_CONFIGURED','payOS chưa được cấu hình',503)
+    check(subtotal+fee+vat_amount<=Decimal('999999999999999999'),'ORDER_TOO_LARGE','Tổng đơn vượt giới hạn xử lý')
     group=await one(s,'customer_groups',T['customer_groups'].c.id==user['group_id'])
     id=uid()
-    await add(s,'orders',id=id,customer_id=user['id'],client_order_id=clientid,request_hash=digest(body),status='PENDING',
+    await add(s,'orders',id=id,customer_id=user['id'],shop_id=shop_id,shop_name_snapshot=shop['name'],
+              platform_fee_rate=platform_rate,platform_fee=platform_fee,client_order_id=clientid,request_hash=digest(body),status='PENDING',
               group_snapshot={'id':group['id'],'code':group['code'],'name':group['name']},address_snapshot=public(address),
               delivery_snapshot=shipping,delivery_method=shipping['method'],merchandise_total=subtotal,shipping_fee=fee,
-              total=subtotal+fee,version=1,created_at=now(),updated_at=now(),
+              total=subtotal+fee+vat_amount,vat_rate=vat_rate,vat_amount=vat_amount,payment_method=method,payment_status='UNPAID',version=1,created_at=now(),updated_at=now(),
               note=await sanitize(s,user,text(body.get('note',''),1000),'order.note',id))
     for item in items: await add(s,'order_items',order_id=id,**item)
     await add(s,'order_status_history',id=uid(),order_id=id,actor_id=user['id'],from_status=None,to_status='PENDING',order_version=1,created_at=now())
     result=await get_order(s,user,id)
     emit(s,'user:'+user['id'],'ORDER_CHANGED',{'id':id,'status':'PENDING','version':'1'},id,1)
     emit(s,'admin:ops','ORDER_CHANGED',{'id':id,'status':'PENDING','version':'1'},id,1)
+    emit(s,shop_topic(shop_id),'ORDER_CHANGED',{'id':id,'status':'PENDING','version':'1'},id,1)
     await notify(s,user['id'],'ORDER_CREATED',{'id':id,'message':'Đơn đã gửi, đang chờ duyệt; chưa giữ hàng.'})
     await catalog_event(s,ids)
     return await complete(s,user,scope,key,result)
 
 async def order_action(s,user,id,action,body,key):
     scope='order:'+id+':'+action
+    initial=await one(s,'orders',T['orders'].c.id==id)
+    check(can_read_order(user, initial), 'FORBIDDEN', 'Không có quyền xử lý đơn', 403)
     prior=await idem(s,user,scope,key,body)
     if prior: return prior
-    initial=await one(s,'orders',T['orders'].c.id==id)
     await lock_user(s,initial['customer_id'])
     order=await one(s,'orders',T['orders'].c.id==id,lock=True)
-    if user['role']!='ADMIN':
+    courier=user['role']=='SHIPPER' and order.get('courier_id')==user['id']
+    if courier:
+        check(action=='transition','FORBIDDEN','Người giao chỉ được xử lý giao nhận',403)
+    elif not is_shop(user):
         check(order['customer_id']==user['id'] and action in ('cancel','request-cancel'),'FORBIDDEN','Không có quyền xử lý đơn',403)
     else: require_admin(user)
     version(order,body)
@@ -254,13 +305,17 @@ async def order_action(s,user,id,action,body,key):
             await change(s,'order_items',item['id'],cost_price_snapshot=offer['cost_price'])
             await move_stock(s,user,offer,-item['quantity'],'APPROVE',id,id)
         target='APPROVED'; values['approved_at']=now()
+        if order['payment_method']=='PAYOS':
+            from .config import settings
+            values['payment_deadline']=now()+timedelta(seconds=settings.payment_ttl_seconds)
+            if order['total']==0:values['payment_status']='PAID'
     elif action in ('cancel','reject'):
         if action=='reject': require_admin(user)
         check(status=='PENDING','INVALID_STATE','Đơn đã duyệt cần gửi yêu cầu hủy',409)
         target='REJECTED' if action=='reject' else 'CANCELLED'
         if target=='CANCELLED': values['cancelled_at']=now()
     elif action=='request-cancel':
-        check(status in ('APPROVED','PREPARING'),'INVALID_STATE','Chỉ yêu cầu hủy trước khi bàn giao vận chuyển',409)
+        check(status in ('APPROVED','PREPARING','READY_FOR_PICKUP'),'INVALID_STATE','Chỉ yêu cầu hủy trước khi bàn giao vận chuyển',409)
         check(bool(reason),'REASON_REQUIRED','Vui lòng nhập lý do hủy')
         open_request=await one(s,'cancellation_requests',T['cancellation_requests'].c.order_id==id,T['cancellation_requests'].c.state=='OPEN',required=False)
         check(not open_request,'CANCELLATION_OPEN','Đơn đã có yêu cầu hủy',409)
@@ -272,7 +327,7 @@ async def order_action(s,user,id,action,body,key):
         check(isinstance(body.get('accept'),bool),'INVALID_BOOLEAN','Quyết định hủy phải là giá trị đúng/sai')
         cancellation=await one(s,'cancellation_requests',T['cancellation_requests'].c.order_id==id,
                                T['cancellation_requests'].c.state=='OPEN',lock=True)
-        check(status in ('APPROVED','PREPARING'),'INVALID_STATE','Không thể hủy sau bàn giao',409)
+        check(status in ('APPROVED','PREPARING','READY_FOR_PICKUP'),'INVALID_STATE','Không thể hủy sau bàn giao',409)
         accept=body.get('accept') is True
         await change(s,'cancellation_requests',cancellation['id'],state='ACCEPTED' if accept else 'REJECTED',
                      decision_by=user['id'],decision_note=reason,decided_at=now(),version=cancellation['version']+1)
@@ -281,26 +336,45 @@ async def order_action(s,user,id,action,body,key):
             for item in items: await move_stock(s,user,offers[item['offer_id']],item['quantity'],'CANCEL_RESTORE',id,id)
             values['cancelled_at']=now()
     elif action=='transition':
-        require_admin(user)
+        check(is_shop(user) or courier,'FORBIDDEN','Không có quyền giao nhận',403)
         target=body.get('status')
-        check({'APPROVED':'PREPARING','PREPARING':'SHIPPING','SHIPPING':'DELIVERED'}.get(status)==target,
+        next_state={'APPROVED':'PREPARING','PREPARING':'READY_FOR_PICKUP' if order['delivery_method']=='COLLECTIVE' else 'SHIPPING','SHIPPING':'DELIVERED','READY_FOR_PICKUP':'DELIVERED'}
+        check(next_state.get(status)==target,
               'INVALID_STATE','Không thể chuyển sang trạng thái này',409)
+        check(not courier or target=='DELIVERED','FORBIDDEN','Người bán điều phối các bước chuẩn bị và bàn giao',403)
+        if order['payment_method']=='PAYOS':
+            from .payments import balance
+            paid,refunded=await balance(s,id)
+            check(paid-refunded>=order['total'],'PAYMENT_REQUIRED','Cần thanh toán đủ trước khi chuẩn bị/giao hàng',409)
+        if target in ('SHIPPING','READY_FOR_PICKUP'):
+            check(order.get('courier_id'),'COURIER_REQUIRED','Phân công người giao/trao hàng trước',409)
+            await one(s,'users',T['users'].c.id==order['courier_id'],T['users'].c.role=='SHIPPER',T['users'].c.status=='ACTIVE')
+        if target in ('SHIPPING','READY_FOR_PICKUP','DELIVERED'):
+            pending_cancel=await one(s,'cancellation_requests',T['cancellation_requests'].c.order_id==id,T['cancellation_requests'].c.state=='OPEN',required=False)
+            check(not pending_cancel,'CANCELLATION_OPEN','Cần xử lý yêu cầu hủy trước khi bàn giao',409)
         if target=='SHIPPING':
             pending=await one(s,'cancellation_requests',T['cancellation_requests'].c.order_id==id,T['cancellation_requests'].c.state=='OPEN',required=False)
             check(not pending,'CANCELLATION_OPEN','Cần xử lý yêu cầu hủy trước khi giao',409)
             values['shipped_at']=now()
-        if target=='DELIVERED': values['delivered_at']=now()
+        if target=='DELIVERED':
+            if order['payment_method']=='COD':
+                check(number(body.get('codAmount'),places=0)==order['total'],'COD_AMOUNT_REQUIRED','Cần xác nhận đã thu đủ tiền COD',409)
+                if order['total']>0:await add(s,'money_entries',id=uid(),order_id=id,kind='PAYMENT',method='COD',amount=order['total'],provider_ref='cod:'+id,actor_id=user['id'],collector_id=order.get('courier_id') or user['id'],created_at=now())
+                values['payment_status']='PAID'
+            values['delivered_at']=now()
     else: check(False,'UNKNOWN_ACTION','Thao tác không hợp lệ')
     await change(s,'orders',id,status=target,version=order['version']+1,updated_at=now(),**values)
     await add(s,'order_status_history',id=uid(),order_id=id,actor_id=user['id'],from_status=status,to_status=target,
               order_version=order['version']+1,reason=reason,created_at=now())
-    result=await get_order(s,user,id)
     await audit(s,user,'order.'+action,'order',id,{'status':status},{'status':target})
-    for topic in ('user:'+order['customer_id'],'admin:ops'):
-        emit(s,topic,'ORDER_CHANGED',{'id':id,'status':target,'version':str(order['version']+1)},id,order['version']+1)
     await notify(s,order['customer_id'],'ORDER_STATUS',{'id':id,'status':target,'message':'Đơn hàng vừa được cập nhật.'})
+    from .payments import request_refund,changed
+    fresh=await one(s,'orders',T['orders'].c.id==id)
+    if target in ('CANCELLED','REJECTED'):await request_refund(s,fresh)
+    if target=='READY_FOR_PICKUP':await notify(s,order['customer_id'],'PICKUP_READY',{'id':id,'message':'Đơn đã sẵn sàng lấy. Xem điểm nhận và khung giờ trong đơn.','pickup':order['delivery_snapshot'].get('pickupSlot')})
+    await changed(s,fresh)
     await catalog_event(s,list(offers))
-    return await complete(s,user,scope,key,result)
+    return await complete(s,user,scope,key,await get_order(s,user,id))
 
 async def move_stock(s,user,offer,delta,kind,reference,order_id=None,reason=None):
     balance=offer['available_qty']+delta

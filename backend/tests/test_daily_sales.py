@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 from app.db import T,Session,one,change,uid,now,Fault
 from app import menus,shipping,analytics
-from conftest import order_body,quote_fixture
+from conftest import order_body,quote_fixture,DATA
 from test_integration import socket,sync_messages
 
 
@@ -76,7 +76,7 @@ async def test_menu_copy_zero_stock_unique_day_and_open_guard(clients,sale):
     r=await admin.request('PATCH','/admin/menus/'+copied['id'],{'expectedVersion':copied['version'],'status':'OPEN'})
     assert r.status_code==400 and r.json()['error']['code']=='STOCK_REQUIRED'
     r=await admin.request('POST','/admin/menus',{'saleDate':str(target),'items':[]})
-    assert r.status_code==409
+    assert r.status_code==200  # Multiple draft rounds on the same day are supported.
 
 
 async def test_product_audience_blocks_http_order_snapshot_and_stale_replay(clients,sale):
@@ -138,18 +138,32 @@ async def test_cost_is_immutable_private_and_negative_profit_is_real(clients,sal
     order=await admin.post('/admin/orders/'+order['id']+'/approve',{'expectedVersion':order['version']})
     assert order['items'][0]['cost_price_snapshot']=='120000'
     async with Session.begin() as s:await change(s,'offers',sale['id'],cost_price=Decimal(20000))
+    order=await admin.post('/admin/orders/'+order['id']+'/assign',{'expectedVersion':order['version'],'courierId':DATA['testCourierId']})
     for target in ('PREPARING','SHIPPING','DELIVERED'):
-        order=await admin.post('/admin/orders/'+order['id']+'/transition',{'expectedVersion':order['version'],'status':target})
+        order=await admin.post('/admin/orders/'+order['id']+'/transition',{'expectedVersion':order['version'],'status':target,'codAmount':order['total']})
     assert 'cost_price_snapshot' not in (await c.get('/orders/'+order['id']))['items'][0]
     # Isolate a business date without altering any primary/live data.
     day=date(2050,1,1)+timedelta(days=int(uid().replace('-','')[:4],16))
     async with Session.begin() as s:await change(s,'orders',order['id'],delivered_at=menus.bounds(day)[0]+timedelta(hours=1))
     result=await admin.get('/admin/reports/daily?date='+str(day))
-    assert result['selected']['merchandise']=='150000' and result['selected']['cost']=='180000'
-    assert result['selected']['grossProfit']=='-30000' and result['changes']['merchandise']['percent'] is None
+    assert Decimal(result['selected']['merchandise'])==Decimal(order['merchandise_total']) and result['selected']['cost']=='180000'
+    assert Decimal(result['selected']['grossProfit'])==Decimal(order['merchandise_total'])-180000 and result['changes']['merchandise']['percent'] is None
+    overview_path = '/admin/reports/overview?from=' + str(day) + '&to=' + str(day)
+    overview = await admin.get(overview_path)
+    assert overview['totals']['createdOrders'] == 0 and overview['statuses'] == []
+    assert overview['totals']['orders'] == 1
+    assert overview['totals']['merchandise'] == result['selected']['merchandise']
+    assert overview['totals']['grossProfit'] == result['selected']['grossProfit']
+    assert overview['topProducts'][0]['productId'] == sale['product_id']
+    assert Decimal(overview['topProducts'][0]['quantity']) == Decimal('1.5')
+    assert overview['topProducts'][0]['grossProfit'] == result['selected']['grossProfit']
+    assert (await c.request('GET', overview_path)).status_code == 403
     async with Session.begin() as s:await change(s,'order_items',order['items'][0]['id'],cost_price_snapshot=None)
     result=await admin.get('/admin/reports/daily?date='+str(day))
     assert result['selected']['grossProfit'] is None and result['selected']['missingCostLines']==1
+    overview = await admin.get(overview_path)
+    assert overview['totals']['grossProfit'] is None
+    assert overview['topProducts'][0]['grossProfit'] is None
 
 
 async def test_cleanup_preserves_recent_orders_and_is_repeatable(clients):

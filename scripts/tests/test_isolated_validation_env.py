@@ -15,6 +15,8 @@ class IsolatedValidationEnvironmentTests(unittest.TestCase):
             "ZALO_OTP_TEMPLATE_ID": "real-template",
             "TWILIO_AUTH_TOKEN": "secret-twilio",
             "SMTP_PASSWORD": "secret-smtp",
+            "VIETMAP_API_KEY": "live-map-key", "GOOGLE_MAPS_SERVER_KEY": "live-map-server", "GOOGLE_MAPS_BROWSER_KEY": "live-browser",
+            "PAYOS_CLIENT_ID": "live-id", "PAYOS_API_KEY": "live-key", "PAYOS_CHECKSUM_KEY": "live-checksum",
         }
         context = {"databaseUrl": "mysql+asyncmy://audit", "uploadDir": "runtime/audit",
                    "evidence": "evidence/audit", "appSecret": "test-only-secret"}
@@ -23,6 +25,7 @@ class IsolatedValidationEnvironmentTests(unittest.TestCase):
         for key in secrets:
             self.assertEqual(env[key], "")
         self.assertEqual(env["DEMO_MODE"], "true")
+        self.assertEqual(env["MAP_PROVIDER"], "osm")
         self.assertEqual(env["SMS_PROVIDER"], "demo")
         self.assertEqual(env["EMAIL_PROVIDER"], "demo")
 

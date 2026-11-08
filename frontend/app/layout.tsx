@@ -5,6 +5,9 @@ import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import "./visual-theme.css";
 import "./motion.css";
+import "./overview.css";
+import "./operations.css";
+import "./product-design.css";
 config.autoAddCss = false;
 export const metadata: Metadata = {
   title: "RealtimeOrders · Đặt hàng trong ngày",

@@ -1,0 +1,114 @@
+/* The overview shares the storefront palette and keeps each filter and data region self-contained. */
+.overview-controls, .overview-range, .overview-presets {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.overview-controls { justify-content: space-between; gap: 14px 24px; margin-bottom: 20px; }
+.overview-presets, .overview-metric-toggle {
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #edf1e8;
+}
+.overview-presets button, .overview-metric-toggle button {
+  min-height: 34px;
+  border-color: transparent;
+  background: transparent;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.overview-presets button[aria-pressed="true"], .overview-metric-toggle button[aria-pressed="true"] {
+  border-color: var(--line);
+  background: white;
+  color: var(--accent);
+}
+.overview-range input { width: 148px; }
+.overview-dashboard { display: grid; gap: 18px; min-width: 0; }
+.overview-dashboard .notice { margin: 0; }
+.overview-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.overview-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--kpi-bg);
+  border-color: var(--kpi-border);
+  color: var(--kpi-ink);
+  box-shadow: inset 0 3px var(--kpi-accent);
+  padding: 17px 18px;
+  min-width: 0;
+}
+.overview-kpi-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; }
+.overview-kpi-heading h2 { font-size: 13px; letter-spacing: normal; }
+.overview-kpi-heading svg { width: 15px; color: var(--kpi-accent); flex-shrink: 0; }
+.overview-kpi > strong { font-size: clamp(19px, 2.1vw, 29px); line-height: 1.2; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.overview-kpi > small { font-size: 11px; line-height: 1.45; margin-top: auto; }
+.overview-kpi-1 { --kpi-bg: #e8f0fc; --kpi-border: #cfdef3; --kpi-ink: #244b80; --kpi-accent: #4679bc; }
+.overview-kpi-2 { --kpi-bg: #e3f3f0; --kpi-border: #c8e5dd; --kpi-ink: #1c5b50; --kpi-accent: #388d7e; }
+.overview-kpi-3 { --kpi-bg: #e5f1df; --kpi-border: #cce2c3; --kpi-ink: #2d602f; --kpi-accent: #579653; }
+.overview-kpi-4 { --kpi-bg: #fff1d9; --kpi-border: #ead8ad; --kpi-ink: #745219; --kpi-accent: #b9822b; }
+.overview-loss { color: #a4432d; }
+.overview-columns { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 18px; align-items: stretch; }
+.overview-panel { min-width: 0; }
+.overview-panel-heading { padding: 16px 18px; display: flex; justify-content: space-between; align-items: start; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--line); }
+.overview-panel-heading p { font-size: 12px; margin-top: 3px; }
+.overview-metric-toggle { display: flex; flex-wrap: wrap; }
+.overview-chart-readout { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 14px 18px 0; font-size: 12px; }
+.overview-chart-readout span { color: var(--muted); }
+.overview-chart-readout strong { color: var(--accent); font-size: 15px; }
+.overview-chart-scroll { margin: 8px 16px 14px; overflow-x: auto; scrollbar-width: thin; }
+.overview-chart { display: grid; gap: 3px; padding: 3px 3px 5px; }
+button.overview-chart-column {
+  display: grid;
+  grid-template-rows: 126px auto;
+  justify-items: center;
+  align-items: end;
+  gap: 6px;
+  border: 1px solid transparent;
+  padding: 4px 2px;
+  background: transparent;
+  min-width: 0;
+}
+button.overview-chart-column[aria-pressed="true"] { background: #f1f5eb; border-color: #e1e9da; }
+.overview-bar-track { width: 100%; height: 100%; display: flex; justify-content: center; align-items: end; border-bottom: 1px solid var(--line); }
+.overview-chart-bar { background: #a2bc94; width: min(60%, 34px); border-radius: 4px 4px 0 0; }
+.overview-chart-column[aria-pressed="true"] .overview-chart-bar { background: var(--accent); }
+.overview-chart-column small { font-size: 10px; font-variant-numeric: tabular-nums; }
+.overview-chart-empty { padding: 10px 18px 18px; font-size: 13px; }
+.overview-status-list { display: grid; gap: 13px; list-style: none; padding: 16px 18px; margin: 0; }
+.overview-status-list li > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.overview-status-track { display: block; height: 4px; margin-top: 7px; background: #edf1e9; border-radius: 4px; overflow: hidden; }
+.overview-status-track span { display: block; height: 100%; background: #91af83; }
+.overview-product-table th[scope="row"] { background: white; border-top: 1px solid var(--line); color: var(--ink); font-size: 13px; letter-spacing: normal; text-transform: none; white-space: normal; min-width: 160px; }
+.overview-product-table td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.overview-sales-detail { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0; }
+.overview-sales-detail > div { padding: 16px 18px; border-right: 1px solid var(--line); }
+.overview-sales-detail > div:last-child { border-right: 0; }
+.overview-sales-detail dt { font-size: 12px; color: var(--muted); }
+.overview-sales-detail dd { margin: 5px 0 0; font-weight: 650; color: var(--accent); overflow-wrap: anywhere; }
+.overview-report-details { margin-top: 18px; }
+.overview-report-details > summary { padding: 15px 18px; font-weight: 600; cursor: pointer; }
+.overview-report-details[open] > summary { border-bottom: 1px solid var(--line); }
+@media (max-width: 1050px) {
+  .overview-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .overview-columns { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 600px) {
+  .overview-controls { align-items: start; }
+  .overview-range { width: 100%; }
+  .overview-range .field { flex: 1 1 130px; }
+  .overview-range input { width: 100%; }
+  .overview-presets button { min-height: 38px; font-size: 12px; padding-inline: 8px; }
+  .overview-kpis { gap: 10px; }
+  .overview-kpi, .overview-sales-detail > div { padding: 13px; }
+  .overview-kpi-heading h2 { font-size: 12px; }
+  .overview-sales-detail { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .overview-sales-detail > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .overview-sales-detail > div:nth-child(2n) { border-right: 0; }
+  .overview-panel-heading { padding: 14px; }
+}

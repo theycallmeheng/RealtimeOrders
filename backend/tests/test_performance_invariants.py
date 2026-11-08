@@ -12,7 +12,7 @@ from app import auth, commerce
 from app.db import Fault, Session, T, engine, now, reflect, uid
 from app.events import Hub, Subscriber, emit, event_wire, flush_events
 from test_integration import socket as open_socket, sync_messages
-from conftest import order_body
+from conftest import order_body,DATA
 
 
 def sample_event(topic, number=1):
@@ -129,8 +129,10 @@ async def test_catalog_batches_admin_prices_without_exposing_other_groups(client
     finally:
         event.remove(engine.sync_engine, 'before_cursor_execute', count)
     selected = next(offer for offer in admin_result if offer['id'] == sale['id'])
-    assert {price['group_id']: price['unit_price'] for price in selected['prices']} == {
-        student.user['group_id']: '123000', worker.user['group_id']: '456000'}
+    actual_prices={price['group_id']: price['unit_price'] for price in selected['prices']}
+    assert actual_prices[student.user['group_id']]=='123000' and actual_prices[worker.user['group_id']]=='456000'
+    configured_groups={g['id'] for g in await admin.get('/admin/config/groups') if g['active']}
+    assert set(actual_prices)==configured_groups
     for client, expected in ((student, '123000'), (worker, '456000')):
         async with Session.begin() as session:
             result = await commerce.catalog(session, client.user, offer_ids=[sale['id']])

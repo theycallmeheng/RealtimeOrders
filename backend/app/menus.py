@@ -65,7 +65,8 @@ async def visible(s,user,offer,product=None):
         offer=await one(s,'offers',T['offers'].c.id==offer['id'])
     group=await one(s,'customer_groups',T['customer_groups'].c.id==user['group_id'],required=False)
     menu=await one(s,'daily_menus',T['daily_menus'].c.id==offer['menu_id'])
-    return (menu['status']=='OPEN' and menu['opens_at']<=now()<menu['closes_at']
+    shop=await one(s,'shops',T['shops'].c.id==offer['shop_id'])
+    return (shop['active'] and menu['status']=='OPEN' and menu['opens_at']<=now()<menu['closes_at']
             and group and group['active'] and offer['status']=='OPEN' and product['active'] and not product['deleted_at']
             and all(a is None or user['group_id'] in a for a in
                     (menu['allowed_group_ids'],product['allowed_group_ids'],offer.get('allowed_group_ids'))))
@@ -88,18 +89,25 @@ async def invalidate(s, user):
     await s.execute(update(e).where(e.c.topic.like('catalog:%')).values(payload={'refresh':True}))
 
 
-async def detail(s,id):
+async def detail(s,id,user=None):
     from .commerce import catalog
+    from .marketplace import assert_owner
     m=await one(s,'daily_menus',T['daily_menus'].c.id==id)
+    if user:
+        assert_owner(user,m['shop_id'])
     m=(await stock_status(s,[m]))[0]
-    m['items']=[o for o in await catalog(s,{'id':'00000000-0000-0000-0000-000000000000','group_id':None},admin=True,menu_id=id)
+    m['items']=[o for o in await catalog(s,user or {'id':'00000000-0000-0000-0000-000000000000','group_id':None,'role':'ADMIN'},admin=True,menu_id=id)
                 if o['menu_id']==id]
     return public(m)
 
 
-async def current(s,user):
+async def current(s,user,shop_id=None):
     from .commerce import catalog
-    active=(await s.execute(select(T['daily_menus']).where(
+    menus,shops=T['daily_menus'],T['shops']
+    conditions=[shops.c.active.is_(True)]
+    if shop_id:
+        conditions.append(menus.c.shop_id==uuid(shop_id))
+    active=(await s.execute(select(menus).join(shops,menus.c.shop_id==shops.c.id).where(*conditions,
         T['daily_menus'].c.status=='OPEN',T['daily_menus'].c.opens_at<=now(),
         T['daily_menus'].c.closes_at>now()).order_by(T['daily_menus'].c.opens_at.desc(),T['daily_menus'].c.id).limit(100))).mappings().all()
     group=await one(s,'customer_groups',T['customer_groups'].c.id==user['group_id'],required=False)
@@ -108,18 +116,21 @@ async def current(s,user):
     active_menus=await stock_status(s,allowed)
     safe=[{k:v for k,v in m.items() if k!='allowed_group_ids'} for m in active_menus]
     return public({'saleDate':today(),'menu':safe[0] if safe else None,'menus':safe,
-                   'offers':await catalog(s,user),'serverTime':now()})
+                   'offers':await catalog(s,user,shop_id=shop_id),'serverTime':now()})
 
 
 
-async def upcoming(s, user):
+async def upcoming(s, user, shop_id=None):
     """Products not assigned to a sales round; expose only customer-safe fields."""
     group=await one(s,'customer_groups',T['customer_groups'].c.id==user['group_id'],required=False)
     if not group or not group['active']: return []
     p,o,u=T['products'],T['offers'],T['units']
     assigned=select(o.c.product_id).where(o.c.menu_id!=None,o.c.archived_at==None)
-    query=select(p.c.id.label('product_id'),p.c.name,p.c.description,p.c.category_id,u.c.label.label('unit')).join(u,p.c.unit_id==u.c.id).where(
+    shops=T['shops']
+    query=select(p.c.id.label('product_id'),p.c.name,p.c.description,p.c.category_id,p.c.shop_id,shops.c.name.label('shop_name'),u.c.label.label('unit')).join(u,p.c.unit_id==u.c.id).join(shops,p.c.shop_id==shops.c.id).where(shops.c.active.is_(True),
         p.c.active==True,p.c.deleted_at==None,p.c.id.not_in(assigned),audience(p.c.allowed_group_ids,user['group_id'])).order_by(p.c.name).limit(500)
+    if shop_id:
+        query=query.where(p.c.shop_id==uuid(shop_id))
     products=[dict(r) for r in (await s.execute(query)).mappings()]
     if not products: return []
     images=await rows(s,'product_images',T['product_images'].c.product_id.in_([p['product_id'] for p in products]),limit=2500,order=T['product_images'].c.position)
@@ -135,9 +146,11 @@ async def notification_feed(s,user,offset=0):
     n=T['notifications']
     notifications=[dict(r) for r in (await s.execute(select(n).where(n.c.user_id==user['id'])
         .order_by(n.c.created_at.desc(),n.c.id.desc()).limit(50).offset(offset))).mappings()]
-    allowed={o['id'] for o in await catalog(s,user)} if any(n['kind']=='PRODUCT_OPENED' for n in notifications) else set()
+    offers=await catalog(s,user) if any(n['kind'] in ('PRODUCT_OPENED','MENU_OPENED') for n in notifications) else []
+    allowed={o['id'] for o in offers};allowed_menus={o['menu_id'] for o in offers}
     return [n for n in notifications if not n['kind'].startswith('REQUEST_') and
-            (n['kind']!='PRODUCT_OPENED' or n['payload'].get('offerId') in allowed)]
+            (n['kind']!='PRODUCT_OPENED' or n['payload'].get('offerId') in allowed) and
+            (n['kind']!='MENU_OPENED' or n['payload'].get('menuId') in allowed_menus)]
 
 
 async def ensure_distinct_products(s, menu_id, product_ids, opens, closes):
@@ -154,8 +167,13 @@ async def ensure_distinct_products(s, menu_id, product_ids, opens, closes):
 
 async def save(s,user,id,body):
     from .commerce import version,audit,catalog_event,move_stock
+    from .marketplace import assert_owner,manage_shop
     old=await one(s,'daily_menus',T['daily_menus'].c.id==id,lock=True) if id else None
-    if old: version(old,body)
+    if old:
+        assert_owner(user,old['shop_id'])
+        version(old,body)
+    shop=await manage_shop(s,user,old['shop_id'] if old else body.get('shopId'))
+    shop_id=shop['id']
     try: day=date.fromisoformat(body.get('saleDate',str(old['sale_date']) if old else ''))
     except (ValueError,TypeError): check(False,'INVALID_DATE','Chọn ngày bán hợp lệ')
     check(not old or day==old['sale_date'],'IMMUTABLE_DATE','Sao chép menu để đổi sang ngày khác')
@@ -180,8 +198,12 @@ async def save(s,user,id,body):
     check(entries is None or isinstance(entries,list) and len(entries)<=100,'INVALID_ITEMS','Menu tối đa 100 sản phẩm')
     existing=await rows(s,'offers',T['offers'].c.menu_id==id,limit=100) if old else []
     if status=='OPEN':
+        check(shop['active'],'SHOP_CLOSED','Shop đang tạm ngừng bán',409)
         selected_ids=([uuid(i.get('productId')) for i in entries if i.get('enabled',True) is not False]
                       if entries is not None else [o['product_id'] for o in existing if o['status']=='OPEN'])
+        for product_id in selected_ids:
+            product=await one(s,'products',T['products'].c.id==product_id)
+            check(product['shop_id']==shop_id,'MIXED_SHOPS','Menu chỉ chứa sản phẩm của shop này',409)
         await ensure_distinct_products(s,id,selected_ids,opens,closes)
 
     if old and entries is not None:
@@ -194,13 +216,23 @@ async def save(s,user,id,body):
                 await audit(s,user,'menu.item.remove','offer',current['id'],
                             {'status':current['status']},{'status':'CLOSED'})
     id=id or uid()
-    data=dict(sale_date=day,status=status,opens_at=opens,closes_at=closes,allowed_group_ids=groups,audience_mode=mode,updated_at=now())
+    from .db import text
+    post={}
+    for external,column,maximum in [('postTitle','post_title',150),('postBody','post_body',2000),('receivingNote','receiving_note',500)]:
+        post[column]=text(body.get(external,old[column] if old else ''),maximum)
+    image=body.get('postImageUrl',old['post_image_url'] if old else None)
+    if image:
+        from .admin import product_image_url
+        image=product_image_url(image)
+    post['post_image_url']=image or None
+    data=dict(sale_date=day,status=status,opens_at=opens,closes_at=closes,allowed_group_ids=groups,audience_mode=mode,updated_at=now(),**post)
     if old: await change(s,'daily_menus',id,version=old['version']+1,**data)
-    else: await add(s,'daily_menus',id=id,version=1,created_at=now(),**data)
+    else: await add(s,'daily_menus',id=id,shop_id=shop_id,version=1,created_at=now(),**data)
     product_ids=[uuid(i.get('productId')) for i in entries or []]
     check(len(product_ids)==len(set(product_ids)),'DUPLICATE_ITEM','Mỗi sản phẩm chỉ xuất hiện một lần')
     for item in sorted(entries or [],key=lambda i:i['productId']):
         p=await one(s,'products',T['products'].c.id==item['productId'],lock=True)
+        check(p['shop_id']==shop_id,'MIXED_SHOPS','Menu chỉ chứa sản phẩm của shop này',409)
         check(p['active'] and not p['deleted_at'],'PRODUCT_UNAVAILABLE','Sản phẩm đã ngừng dùng')
         prev=next((o for o in existing if o['product_id']==p['id']),None)
         if prev: prev=await one(s,'offers',T['offers'].c.id==prev['id'],lock=True)
@@ -220,7 +252,9 @@ async def save(s,user,id,body):
         enabled=item.get('enabled',True)
         check(isinstance(enabled,bool),'INVALID_BOOLEAN','Trạng thái món không hợp lệ')
         offer_id=prev['id'] if prev else uid()
-        values=dict(allowed_group_ids=audience_ids,cost_price=cost,status='OPEN' if enabled else 'CLOSED',
+        raw_price=item.get('salePrice',prev['sale_price_override'] if prev else None)
+        override=None if raw_price in (None,'') else number(raw_price,places=0)
+        values=dict(allowed_group_ids=audience_ids,cost_price=cost,sale_price_override=override,status='OPEN' if enabled else 'CLOSED',
                     opens_at=opens,closes_at=closes,updated_at=now())
         if prev:
             check(str(prev['version'])==str(item.get('expectedVersion')),'VERSION_CONFLICT','Tồn hoặc giá món đã đổi; tải lại menu',409)
@@ -229,13 +263,14 @@ async def save(s,user,id,body):
             if any(values[k]!=prev[k] for k in values if k!='updated_at'):
                 await change(s,'offers',offer_id,version=prev['version']+(2 if delta else 1),**values)
         else:
-            await add(s,'offers',id=offer_id,menu_id=id,product_id=p['id'],sale_date=day,batch_code=id,
+            await add(s,'offers',id=offer_id,shop_id=shop_id,menu_id=id,product_id=p['id'],sale_date=day,batch_code=id,
                       available_qty=quantity,version=1,created_at=now(),**values)
             if quantity: await add(s,'inventory_movements',id=uid(),offer_id=offer_id,actor_id=user['id'],kind='OPENING',
                 reference_id=offer_id,quantity_delta=quantity,balance_after=quantity,created_at=now())
         from .pricing import menu_prices, load_rules
         active_groups=await rows(s,'customer_groups',T['customer_groups'].c.active==True,limit=100)
-        prices=menu_prices(cost,active_groups,await load_rules(s)) if cost is not None else []
+        prices=([{'groupId':g['id'],'unitPrice':override} for g in active_groups]
+                if override is not None else menu_prices(cost,active_groups,await load_rules(s)) if cost is not None else [])
         check(isinstance(prices,list) and len(prices)<=100,'INVALID_PRICES','Giá nhóm không hợp lệ')
         seen=set()
         for price in prices:
@@ -275,15 +310,15 @@ async def save(s,user,id,body):
         for item in await rows(s,'offers',T['offers'].c.menu_id==id,T['offers'].c.status=='OPEN',limit=100):
             await add(s,'notification_jobs',id=uid(),source_fact_id=uid(),kind='PRODUCT_OPENED',product_id=item['product_id'],
                 payload={'offerId':item['id'],'message':'Sản phẩm bạn quan tâm vừa mở bán.'},state='PENDING',attempts=0,created_at=now())
-    return await detail(s,id)
+    return await detail(s,id,user)
 
 
 async def copy(s,user,id,body):
-    source=await detail(s,id)
-    items=[{'productId':i['product_id'],'availableQty':'0','costPrice':i['cost_price'],
+    source=await detail(s,id,user)
+    items=[{'productId':i['product_id'],'availableQty':'0','costPrice':i['cost_price'],'salePrice':i['sale_price_override'],
             'allowedGroupIds':i['allowed_group_ids'] if source.get('audience_mode')=='PRODUCT' and i['product_allowed_group_ids'] is None else None,
             'prices':[{'groupId':p['group_id'],'unitPrice':p['unit_price']} for p in i['prices']]} for i in source['items'] if i['status']=='OPEN']
-    return await save(s,user,None,{'saleDate':body.get('saleDate'),'status':'DRAFT','items':items,'allowedGroupIds':source['allowed_group_ids'],'audienceMode':source.get('audience_mode','MENU')})
+    return await save(s,user,None,{'saleDate':body.get('saleDate'),'shopId':source['shop_id'],'status':'DRAFT','items':items,'allowedGroupIds':source['allowed_group_ids'],'audienceMode':source.get('audience_mode','MENU')})
 
 
 async def boundary_monitor():
@@ -293,6 +328,13 @@ async def boundary_monitor():
     while True:
         try:
             async with Session.begin() as s:
+                m,o=T['daily_menus'],T['offers']
+                due=(await s.execute(select(m).where(m.c.status=='OPEN',m.c.announced_at.is_(None),m.c.opens_at<=now(),m.c.closes_at>now()).limit(20).with_for_update(skip_locked=True))).mappings().all()
+                for menu in due:
+                    item=await one(s,'offers',o.c.menu_id==menu['id'],o.c.status=='OPEN',required=False)
+                    if item:
+                        await add(s,'notification_jobs',id=uid(),source_fact_id=menu['id'],kind='MENU_OPENED',product_id=item['product_id'],payload={'menuId':menu['id'],'message':'Có đợt bán mới dành cho nhóm của bạn. Xem Bảng tin hoặc Hàng trong ngày.'},state='PENDING',attempts=0,created_at=now())
+                        await change(s,'daily_menus',menu['id'],announced_at=now())
                 menus=await rows(s,'daily_menus',T['daily_menus'].c.status=='OPEN',
                                  T['daily_menus'].c.closes_at>now(),limit=100,
                                  order=T['daily_menus'].c.opens_at)
@@ -300,6 +342,7 @@ async def boundary_monitor():
                 if previous is not None and state!=previous:
                     await catalog_event(s,[]); await flush_events(s)
                 previous=state
+                await flush_events(s)
         except asyncio.CancelledError: raise
         except Exception:
             import logging

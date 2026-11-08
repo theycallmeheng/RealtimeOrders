@@ -126,8 +126,11 @@ async def configuration(s,user,table,id,body,method='POST'):
 
 async def product(s,user,id,body,method='POST'):
     from .menus import group_ids,invalidate
+    from .marketplace import assert_owner,manage_shop
     old=await one(s,'products',T['products'].c.id==id,lock=True) if id else None
-    if old: version(old,body)
+    if old:
+        assert_owner(user,old['shop_id'])
+        version(old,body)
     if method=='DELETE': values={'active':False,'deleted_at':now()}
     else:
         values={}
@@ -157,7 +160,8 @@ async def product(s,user,id,body,method='POST'):
         values['sku']=f'SKU-{sku_number:06d}'
         await s.execute(T['sku_sequences'].update().where(
             T['sku_sequences'].c.sequence_key=='product').values(next_value=sku_number+1))
-        id=uid(); await add(s,'products',id=id,version=1,created_at=now(),**values)
+        shop=await manage_shop(s,user,body.get('shopId'))
+        id=uid(); await add(s,'products',id=id,shop_id=shop['id'],version=1,created_at=now(),**values)
     image_entries=None
     if 'images' in body:
         image_entries=body['images']
@@ -179,8 +183,10 @@ async def product(s,user,id,body,method='POST'):
                 asset=uuid(entry['assetId'])
                 check(('asset',asset) not in seen,'INVALID_IMAGES','Mỗi ảnh chỉ được chọn một lần')
                 seen.add(('asset',asset))
-                await one(s,'media_assets',T['media_assets'].c.id==asset,T['media_assets'].c.owner_id==user['id'],
-                          T['media_assets'].c.purpose=='PRODUCT',T['media_assets'].c.state=='READY')
+                existing_image=await one(s,'product_images',T['product_images'].c.product_id==id,T['product_images'].c.asset_id==asset,required=False)
+                if not existing_image:
+                    await one(s,'media_assets',T['media_assets'].c.id==asset,T['media_assets'].c.owner_id==user['id'],
+                              T['media_assets'].c.purpose=='PRODUCT',T['media_assets'].c.state=='READY')
                 normalized.append((asset,None))
             else:
                 source_url=product_image_url(entry['url'])
@@ -255,9 +261,12 @@ async def offer(s,user,id,body):
     return await one(s,'offers',T['offers'].c.id==offer['id'])
 
 async def adjustment(s,user,body,key):
+    from .marketplace import assert_owner
+    o=await one(s,'offers',T['offers'].c.id==uuid(body.get('offerId')),lock=True)
+    assert_owner(user,o['shop_id'])
     prior=await idem(s,user,'inventory-adjust',key,body)
     if prior: return prior
-    o=await one(s,'offers',T['offers'].c.id==uuid(body.get('offerId')),lock=True); version(o,body)
+    version(o,body)
     delta=number(body.get('delta'),minimum=Decimal('-999999999'))
     check(delta!=0,'INVALID_NUMBER','Lượng điều chỉnh phải khác 0')
     product=await one(s,'products',T['products'].c.id==o['product_id'])

@@ -2,13 +2,13 @@
 
 Đồ án môn **Lập trình mạng**, Nhóm **15** · Giảng viên: **Ngô Văn Quyền**.
 
-RealtimeOrders là ứng dụng web client–server giúp khách hàng xem menu theo ngày, đặt nhiều mặt hàng và theo dõi đơn; người bán quản lý sản phẩm, tồn kho, đơn và giao hàng. Backend là nơi quyết định quyền, giá, phí và trạng thái. **Đơn đang chờ không giữ hàng; chỉ khi quản trị duyệt, server mới trừ tồn.**
+RealtimeOrders là ứng dụng web client–server giúp khách hàng xem menu theo ngày, đặt nhiều mặt hàng và theo dõi đơn; người bán quản lý sản phẩm, tồn kho, đơn và giao hàng. Backend là nơi quyết định quyền, giá, phí và trạng thái. **Đơn đang chờ không giữ hàng; server trừ tồn khi người bán hoặc quản trị duyệt.**
 
 ## Bài toán và mục tiêu
 
 Trong mô hình bán hàng theo nhóm ở trường học, người bán thường mở nhiều mặt hàng trong các khung giờ khác nhau, giới hạn số lượng và áp dụng giá hoặc cách giao riêng cho từng nhóm khách. Nếu nhận đơn qua tin nhắn hoặc bảng tính, người bán khó theo dõi hàng còn lại khi nhiều khách cùng đặt, khách dễ nhìn nhầm giá/đợt bán, còn trạng thái đơn không đến mọi người kịp thời.
 
-RealtimeOrders mô phỏng quy trình này bằng ứng dụng client–server cho một người bán. Mục tiêu là:
+RealtimeOrders mô phỏng quy trình này bằng ứng dụng client–server cho nhiều shop trên cùng một sàn. Mục tiêu là:
 
 - **Quản lý các đợt bán rõ ràng:** mở nhiều đợt theo thời gian, chọn nhiều sản phẩm, kiểm soát tồn riêng và ngăn cùng một sản phẩm xuất hiện trong các đợt đang chồng lịch.
 - **Phục vụ đúng nhóm khách:** hiển thị sản phẩm, giá và cách giao theo nhóm được cấu hình; máy chủ kiểm tra lại quyền và giá khi nhận đơn.
@@ -27,7 +27,7 @@ Các hệ thống đặt hàng trực tuyến đã có sẵn những chức năn
 
 Nhóm có thể chứng minh các mục tiêu này bằng demo hai trình duyệt: tài khoản thuộc nhóm khác nhau thấy đúng giá/sản phẩm; nhiều đơn cạnh tranh mặt hàng cuối không làm tồn âm; thay đổi được cập nhật trực tiếp và client bắt kịp sau khi kết nối lại. Đây là cải tiến về **mô hình nghiệp vụ và cách tích hợp trong đồ án**, không phải khẳng định hệ thống vượt trội hơn các nền tảng thương mại đang vận hành.
 
-Phạm vi hiện tại là ứng dụng hỗ trợ một người bán, gồm hai vai trò chính: khách hàng và quản trị. Hệ thống chưa có thanh toán trực tuyến, kết nối đơn vị vận chuyển, đổi trả sau khi giao thành công hoặc nhiều máy chủ ứng dụng.
+Phạm vi hiện tại là **nhiều shop, bốn vai trò**: quản trị, người bán, người giao hàng và khách hàng. Hệ thống hỗ trợ COD và tích hợp payOS VietQR sau khi duyệt; chưa kết nối hãng vận chuyển, chưa có đổi trả sau giao thành công hoặc nhiều máy chủ ứng dụng. Hồ sơ shop là thông tin tự khai, chưa kết nối đăng ký kinh doanh hoặc hóa đơn điện tử.
 
 ## Thành viên
 
@@ -50,6 +50,9 @@ Phân công chi tiết được trình bày trong báo cáo của nhóm.
 - Thêm món vào giỏ, chọn địa chỉ/cách nhận hàng, xem tổng tiền và gửi đơn.
 - Theo dõi trạng thái đơn, thông báo, hội thoại riêng và mặt hàng quan tâm.
 - Hủy đơn đang chờ; gửi yêu cầu hủy đơn đã duyệt hoặc đang chuẩn bị để quản trị quyết định.
+- Xem bảng tin giới thiệu cửa hàng và bài đăng gắn với đợt bán theo nhóm; nhận thông báo khi đến lượt lấy hàng tập trung.
+- Chọn trả đủ qua payOS sau khi shop duyệt hoặc thu đủ COD khi nhận; không mua nợ hoặc chủ động thanh toán một phần.
+- Đánh giá sản phẩm và người giao/trao hàng sau khi hoàn tất đơn.
 
 **Quản trị**
 
@@ -57,6 +60,11 @@ Phân công chi tiết được trình bày trong báo cáo của nhóm.
 - Tạo menu theo ngày với nhiều sản phẩm; có thể mở nhiều đợt trong ngày và cấu hình thời gian đóng.
 - Quản lý chính sách giao, nhóm khách hàng, tài khoản, đơn, hội thoại, kiểm duyệt và báo cáo.
 - Duyệt, từ chối, chuẩn bị, bàn giao và xác nhận giao đơn. Đơn đã duyệt chỉ hoàn kho khi quản trị chấp thuận yêu cầu hủy.
+- Tạo/khóa tài khoản nhân viên, cấu hình VAT cho đơn mới, đối soát tiền, xác nhận hoàn tiền thủ công và ẩn đánh giá vi phạm.
+
+**Người bán** quản lý danh mục, sản phẩm, nhóm khách, menu/bài đăng, hồ sơ shop, chat, đơn và phân công người giao. Được xem Tổng quan doanh thu của shop, số dư và yêu cầu rút tiền; quản trị xác nhận tiền COD thực nhận về sàn. Người bán không tự đổi VAT, tạo nhân viên hoặc xác nhận hoàn tiền ngân hàng.
+
+**Người giao hàng** chỉ xem đơn được phân công, xác nhận đã bàn giao và thu đủ COD, hoặc ghi lý do giao chưa thành công. Không xem danh mục quản trị, giá vốn, hồ sơ tài chính toàn shop hoặc đơn của người giao khác.
 
 **Tính năng cần cấu hình dịch vụ ngoài**
 
@@ -108,7 +116,7 @@ Luồng cập nhật realtime: client gửi yêu cầu → backend xác thực v
 
 ## Luồng nghiệp vụ và dữ liệu chính
 
-Khách đăng nhập, xem mặt hàng theo nhóm được phép, thêm món vào giỏ và gửi đơn. Server kiểm tra quyền, giá, số lượng và phí; đơn mới ở trạng thái chờ và chưa trừ tồn. Khi quản trị duyệt, server kiểm tra lại và trừ tồn trong transaction. Các bước chuẩn bị, bàn giao và giao thành công được ghi lại; khách có thể hủy đơn chờ hoặc yêu cầu hủy đơn đã duyệt theo quy tắc xử lý của hệ thống.
+Khách đăng nhập, xem mặt hàng theo nhóm được phép, thêm món vào giỏ và gửi đơn. Server kiểm tra quyền, giá, số lượng và phí; đơn mới ở trạng thái chờ và chưa trừ tồn. Khi người bán hoặc quản trị duyệt, server kiểm tra lại và trừ tồn trong transaction. Các bước chuẩn bị, bàn giao và giao thành công được ghi lại; khách có thể hủy đơn chờ hoặc yêu cầu hủy đơn đã duyệt theo quy tắc xử lý của hệ thống.
 
 Quản trị tạo menu theo ngày, chọn mặt hàng, lượng, giá và nhóm được mua. Có thể mở nhiều đợt cùng giờ nếu không trùng sản phẩm đang bật trong các đợt có lịch chồng nhau. Mỗi dòng bán có tồn và giá riêng. Khi toàn bộ món đang bật hết hàng, đợt hiển thị đã bán hết; bổ sung/hoàn kho có thể cho bán tiếp nếu đợt còn thời gian và chưa đóng thủ công.
 
@@ -120,6 +128,7 @@ Báo cáo tính theo ngày giao thành công tại Việt Nam: doanh thu hàng, 
 | Sản phẩm và bán hàng | `products`, `product_images`, `daily_menus`, `offers`, `offer_prices` | Danh mục, đợt bán, giá theo nhóm và lượng còn |
 | Đơn và kho | `orders`, `order_items`, `order_status_history`, `inventory_movements` | Snapshot đơn, lịch sử trạng thái và biến động kho |
 | Giao hàng | `addresses`, `delivery_policies`, `pickup_slots` | Điểm nhận và chính sách tính phí |
+| Thanh toán và đánh giá | `payment_requests`, `money_entries`, `refund_requests`, `reviews` | Link payOS, lịch sử thu/hoàn, đối soát COD và đánh giá |
 | Realtime và quản trị | `stream_events`, `outbox`, `notifications`, `audit_logs` | Sự kiện, phát lại, thông báo và truy vết |
 
 `db/schema.sql` là schema đầu vào của migration đầu tiên; các thay đổi sau đó nằm trong `backend/alembic/versions`. Cài mới và cập nhật schema bằng Alembic đến `head`, không chỉ import riêng schema ban đầu. MySQL/InnoDB giữ dữ liệu nghiệp vụ; ảnh tải lên nằm trong `runtime/uploads` trên máy server.
@@ -129,6 +138,67 @@ Khi cài mới, các bước hướng dẫn trên Windows và macOS đều chạ
 Migration 0013 không thể rollback tự động. Hãy sao lưu database trước khi nâng cấp bản cũ; migration sẽ dừng nếu đơn hàng còn tham chiếu yêu cầu/báo giá cũ. Nếu cần lưu dữ liệu lịch sử, giữ bản sao lưu trước khi tiếp tục.
 
 ## Đồng thời và tính đúng đắn
+
+### Quyền, giao nhận và tiền
+
+- URL khách: `/feed`, `/menu`, `/cart`, `/orders`, `/messages`, `/profile`. Người bán dùng `/shop/reports`, `/shop/orders`, `/shop/menus`, `/shop/products`, `/shop/balance`, `/shop/profile`. Người giao dùng `/courier/orders`; quản trị dùng các trang `/admin/*`.
+- REST giữ prefix `/api/v1`. Các route nghiệp vụ `/shop/*` kiểm tra quyền người bán/quản trị, `/courier/*` kiểm tra người giao và phân công; `/admin/*` chỉ quản trị. Khách không được tự cấp vai trò. Shop không được dùng topic quản trị; người giao chỉ nhận `user:<id>` và `courier:<id>`.
+- Đơn giao riêng: Chờ → Duyệt → Chuẩn bị → Đang giao → Đã giao. Đơn tập trung: Chờ → Duyệt → Chuẩn bị → Sẵn sàng lấy → Đã nhận. Shop cần phân công người giao/trao trước bước bàn giao. Khi sẵn sàng, chỉ khách có đơn liên quan nhận thông báo lấy hàng và điểm/giờ đã chụp trong đơn.
+- COD phải xác nhận thu **đủ tổng tiền** khi giao/trao hàng, ghi nhận thu và hoàn tất đơn trong một transaction. Tiền nhân viên đã thu nhưng chưa bàn giao được theo dõi riêng; shop xác nhận thực nhận để đối soát. Đây không phải công nợ của khách.
+- Giao thất bại cần lý do. Shop chọn giao lại hoặc xác nhận đã nhận đủ hàng hoàn rồi hủy/hoàn kho. Không hoàn kho chỉ vì người giao bấm giao thất bại.
+- VAT mặc định 0%, admin chỉnh tại **Thu / hoàn tiền**. Giá nhóm là giá chưa VAT; `tổng = tiền hàng + VAT + phí giao`. Tiền thuế được làm tròn đến một đồng; đơn chụp thuế suất/tổng khi tạo. Thay đổi thuế sau đó không sửa đơn cũ; checkout cũ phải xác nhận lại nếu phiên bản VAT đổi.
+- Báo cáo doanh thu ghi nhận theo ngày giao thành công; lãi gộp không gồm VAT/phí giao. Màn hình tài chính tách tiền thu/hoàn theo ngày giao dịch. Đơn trước migration `0014` được đánh dấu **Chưa có dữ liệu thanh toán**, không giả định đã trả hoặc đang nợ.
+- Đánh giá chỉ dành cho khách sở hữu đơn đã hoàn tất: mỗi dòng sản phẩm và người giao một lần, 1–5 sao. Quản trị ẩn nội dung vi phạm kèm lý do; lịch sử được giữ lại.
+
+### Shop, giỏ hàng và chi trả
+
+1. Khách đã xác minh số điện thoại vào **Đăng ký mở shop**. Quản trị duyệt tại **Quản lý shop**. Sau khi được duyệt, tài khoản chuyển sang vai trò người bán và đăng nhập lại để vào kênh của shop.
+2. Người bán quản lý sản phẩm, tồn kho, giá, menu, đơn và tin nhắn của shop. Để giao riêng, shop xác nhận vị trí lấy hàng trong **Hồ sơ cửa hàng**. Quản trị có thể chọn shop ở trang xử lý đơn, sản phẩm và menu để can thiệp.
+3. Khách chọn shop từ **Bảng tin cửa hàng** hoặc bộ lọc **Hàng trong ngày**. Giỏ và đơn tách theo shop. Chọn shop trong **Giỏ hàng** rồi thanh toán riêng; món của các shop còn lại tiếp tục nằm trong giỏ.
+4. Quản trị đặt tỷ lệ phí tại **Chi trả shop**. Đơn mới chụp tỷ lệ khi đặt. Phí tính trên tiền hàng, tách khỏi VAT và phí giao, mặc định 0%. Số dư ghi nhận tiền hàng của đơn đã giao và đã thực nhận sau phí sàn; COD cần xác nhận bàn giao tiền. Đơn trước migration `0016` nằm trong lịch sử, ngoài số dư rút được.
+5. Shop vào **Số dư và rút tiền**, lưu tài khoản nhận và nhập số tiền nguyên dương trong phạm vi số dư khả dụng. Điều kiện gửi là số dư khả dụng đạt ít nhất **1.000.000 ₫**. Tối đa **2 lượt mỗi tháng lịch theo giờ Việt Nam**, có thể gửi vào bất kỳ ngày nào. Yêu cầu đang chờ giữ tiền và một lượt. Nếu bị từ chối, hệ thống trả tiền về số dư và trả lượt về tháng của yêu cầu.
+6. Quản trị kiểm tra thông tin tại **Chi trả shop**, chuyển khoản thủ công rồi nhập mã giao dịch để xác nhận **Đã chi trả**, hoặc từ chối kèm lý do. Màn hình này ghi nhận đối soát và lịch sử.
+
+### Cấu hình payOS và hoàn tiền
+
+1. Tạo/xác thực tài khoản và kênh thanh toán theo [tài liệu chính thức payOS](https://payos.vn/docs/api/). Lấy Client ID, API Key và Checksum Key. Lưu chúng trong `.env` phía server, không gửi lên Git hoặc nhập vào frontend:
+
+   ```dotenv
+   PAYOS_CLIENT_ID=<client-id>
+   PAYOS_API_KEY=<api-key>
+   PAYOS_CHECKSUM_KEY=<checksum-key>
+   PAYMENT_TTL_SECONDS=900
+   ```
+
+2. Chạy ứng dụng với URL HTTPS công khai và `APP_ORIGIN` tương ứng. Trong kênh payOS, cấu hình webhook thành `https://<ten-mien>/api/v1/payments/payos/webhook`. Máy payOS phải truy cập được endpoint này. Nếu hostname Quick Tunnel đổi, cập nhật webhook rồi xác minh lại; đừng dùng `localhost` làm webhook.
+3. Khởi động lại backend để nạp cấu hình. Khi thiếu bất kỳ khóa nào, checkout ghi payOS chưa được cấu hình; COD vẫn hoạt động. Không có nút đánh dấu giả giao dịch online thành công.
+4. Khách chọn payOS lúc đặt. Sau khi shop duyệt/trừ kho, khách vào **Đơn của tôi → Thanh toán đủ qua payOS**. Link chỉ cho tổng tiền của đơn; mặc định hết hạn sau 15 phút kể từ lúc duyệt. Đơn online chưa trả đủ không được chuẩn bị/giao.
+5. Backend xác thực chữ ký webhook và ghi theo tham chiếu ngân hàng; `returnUrl` chỉ đưa khách về trang đơn, không xác nhận đã trả. Gửi lại yêu cầu lấy link dùng cùng mã payOS để đối soát khi mất phản hồi. Backend định kỳ truy vấn các link còn chờ để bắt kịp webhook bị mất. Lỗi nhà cung cấp không biến thành trạng thái đã trả.
+6. Hết hạn chưa đủ tiền thì đơn bị hủy và hoàn kho một lần. Nếu ngân hàng báo tiền đến sau hủy, hoặc có tiền dư/ngoài dự kiến, lưu khoản nhận và tạo yêu cầu hoàn; không tự mở lại đơn. Chuyển tiền thiếu ngoài luồng không mở quyền chuẩn bị/giao hàng.
+7. Hoàn tiền thực hiện thủ công: admin chuyển khoản thực tế, vào **Thu / hoàn tiền → Yêu cầu hoàn tiền**, nhập mã tham chiếu rồi xác nhận đúng số tiền. Ứng dụng ghi lịch sử đối soát; thao tác này **không tự chuyển tiền ngân hàng**.
+
+Migration `0014`/`0015` thêm dữ liệu vai trò, thanh toán, đánh giá và loại biến động kho. Migration `0016` gắn dữ liệu đang có với shop ban đầu và thêm hồ sơ mở shop, phí sàn và yêu cầu rút. Sao lưu trước khi nâng cấp và dùng `alembic upgrade head`; không chạy lại seed để sửa CSDL đã có tài khoản. Hoàn tác dữ liệu tài chính bằng cách khôi phục bản sao lưu đã kiểm chứng vào CSDL riêng, không hạ migration để xóa lịch sử.
+
+### Hợp đồng API bổ sung
+
+Các đường dẫn dưới đây nối sau `/api/v1`; thao tác từ trình duyệt cần cookie, đúng `Origin`, `X-CSRF-Token` và khóa `Idempotency-Key` cho các thao tác có hỗ trợ gửi lại. Giữ nguyên khóa khi thử lại cùng nội dung; không dùng trạng thái client thay cho kiểm tra của server.
+
+| API | Dữ liệu / kết quả chính |
+| --- | --- |
+| `GET /checkout/config` | `vatRate`, `vatVersion`, `payosAvailable`; không chứa khóa nhà cung cấp |
+| `POST /orders` | Bổ sung `paymentMethod: COD hoặc PAYOS`, `vatVersion`; các trường món/địa chỉ/báo phí giữ nguyên. Phản hồi có snapshot VAT, trạng thái và tổng đã thu/hoàn/còn phải trả |
+| `POST /orders/{id}/payment-link` | Chỉ chủ đơn online đã duyệt, còn hạn; trả `checkout_url`, `expires_at`, mã yêu cầu. Không nhận số tiền client tự nhập |
+| `POST /shop/orders/{id}/assign` | `expectedVersion`, `courierId`; chỉ người giao đang hoạt động |
+| `POST /shop/orders/{id}/transition` | `expectedVersion`, `status`; giao tập trung dùng `READY_FOR_PICKUP`, giao riêng dùng `SHIPPING` |
+| `POST /courier/orders/{id}/transition` | `expectedVersion`, `status: DELIVERED`; COD thêm `codAmount` đúng tổng đơn và phải là người được phân công |
+| `POST /shop/orders/{id}/delivery-failed`, `/retry-delivery`, `/confirm-return` | Lý do thất bại; giao lại do shop quyết định; nhận hàng hoàn phải có `received: true` |
+| `POST /reviews` | `orderId`, `target: PRODUCT hoặc COURIER`, `itemId` khi đánh giá sản phẩm, `rating`, `comment` |
+| `GET /shop/finance?from=YYYY-MM-DD&to=YYYY-MM-DD` (chỉ quản trị) | Tổng thu/hoàn theo ngày nhận tiền, doanh thu/VAT theo ngày giao, yêu cầu hoàn và COD chưa bàn giao |
+| `POST /admin/refunds/{id}/confirm` | `amount` đúng số yêu cầu, `reference`, `note`; chỉ xác nhận sau khi đã chuyển tiền thực tế |
+| `POST /shop/money/{id}/remit` | `received: true`; xác nhận shop đã thực nhận khoản COD |
+| `POST /payments/payos/webhook` | Endpoint nhà cung cấp, không dùng cookie/CSRF; bắt buộc xác thực chữ ký của `data`, kiểm tra mã đơn/link/tham chiếu và ghi tiền một lần |
+
+Môi trường kiểm thử cách ly xóa các khóa payOS/Zalo/Twilio/SMTP khỏi biến môi trường. Kiểm thử nhà cung cấp giả chứng minh luồng xử lý, không chứng minh đã gửi/nhận tiền thật. Nghiệm thu live cần tài khoản payOS hợp lệ và giao dịch thực tế có đối soát.
 
 FastAPI xử lý nhiều yêu cầu bất đồng bộ. Mỗi WebSocket có hàng đợi riêng, giới hạn kích thước để client chậm không chặn toàn bộ kết nối. Hiện ứng dụng chạy **một FastAPI worker**, vì danh sách socket đang hoạt động nằm trong bộ nhớ của tiến trình. Chạy nhiều worker cần event bus dùng chung và kiểm thử liên tiến trình.
 
@@ -187,6 +257,7 @@ Cài lần đầu cần Internet để tải gói Python và npm. Khi hoàn tấ
 #### Dữ liệu và quy tắc mẫu trong database mới
 
 - Tạo ba nhóm khách: **Sinh viên**, **Người đi làm** và **Khách hàng thân thiết**; tạo một tài khoản quản trị mẫu và ba tài khoản khách mẫu với mật khẩu ngẫu nhiên. Xem tên đăng nhập/số điện thoại và mật khẩu ở `runtime/demo-accounts.local.json`; không chép tệp này lên Git hoặc gửi công khai.
+- Cài mới còn tạo một người bán và một người giao hàng; thông tin nằm trong `staffAccounts` của cùng tệp cục bộ. CSDL đã có người dùng không tự thêm hoặc đổi mật khẩu nhân viên; quản trị tạo nhân viên tại mục **Nhân viên**.
 - Nạp **56 sản phẩm** từ [`backend/seed_catalog.json`](backend/seed_catalog.json), gồm tên, SKU, danh mục, đơn vị, bước số lượng, mô tả, nhóm được phép mua và ảnh mẫu (54 URL HTTPS tại thời điểm chuẩn bị dữ liệu). URL thuộc máy chủ bên ngoài nên ảnh có thể đổi hoặc ngừng hoạt động. Đây là dữ liệu minh họa, không phải giá bán hiện hành của cửa hàng.
 - Giá vốn nhập mẫu của từng sản phẩm được lưu ở `products.default_cost_price`. Giá bán mẫu chuẩn cho người đi làm bằng **150% giá vốn**, làm tròn đến đồng gần nhất; giá theo nhóm được tính từ giá chuẩn: sinh viên **giảm 5%**, khách hàng thân thiết **giảm 10%**. Quy tắc lưu tại `system_settings` với khóa `price_rules`. Ví dụ giá vốn 50.000đ → giá người đi làm 75.000đ, sinh viên 71.250đ, khách hàng thân thiết 67.500đ. Khi tạo menu, giá vốn mặc định được điền từ sản phẩm; thay đổi giá vốn trong menu sẽ tính lại giá của từng nhóm theo quy tắc đang lưu. Thay đổi dữ liệu seed không sửa lại sản phẩm/giá đã tồn tại.
 - Tạo khu giao mẫu Hà Đông và chính sách giao theo quãng đường: sinh viên giao riêng **3.000đ/km trong 10km đầu**, sau đó **4.000đ/km vượt**, tối đa **15km**; người đi làm và khách hàng thân thiết **3.500đ/km trong 10km đầu**, sau đó **5.000đ/km vượt**, tối đa **15km**. Khoảng cách tính theo km thực của tuyến; phí cuối được làm tròn lên nghìn đồng gần nhất. Giao tập trung cho sinh viên miễn phí. Chính sách giao mẫu không đặt mức đơn tối thiểu.
@@ -470,7 +541,7 @@ Test nghiệp vụ cần database MySQL audit riêng; không chạy trên databa
 Quy trình cô lập mẫu trên Windows: cần MySQL server cục bộ, `mysqldump.exe`/`mysql.exe` tại `C:\Program Files\MySQL\MySQL Server 8.0\bin` và mật khẩu root trong tệp cục bộ `runtime/mysql-3306-admin-password.local` (tên tệp theo cổng thực tế). Tệp này nằm trong `runtime` bị Git bỏ qua; không chia sẻ mật khẩu. `prepare` sao lưu nguồn, tạo một database và user audit mới, sao chép ảnh rồi chạy dịch vụ trên bản sao; các database audit **được giữ lại**, không tự xóa. Trước khi bắt đầu, dừng tunnel (nếu bật) bằng `Stop-Remote.cmd` và dừng ứng dụng bằng `services.ps1 stop-app` để giải phóng các cổng. Sau đó:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\isolated_validation.py prepare
+.\.venv\Scripts\python.exe scripts\isolated_validation.py --upgrade-schema prepare
 .\.venv\Scripts\python.exe scripts\isolated_validation.py backend
 .\.venv\Scripts\python.exe scripts\isolated_validation.py browser
 .\.venv\Scripts\python.exe scripts\isolated_validation.py finish
@@ -526,7 +597,7 @@ Chỉ thử khôi phục vào một database mới, đối chiếu bảng, đơn
 
 1. Quản trị tạo hoặc mở menu hôm nay, cấu hình sản phẩm, giá, lượng và nhóm được mua.
 2. Khách dùng tài khoản demo, chọn mặt hàng, thêm vào giỏ và gửi đơn.
-3. Quản trị duyệt; kiểm tra tồn chỉ giảm sau khi duyệt và hai màn hình nhận cập nhật.
+3. Người bán duyệt đơn của shop; kiểm tra tồn giảm sau khi duyệt và cả hai màn hình nhận cập nhật.
 4. Thử chat/thông báo; ngắt rồi nối lại client để quan sát đồng bộ.
 5. Nếu trình bày client ở mạng khác, mở cùng link tunnel trên điện thoại 4G/5G và kiểm tra đồng bộ.
 
@@ -535,7 +606,7 @@ Chỉ thử khôi phục vào một database mới, đối chiếu bảng, đơn
 - Một server ứng dụng và một worker; hub WebSocket không chia sẻ trạng thái giữa nhiều tiến trình.
 - Cấu hình mặc định dùng localhost; LAN cần chứng thư và firewall phù hợp. Cloudflare Quick Tunnel phục vụ demo qua Internet, không có cam kết uptime và cần máy chủ tiếp tục chạy.
 - Gửi OTP Zalo/SMS/email phụ thuộc dịch vụ bên ngoài. Tra cứu địa chỉ và tuyến đường dùng dịch vụ công cộng OSM/OSRM, chịu giới hạn và có thể gián đoạn.
-- Chưa có thanh toán trực tuyến, tích hợp đơn vị vận chuyển hoặc đổi trả sau khi giao thành công.
+- payOS cần cấu hình nhà cung cấp và webhook HTTPS công khai; chưa có cấu hình thì chỉ dùng COD. Chưa tích hợp hãng vận chuyển hoặc đổi trả sau giao thành công.
 - Cần đo lại workload có đặt/duyệt đơn, thử mạng chậm và phục hồi lỗi trên revision bàn giao; kết quả mô phỏng chỉ áp dụng cho cấu hình đã mô tả.
 
 ## Cấu trúc repository
@@ -556,3 +627,62 @@ evidence/      kết quả kiểm thử/đo cục bộ; không commit
 - [Cài Homebrew](https://docs.brew.sh/Installation) · [Python 3.12 trên Homebrew](https://formulae.brew.sh/formula/python@3.12) · [Python cho macOS](https://www.python.org/downloads/macos/) · [Node.js 24 trên Homebrew](https://formulae.brew.sh/formula/node@24) · [Node.js downloads](https://nodejs.org/en/download)
 - [MySQL 8.4 trên Homebrew](https://formulae.brew.sh/formula/mysql@8.4) · [MySQL cho macOS](https://dev.mysql.com/doc/refman/8.4/en/macos-installation.html) · [MySQL Community downloads](https://dev.mysql.com/downloads/mysql/) · [Yêu cầu Node.js của Next.js](https://nextjs.org/docs/pages/getting-started/installation)
 - [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) · [Chính sách Nominatim](https://operations.osmfoundation.org/policies/nominatim/) · [OSRM demo](https://github.com/Project-OSRM/osrm-backend/wiki/Demo-server)
+
+### Cấu hình Google Maps
+
+Bật Places API (New), Routes API và Maps JavaScript API trong Google Cloud. Tạo key backend giới hạn theo IP công khai và key website giới hạn theo địa chỉ website. Thêm vào .env trên máy server:
+
+    MAP_PROVIDER=google
+    GOOGLE_MAPS_SERVER_KEY=<key backend>
+    GOOGLE_MAPS_BROWSER_KEY=<key website>
+
+Khởi động lại ứng dụng để nạp cấu hình. Để thử bằng dịch vụ hiện có, chọn MAP_PROVIDER=osm. Khi dùng Google, Places tìm địa chỉ, Maps JavaScript hiển thị bản đồ và Routes tính khoảng cách đường ô tô. Thiết lập vị trí lấy hàng của từng shop trước khi báo phí. Kiểm tra billing, quota và giới hạn key nếu Google từ chối yêu cầu. Key backend chỉ nằm trên server. Key website được gửi cho trình duyệt và cần giới hạn theo website.
+
+Google quy định cách hiển thị, ghi nguồn và lưu dữ liệu Places/Routes. Cần đánh giá các quy tắc này với thời gian lưu địa chỉ và tọa độ hiện tại trước khi triển khai thực tế. Xem https://developers.google.com/maps/documentation/places/web-service/policies và https://developers.google.com/maps/documentation/routes/policies.
+
+### Tìm địa chỉ và tính tuyến bằng VIETMAP
+
+Đăng ký VIETMAP Services key, bật Autocomplete v4, Place v4 và Route v4. Trong .env đặt MAP_PROVIDER=vietmap và VIETMAP_API_KEY=<Services key>, sau đó khởi động lại. Key dịch vụ chỉ dùng ở server. Địa chỉ chỉ tìm khi người dùng bấm nút, kết quả ưu tiên quanh Hà Đông. Route v4 sử dụng mô hình xe máy. Bản đồ chọn ghim tiếp tục dùng OpenStreetMap. Kiểm tra độ chính xác của ghim trước khi xác nhận; không nhập địa chỉ nhạy cảm vào bản đồ công cộng. Quản lý quota và quyền theo điều kiện tài khoản VIETMAP.
+
+### Doanh thu theo shop
+
+- Quản trị mở **Tổng quan**, chọn **Shop báo cáo** để lọc số liệu. Chọn **Tất cả shop** để xem tổng hợp cùng bảng doanh thu riêng từng cửa hàng.
+- Người bán mở **Tổng quan** (`/shop/reports`); backend tự giới hạn theo shop của tài khoản và từ chối yêu cầu xem shop khác.
+- Bộ lọc áp dụng đồng nhất cho banner, biểu đồ, trạng thái đơn, sản phẩm bán chạy, báo cáo ngày/tháng, so sánh và CSV. CSV có tên shop và ID shop trong tên tệp.
+- Doanh thu hàng tính từ đơn giao thành công, theo giờ Việt Nam. Phí giao và VAT tách riêng. **Lãi gộp = doanh thu hàng − giá vốn**; **tiền hàng sau phí sàn = doanh thu hàng − phí sàn**, chưa trừ giá vốn và không đồng nghĩa số dư có thể rút. Giá vốn thiếu vẫn hiển thị chưa đủ dữ liệu.
+
+Phí nền tảng mặc định **10% tiền hàng** và được chụp khi tạo đơn. Thay đổi mức phí không sửa các đơn cũ. Tổng quan của shop hiển thị doanh thu trước/sau phí; lãi sau phí = doanh thu hàng − giá vốn − phí nền tảng. Số dư khả dụng lấy tiền hàng sau phí của đơn đã giao, đã thu đủ tiền, không còn chờ hoàn tiền; trừ tiền đã chi và đang chờ rút. Số dư không phải lợi nhuận vì chưa trừ giá vốn.
+
+### payOS QR: khách trả tiền về sàn, shop nhận số dư sau phí
+
+1. Đăng ký tại https://my.payos.vn/login, xác thực email và hoàn thành xác minh theo hướng dẫn payOS. Liên kết tài khoản ngân hàng của người đại diện sàn. Tạo kênh thanh toán RealtimeOrders và chọn tài khoản này làm nơi nhận tiền; không dùng tài khoản rút tiền của từng shop.
+2. Trong kênh thanh toán, lấy Client ID, API Key và Checksum Key. Lưu riêng trên server vào `.env`:
+
+```dotenv
+PAYOS_CLIENT_ID=<Client ID của kênh sàn>
+PAYOS_API_KEY=<API Key của kênh sàn>
+PAYOS_CHECKSUM_KEY=<Checksum Key của kênh sàn>
+```
+
+Không commit `.env` và không đưa các khóa này lên frontend. Các shop không được cấu hình kênh payOS riêng.
+
+3. Cài dependency bằng `python -m pip install -r backend/requirements.txt`. Chạy migration từ thư mục backend: `python -m alembic upgrade head`, rồi khởi động lại ứng dụng.
+4. Trong kênh payOS, cấu hình webhook thành `APP_ORIGIN/api/v1/payments/payos/webhook`, thay `APP_ORIGIN` bằng địa chỉ HTTPS công khai thực tế. Không nhập localhost. Nếu dùng Quick Tunnel và link thay đổi, cập nhật lại APP_ORIGIN và webhook.
+5. Khách chọn payOS lúc đặt hàng, đợi shop duyệt giữ kho, rồi vào **Đơn của tôi → Quét QR thanh toán**. Cửa sổ hiển thị tổng tiền (tiền hàng + VAT + phí giao), người nhận và QR do server tạo từ dữ liệu payOS; có thể mở trang thanh toán payOS nếu nhà cung cấp không trả chuỗi QR khi khôi phục link.
+6. Server xác minh chữ ký webhook, đối chiếu mã thanh toán và lưu giao dịch duy nhất theo tham chiếu ngân hàng. Màn hình tự kiểm tra trạng thái sau mỗi 5 giây và nhận cập nhật WebSocket. Redirect về website hoặc bấm nút kiểm tra không tự đánh dấu đã thanh toán. Đóng QR cũng không hủy đơn.
+7. Tiền trả về ngân hàng của sàn. Phần tiền hàng của shop sau phí nền tảng nằm ở **Chờ hoàn tất đơn** khi đã thu đủ nhưng chưa giao xong; chỉ chuyển sang **Số dư khả dụng** sau khi giao thành công, tiền đã về sàn và không chờ hoàn tiền. Với COD, cần xác nhận đã bàn giao tiền về sàn. VAT và phí giao không cộng vào số dư shop.
+8. Số dư khả dụng trừ yêu cầu đang rút/đã chi. Giữ quy tắc tối đa 2 lượt/tháng và số dư tối thiểu 1 triệu; quản trị chi trả thủ công rồi ghi mã giao dịch. payOS QR ở đây là kênh thu, không tự chuyển tiền rút về ngân hàng shop.
+
+Phí nền tảng 10% tiền hàng được chụp khi tạo đơn mới. Ví dụ tiền hàng 100.000đ, phí giao 10.000đ: khách trả 110.000đ về sàn; phần tiền hàng sau phí của shop là 90.000đ. Đơn đã tạo giữ mức phí đã chốt.
+
+**Xử lý sự cố:** không thấy tùy chọn payOS thì kiểm tra đủ 3 khóa rồi restart; lỗi chữ ký thì kiểm tra Checksum Key cùng kênh; không nhận webhook thì kiểm tra URL công khai/tunnel và cấu hình kênh; khách đã chuyển tiền nhưng chưa cập nhật thì không chuyển lại, dùng nút kiểm tra và chờ đối soát. Chuyển thiếu tiền chưa mở chuẩn bị hàng. Chuyển muộn sau hủy hoặc chuyển dư tạo yêu cầu hoàn tiền, không cộng thành số dư rút.
+
+Tài liệu chính thức: https://payos.vn/docs/ ; API và dữ liệu QR: https://payos.vn/docs/api/ . payOS dùng production API, không có sandbox ngân hàng riêng; kiểm thử nhà cung cấp giả không chứng minh chuyển tiền thật. Chỉ kiểm tra live sau khi có khóa, liên kết ngân hàng và webhook, với giao dịch giá trị nhỏ do người dùng thực hiện.
+
+Sau khi đã lưu khóa và chạy website công khai, có thể đăng ký/kiểm tra webhook tự động từ gốc dự án:
+
+```powershell
+.venv\Scripts\python.exe scripts/configure_payos.py --confirm-webhook
+```
+
+Lệnh dùng origin hiện tại trong `runtime/network.local.json`, gửi khóa trực tiếp tới API payOS chính thức và đăng ký webhook cho kênh; không tạo link hay chuyển tiền. Chạy lại nếu URL tunnel thay đổi.

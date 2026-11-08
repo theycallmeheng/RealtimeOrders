@@ -109,6 +109,12 @@ async def local_matches(s,query):
 
 async def search(s,query):
     query=text(query,200,3)
+    if settings.map_provider == 'vietmap':
+        from .vietmap import search
+        return await search(query)
+    if settings.map_provider == 'google':
+        from .google_maps import search
+        return await search(query)
     local=await local_matches(s,query)
     center={'latitude':20.9809427,'longitude':105.7870861}
     if s is not None:
@@ -162,7 +168,13 @@ async def search(s,query):
 
 
 async def resolve(s,place_id):
-    place_id=text(place_id,80,2)
+    place_id=text(place_id,1024,2)
+    if place_id.startswith('vietmap:'):
+        from .vietmap import resolve
+        return await resolve(place_id[8:])
+    if place_id.startswith('google:'):
+        from .google_maps import resolve
+        return await resolve(place_id[7:])
     if place_id.startswith('local:'):
         row=await one(s,'verified_locations',T['verified_locations'].c.id==uuid(place_id[6:]),T['verified_locations'].c.active==True)
         point={'latitude':str(row['latitude']),'longitude':str(row['longitude']),'address':row['label'],
