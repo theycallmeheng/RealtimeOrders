@@ -6,7 +6,8 @@ node_modules/
 .next/
 __pycache__/
 .pytest_cache/
-runtime/
+runtime/*
+!runtime/README.md
 evidence/
 *.pyc
 *.log
