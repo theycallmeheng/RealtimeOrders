@@ -60,7 +60,7 @@ async def test_email_verification(clients):
 
 async def test_address_limit_concurrently(clients):
     c=clients[3]; existing=await c.get('/me/addresses')
-    payload={'zoneId':DATA['zoneId'],'recipientName':'Khách thử','phone':c.user['phone_e164'],'addressLine':'Địa chỉ mẫu để kiểm tra đồng thời'}
+    payload={'recipientName':'Khách thử','phone':c.user['phone_e164'],'addressLine':'Địa chỉ mẫu để kiểm tra đồng thời'}
     results=await asyncio.gather(*[c.request('POST','/me/addresses',payload) for _ in range(6)])
     assert sum(r.status_code==200 for r in results)==3-len(existing)
     assert len(await c.get('/me/addresses'))==3

@@ -12,9 +12,6 @@ export type OverviewData = {
     orders: number;
     merchandise: string;
     grossProfit: string | null;
-    platformFees: string;
-    afterPlatformFees: string;
-    profitAfterFees: string | null;
     averageOrderValue: string | null;
     cost: string | null;
     shipping: string;
@@ -41,10 +38,9 @@ type Props = {
   data: OverviewData;
   money: (value: unknown) => string;
   statusLabels: Record<string, string>;
-  afterPlatformFee?: boolean;
 };
 
-export default function OverviewDashboard({ data, money, statusLabels, afterPlatformFee = false }: Props) {
+export default function OverviewDashboard({ data, money, statusLabels }: Props) {
   const totals = data.totals;
   const [metric, setMetric] = useState<"merchandise" | "orders">("merchandise");
   const [selectedDay, setSelectedDay] = useState("");
@@ -67,12 +63,12 @@ export default function OverviewDashboard({ data, money, statusLabels, afterPlat
   const dayRange = (start: string, end: string) => start === end
     ? fullDate(start)
     : fullDate(start) + " – " + fullDate(end);
-  const profit = afterPlatformFee ? totals.profitAfterFees : totals.grossProfit;
+  const profit = totals.grossProfit;
   const metrics = [
     { label: "Số đơn hàng", value: number.format(totals.createdOrders), note: "Đơn được tạo trong kỳ", icon: faClipboardList },
     { label: "Giao thành công", value: number.format(totals.orders), note: "Đơn hoàn tất giao nhận trong kỳ", icon: faTruck },
     { label: "Doanh thu trước phí", value: money(totals.merchandise), note: "Tiền hàng đã giao, tách phí giao và VAT", icon: faCoins },
-    { label: afterPlatformFee ? "Lãi sau phí" : "Lãi gộp", value: profit === null ? "Chưa đủ dữ liệu" : money(profit), note: afterPlatformFee ? "Doanh thu trừ giá vốn và phí nền tảng" : "Doanh thu hàng trừ giá vốn", icon: faChartLine },
+    { label: "Lãi gộp", value: profit === null ? "Chưa đủ dữ liệu" : money(profit), note: "Doanh thu hàng trừ giá vốn", icon: faChartLine },
   ];
   return (
     <div className="overview-dashboard">
@@ -143,10 +139,7 @@ export default function OverviewDashboard({ data, money, statusLabels, afterPlat
           <div><dt>Giá vốn</dt><dd>{totals.cost === null ? "Chưa đủ dữ liệu" : money(totals.cost)}</dd></div>
           <div><dt>Phí giao</dt><dd>{money(totals.shipping)}</dd></div>
           <div><dt>VAT</dt><dd>{money(totals.vat)}</dd></div>
-          <div><dt>Doanh thu trước phí</dt><dd>{money(totals.merchandise)}</dd></div>
-          <div><dt>Phí nền tảng</dt><dd>{money(totals.platformFees)}</dd></div>
-          <div><dt>Doanh thu sau phí</dt><dd>{money(totals.afterPlatformFees)}</dd></div>
-          <div><dt>Lãi sau phí</dt><dd>{totals.profitAfterFees === null ? "Chưa đủ dữ liệu" : money(totals.profitAfterFees)}</dd></div>
+          <div><dt>Doanh thu hàng</dt><dd>{money(totals.merchandise)}</dd></div>
         </dl>
       </section>
     </div>

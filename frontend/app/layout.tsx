@@ -3,12 +3,15 @@ import { config } from "@fortawesome/fontawesome-svg-core";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
-import "./visual-theme.css";
 import "./motion.css";
 import "./overview.css";
 import "./operations.css";
 import "./product-design.css";
 import "./product-requests.css";
+import "./food-mart.css";
+import "./visual-theme.css";
+import "./store-refresh.css";
+import "./seafoam-theme.css";
 config.autoAddCss = false;
 export const metadata: Metadata = {
   title: "RealtimeOrders · Đặt hàng trong ngày",

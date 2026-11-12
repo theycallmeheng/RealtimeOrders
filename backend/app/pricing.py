@@ -22,7 +22,7 @@ async def load_rules(s):
 
 def menu_prices(cost, groups, rules=None):
     rules=validate_rules(DEFAULT_RULES if rules is None else rules)
-    cost=number(cost,places=0)
+    cost=number(cost,places=6)
     base=(cost*Decimal(rules['markupPercent'])/100).quantize(Decimal('1'),rounding=ROUND_HALF_UP)
     return [{'groupId':g['id'],'unitPrice':format(number(
         (base*Decimal(rules['groupPercent'].get(g['code'],100))/100).quantize(Decimal('1'),rounding=ROUND_HALF_UP),

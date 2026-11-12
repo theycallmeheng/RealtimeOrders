@@ -1,0 +1,65 @@
+.food-mobile-nav { display: none; }
+.food-hero { padding: clamp(1.25rem, 5vw, 3rem); border-radius: 12px; background: #e8f1df; color: #1b472c; }
+.food-hero h2 { margin: 0 0 .35rem; font-size: clamp(1.6rem, 5vw, 2.5rem); }
+.food-hero p { margin: 0 0 1rem; }
+.food-product-price { display: grid; gap: .2rem; min-width: 0; overflow-wrap: anywhere; }
+.food-product-price strong { font-size: clamp(.95rem, 2vw, 1.2rem); color: #1b5936; }
+.food-product-price del { color: #576659; font-size: .82rem; }
+.food-product-price small { color: #8a3a16; background: #fff0e3; padding: .1rem .3rem; border-radius: 3px; white-space: nowrap; }
+.daily-rounds { display: grid; gap: 1.5rem; min-width: 0; }
+.daily-round { min-width: 0; }
+.daily-round-heading { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: .5rem; margin-bottom: .75rem; }
+.daily-round-heading h2 { margin: 0; font-size: 1.1rem; }
+.daily-round-heading p { margin: .25rem 0 0; font-size: .82rem; }
+.daily-round-pickup { display: grid; gap: .15rem; margin: .65rem 0; padding: .65rem .8rem; border-left: 3px solid #8cae8a; background: #f2f7ef; font-size: .85rem; overflow-wrap: anywhere; }
+.daily-round-pickup small { color: #526557; }
+.feed-offer-price { display: grid; justify-items: end; gap: .15rem; text-align: right; }
+.feed-offer-price > span { display: flex; flex-wrap: wrap; justify-content: end; align-items: center; gap: .3rem; }
+.feed-offer-price del { color: #647366; font-size: .75rem; }
+.feed-offers .feed-offer-price .feed-discount { color: #9b3c20; background: #fff0e3; padding: .1rem .3rem; border-radius: 3px; }
+.feed-offers .feed-offer-price strong { color: var(--accent); font-size: .9rem; }
+.menu-discount { display: block; margin-top: .3rem; color: #286442; }
+.food-stock-tabs { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+.food-stock-section, .food-stock-detail, .food-stock-list { display: grid; min-width: 0; gap: .8rem; }
+.food-stock-section { padding: clamp(.8rem, 3vw, 1.25rem); margin-bottom: .85rem; }
+.food-stock-section label, .food-stock-detail label { display: grid; gap: .25rem; min-width: 0; }
+.food-stock-section label.check { display: flex; align-items: center; }
+.food-stock-section input, .food-stock-section select { min-width: 0; max-width: 100%; }
+.food-stock-section > summary { cursor: pointer; font-weight: 700; }
+.food-stock-section[open] > * + * { margin-top: .8rem; }
+.food-fields, .food-receipt-line { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,12rem),1fr)); gap: .7rem; align-items: end; }
+.food-receipt-line { border: 1px solid #dbe5d7; border-radius: 8px; padding: .7rem; min-width: 0; margin: 0; }
+.food-stock-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) auto; align-items: center; gap: .6rem; padding: .65rem 0; border-bottom: 1px solid #e3ebe0; overflow-wrap: anywhere; }
+.food-stock-row small { display: block; color: #526557; }
+.food-stock-row-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.food-stock-detail { border-top: 1px solid #dbe5d7; padding-top: .8rem; }
+.food-receipt-payment { display: grid; gap: .6rem; padding: .8rem; border: 1px solid var(--line); border-radius: 8px; background: var(--page); }
+.food-receipt-payment > p { margin: 0; }
+.food-receipt-payment-controls { display: grid; grid-template-columns: minmax(0, 15rem) auto; gap: .5rem; align-items: end; justify-content: start; }
+.food-receipt-payment-controls button { white-space: nowrap; }
+.food-receipt-payment-controls button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.food-receipt-amounts { display: grid; gap: .25rem; }
+.food-receipt-amounts span { font-size: .82rem; }
+.food-receipt-payment .is-paid, .food-receipt-amounts .is-paid { color: #17603b; }
+.food-receipt-payment .is-owed, .food-receipt-amounts .is-owed { color: #b42318; }
+.role-customer .promotion-products { grid-auto-flow: row; grid-template-columns: repeat(auto-fit,minmax(min(100%,10rem),1fr)); overflow: visible; }
+.role-customer .promotion-product { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .food-mobile-nav { position: fixed; inset: auto 0 0; z-index: 12; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); background: #fff; border-top: 1px solid #dbe5d7; padding: .25rem .2rem calc(.25rem + env(safe-area-inset-bottom)); }
+  .food-mobile-nav a { min-width: 0; min-height: 48px; display: grid; place-content: center; justify-items: center; gap: .2rem; color: #3d5545; font-size: .72rem; text-align: center; text-decoration: none; }
+  .food-mobile-nav a[aria-current="page"] { background: #e8f1df; color: #195334; font-weight: 700; border-radius: 7px; }
+  .role-customer main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+  .role-customer main[data-screen=catalog] .daily-catalog-heading { min-height: auto; padding: .9rem; gap: .65rem; }
+  .role-customer main[data-screen=catalog] .daily-catalog-heading::after { display: none; }
+  .role-customer main[data-screen=catalog] .daily-products { grid-template-columns: repeat(2,minmax(0,1fr)); gap: .55rem; }
+  .role-customer .daily-product { min-width: 0; padding: .5rem; }
+  .role-customer .daily-products .daily-product-image-main { height: auto; aspect-ratio: 1 / 1; }
+  .role-customer .daily-product-buy button { min-height: 44px; padding-inline: .2rem; }
+  .role-customer .promotion-products { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .role-customer .catalog-view-tabs, .role-customer .daily-category-filters, .role-customer .daily-filters { flex-wrap: wrap; overflow: visible; }
+  .role-customer .cart-line { min-width: 0; overflow-wrap: anywhere; }
+  .role-customer .business-order .business-totals, .role-customer .feed-offers li { min-width: 0; overflow-wrap: anywhere; }
+  .food-stock-row { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .food-stock-row-actions { grid-column: 1 / -1; }
+  .food-stock-row button { justify-self: start; }
+}

@@ -23,7 +23,7 @@ Các hệ thống đặt hàng trực tuyến đã có sẵn những chức năn
 - Từ một danh sách món chung thành các đợt bán có lịch riêng, tồn riêng, nhiều sản phẩm và quyền xem/mua theo nhóm.
 - Từ kiểm tra tồn đơn giản thành luồng duyệt có kiểm tra đồng thời, cập nhật tồn, ghi biến động kho và chống xử lý trùng.
 - Từ thông báo cập nhật đơn thành luồng sự kiện có lưu bền vững, thứ tự theo phiên bản và đồng bộ lại sau khi client kết nối lại.
-- Từ một mức giao hàng cố định thành chính sách có giao tập trung miễn phí cho sinh viên và giao riêng tính theo tuyến đường, giới hạn quãng đường.
+- Từ mức giao hàng cố định thành các điểm nhận tập trung miễn phí theo nhóm và giao riêng tính theo tuyến, có giới hạn quãng đường.
 
 Nhóm có thể chứng minh các mục tiêu này bằng demo hai trình duyệt: tài khoản thuộc nhóm khác nhau thấy đúng giá/sản phẩm; nhiều đơn cạnh tranh mặt hàng cuối không làm tồn âm; thay đổi được cập nhật trực tiếp và client bắt kịp sau khi kết nối lại. Đây là cải tiến về **mô hình nghiệp vụ và cách tích hợp trong đồ án**, không phải khẳng định hệ thống vượt trội hơn các nền tảng thương mại đang vận hành.
 
@@ -49,9 +49,10 @@ Phân công chi tiết được trình bày trong báo cáo của nhóm.
 - Xem menu đang mở theo nhóm khách hàng; tìm/lọc mặt hàng, xem đơn vị, giá và lượng còn.
 - Thêm món vào giỏ, chọn địa chỉ/cách nhận hàng, xem tổng tiền và gửi đơn.
 - Theo dõi trạng thái đơn, thông báo, hội thoại riêng và mặt hàng quan tâm.
-- Gửi yêu cầu bổ sung sản phẩm riêng cho từng shop; theo dõi tiến trình và nhận thông báo khi shop mở bán sản phẩm phù hợp.
+- Thông báo bài viết được lưu và đẩy thời gian thực: quản trị/người bán nhận tương tác mới của khách; khách nhận phản hồi trực tiếp và tương tác từ cửa hàng trên bài đã tham gia, nếu vẫn được phép xem. Âm báo theo cài đặt trình duyệt.
+- Gửi yêu cầu bổ sung sản phẩm tới Food Mart và nhận thông báo khi sản phẩm phù hợp mở bán.
 - Hủy đơn đang chờ; gửi yêu cầu hủy đơn đã duyệt hoặc đang chuẩn bị để quản trị quyết định.
-- Xem bảng tin giới thiệu cửa hàng và bài đăng gắn với đợt bán theo nhóm; nhận thông báo khi đến lượt lấy hàng tập trung.
+- Xem bảng tin giới thiệu cửa hàng và bài đăng gắn với đợt bán theo nhóm; bình luận, trả lời bình luận gốc một cấp và chọn, đổi hoặc bỏ cảm xúc Thích, Yêu thích, Ngạc nhiên trên bài được phép xem. Quản trị/người bán có thể tương tác với bài đang mở từ lịch sử mở bán; đợt đã kết thúc chỉ xem lịch sử. Nhận thông báo khi đến lượt lấy hàng tập trung.
 - Chọn trả đủ qua payOS sau khi shop duyệt hoặc thu đủ COD khi nhận; không mua nợ hoặc chủ động thanh toán một phần.
 - Đánh giá sản phẩm và người giao/trao hàng sau khi hoàn tất đơn.
 
@@ -63,7 +64,7 @@ Phân công chi tiết được trình bày trong báo cáo của nhóm.
 - Duyệt, từ chối, chuẩn bị, bàn giao và xác nhận giao đơn. Đơn đã duyệt chỉ hoàn kho khi quản trị chấp thuận yêu cầu hủy.
 - Tạo/khóa tài khoản nhân viên, cấu hình VAT cho đơn mới, đối soát tiền, xác nhận hoàn tiền thủ công và ẩn đánh giá vi phạm.
 
-**Người bán** quản lý danh mục, sản phẩm, nhóm khách, menu/bài đăng, hồ sơ shop, chat, đơn và phân công người giao. Được xem Tổng quan doanh thu của shop, số dư và yêu cầu rút tiền; quản trị xác nhận tiền COD thực nhận về sàn. Người bán không tự đổi VAT, tạo nhân viên hoặc xác nhận hoàn tiền ngân hàng.
+**Người bán** quản lý sản phẩm, menu, đơn và kho chung. Người bán lập phiếu kiểm kê, xác nhận nhập hàng, quản lý nhà cung cấp và theo dõi số còn nợ. Quản trị xác nhận khoản đã thanh toán cho nhà cung cấp.
 
 **Người giao hàng** chỉ xem đơn được phân công, xác nhận đã bàn giao và thu đủ COD, hoặc ghi lý do giao chưa thành công. Không xem danh mục quản trị, giá vốn, hồ sơ tài chính toàn shop hoặc đơn của người giao khác.
 
@@ -119,7 +120,7 @@ Luồng cập nhật realtime: client gửi yêu cầu → backend xác thực v
 
 Khách đăng nhập, xem mặt hàng theo nhóm được phép, thêm món vào giỏ và gửi đơn. Server kiểm tra quyền, giá, số lượng và phí; đơn mới ở trạng thái chờ và chưa trừ tồn. Khi người bán hoặc quản trị duyệt, server kiểm tra lại và trừ tồn trong transaction. Các bước chuẩn bị, bàn giao và giao thành công được ghi lại; khách có thể hủy đơn chờ hoặc yêu cầu hủy đơn đã duyệt theo quy tắc xử lý của hệ thống.
 
-Quản trị tạo menu theo ngày, chọn mặt hàng, lượng, giá và nhóm được mua. Có thể mở nhiều đợt cùng giờ nếu không trùng sản phẩm đang bật trong các đợt có lịch chồng nhau. Mỗi dòng bán có tồn và giá riêng. Khi toàn bộ món đang bật hết hàng, đợt hiển thị đã bán hết; bổ sung/hoàn kho có thể cho bán tiếp nếu đợt còn thời gian và chưa đóng thủ công.
+Quản trị hoặc người bán tạo menu theo ngày, chọn mặt hàng, lượng, giá và nhóm được mua. Một sản phẩm có thể xuất hiện trong nhiều đợt cùng giờ. Mỗi đợt đặt giá và hạn mức riêng, còn lượng hàng thực tế được dùng chung từ kho. Khi toàn bộ món đang bật hết hàng, đợt hiển thị đã bán hết; bổ sung/hoàn kho có thể cho bán tiếp nếu đợt còn thời gian và chưa đóng thủ công.
 
 Báo cáo tính theo ngày giao thành công tại Việt Nam: doanh thu hàng, giá vốn, lãi gộp và phí giao riêng. Chế độ ngày hiển thị 7 ngày tính đến ngày được chọn; chế độ tháng hiển thị từng ngày trong tháng. Khi thiếu giá vốn của một dòng đã giao, kỳ đó hiển thị chưa đủ dữ liệu tính lãi. Nhật ký quản trị có thể lọc theo khoảng ngày và xem thay đổi trước/sau.
 
@@ -138,37 +139,43 @@ Khi cài mới, các bước hướng dẫn trên Windows và macOS đều chạ
 
 Migration 0013 không thể rollback tự động. Hãy sao lưu database trước khi nâng cấp bản cũ; migration sẽ dừng nếu đơn hàng còn tham chiếu yêu cầu/báo giá cũ. Nếu cần lưu dữ liệu lịch sử, giữ bản sao lưu trước khi tiếp tục.
 
-### Yêu cầu sản phẩm theo shop
+### Yêu cầu sản phẩm
 
-- Khách dùng `/product-requests`; shop dùng `/shop/product-requests`; quản trị xem và hỗ trợ qua `/admin/product-requests`. Người giao hàng không có quyền truy cập. Nội dung chỉ khách gửi, shop tiếp nhận và quản trị được xem.
+- Khách dùng `/product-requests`; shop dùng `/shop/product-requests`; quản trị xem và hỗ trợ qua `/admin/product-requests`. Người giao hàng không có quyền truy cập. Nội dung chỉ khách gửi, nhân viên tiếp nhận và quản trị được xem.
 - Nhập tên, mô tả, số lượng, đơn vị; URL ảnh HTTPS, link tham khảo và giá mong muốn/đơn vị là tùy chọn. Các URL do trình duyệt mở/tải, server không tải nội dung từ link này.
 - Trạng thái: **Chờ tiếp nhận → Đang xem xét → Chờ mở bán → Đã mở bán**, cùng **Từ chối** (bắt buộc lý do) và **Khách đã hủy**. Khách chỉ sửa khi chờ tiếp nhận, được hủy ở ba trạng thái chưa kết thúc.
-- Shop tiếp nhận, thêm sản phẩm trong danh mục nếu cần, liên kết đúng sản phẩm của shop rồi mở bán qua menu. Không có nút tự đánh dấu đã mở bán: server kiểm tra lịch bán, tồn đủ một bước mua, giá theo nhóm và quyền mua của khách trước khi tự hoàn tất/thông báo. Lịch tương lai, hết hàng hoặc khách không thuộc nhóm được mua vẫn giữ chờ mở bán; monitor kiểm tra lại mỗi giây, kể cả khi bổ sung kho.
-- Mỗi khách tối đa **5 yêu cầu/ngày trên toàn sàn**, tính theo ngày Việt Nam; sửa/hủy không hoàn lượt. Chặn tên trùng đang xử lý trong cùng shop, bỏ qua hoa/thường, khoảng trắng thừa và chuẩn hóa Unicode.
+- Shop tiếp nhận, thêm sản phẩm trong danh mục nếu cần, liên kết sản phẩm trong catalog chung rồi mở bán qua menu. Không có nút tự đánh dấu đã mở bán: server kiểm tra lịch bán, tồn đủ một bước mua, giá theo nhóm và quyền mua của khách trước khi tự hoàn tất/thông báo. Lịch tương lai, hết hàng hoặc khách không thuộc nhóm được mua vẫn giữ chờ mở bán; monitor kiểm tra lại mỗi giây, kể cả khi bổ sung kho.
+- Mỗi khách tối đa **5 yêu cầu/ngày**, tính theo ngày Việt Nam; sửa/hủy không hoàn lượt. Chặn tên trùng đang xử lý của cùng khách, bỏ qua hoa/thường, khoảng trắng thừa và chuẩn hóa Unicode.
 - Mọi thay đổi có `expectedVersion`; ghi mới/sửa/hủy/xét duyệt hỗ trợ `Idempotency-Key`. Thông báo lưu bền vững và cập nhật qua WebSocket riêng. Yêu cầu chưa tạo đơn, chưa giữ hàng, chưa cam kết giá; khách tự đặt khi mở bán.
-- API: `GET/POST /api/v1/product-requests`, `GET/PATCH /api/v1/product-requests/{id}`, `POST /api/v1/product-requests/{id}/cancel`; shop/quản trị dùng `GET /api/v1/{shop|admin}/product-requests`, `GET/PATCH /api/v1/{shop|admin}/product-requests/{id}`. Danh sách nhận `status`, `shopId` (đúng quyền) và `offset`, tối đa 50 dòng/trang. Các action báo giá/chuyển đơn cũ tiếp tục trả HTTP 410.
+- API: `GET/POST /api/v1/product-requests`, `GET/PATCH /api/v1/product-requests/{id}`, `POST /api/v1/product-requests/{id}/cancel`; shop/quản trị dùng `GET /api/v1/{shop|admin}/product-requests`, `GET/PATCH /api/v1/{shop|admin}/product-requests/{id}`. Danh sách nhận `status` và `offset`, tối đa 50 dòng/trang. Các action báo giá/chuyển đơn cũ tiếp tục trả HTTP 410.
 
 ## Đồng thời và tính đúng đắn
 
 ### Quyền, giao nhận và tiền
 
-- URL khách: `/feed`, `/menu`, `/cart`, `/orders`, `/messages`, `/profile`. Người bán dùng `/shop/reports`, `/shop/orders`, `/shop/menus`, `/shop/products`, `/shop/balance`, `/shop/profile`. Người giao dùng `/courier/orders`; quản trị dùng các trang `/admin/*`.
+- URL khách: `/feed`, `/menu`, `/cart`, `/orders`, `/messages`, `/profile`. Người bán dùng `/shop/orders`, `/shop/menus`, `/shop/products` và `/shop/stock`. Người giao dùng `/courier/orders`; quản trị dùng các trang `/admin/*`.
 - REST giữ prefix `/api/v1`. Các route nghiệp vụ `/shop/*` kiểm tra quyền người bán/quản trị, `/courier/*` kiểm tra người giao và phân công; `/admin/*` chỉ quản trị. Khách không được tự cấp vai trò. Shop không được dùng topic quản trị; người giao chỉ nhận `user:<id>` và `courier:<id>`.
 - Đơn giao riêng: Chờ → Duyệt → Chuẩn bị → Đang giao → Đã giao. Đơn tập trung: Chờ → Duyệt → Chuẩn bị → Sẵn sàng lấy → Đã nhận. Shop cần phân công người giao/trao trước bước bàn giao. Khi sẵn sàng, chỉ khách có đơn liên quan nhận thông báo lấy hàng và điểm/giờ đã chụp trong đơn.
 - COD phải xác nhận thu **đủ tổng tiền** khi giao/trao hàng, ghi nhận thu và hoàn tất đơn trong một transaction. Tiền nhân viên đã thu nhưng chưa bàn giao được theo dõi riêng; shop xác nhận thực nhận để đối soát. Đây không phải công nợ của khách.
 - Giao thất bại cần lý do. Shop chọn giao lại hoặc xác nhận đã nhận đủ hàng hoàn rồi hủy/hoàn kho. Không hoàn kho chỉ vì người giao bấm giao thất bại.
-- VAT mặc định 0%, admin chỉnh tại **Thu / hoàn tiền**. Giá nhóm là giá chưa VAT; `tổng = tiền hàng + VAT + phí giao`. Tiền thuế được làm tròn đến một đồng; đơn chụp thuế suất/tổng khi tạo. Thay đổi thuế sau đó không sửa đơn cũ; checkout cũ phải xác nhận lại nếu phiên bản VAT đổi.
+- Quản trị thiết lập VAT tại **Cấu hình → Thuế VAT**. Ưu tiên mức sản phẩm, rồi danh mục, rồi mức mặc định. VAT tính trên tiền hàng thực bán của từng dòng, làm tròn đến đồng và cộng riêng ở checkout. Mỗi dòng đơn giữ thuế suất và tiền VAT tại thời điểm đặt.
 - Báo cáo doanh thu ghi nhận theo ngày giao thành công; lãi gộp không gồm VAT/phí giao. Màn hình tài chính tách tiền thu/hoàn theo ngày giao dịch. Đơn trước migration `0014` được đánh dấu **Chưa có dữ liệu thanh toán**, không giả định đã trả hoặc đang nợ.
 - Đánh giá chỉ dành cho khách sở hữu đơn đã hoàn tất: mỗi dòng sản phẩm và người giao một lần, 1–5 sao. Quản trị ẩn nội dung vi phạm kèm lý do; lịch sử được giữ lại.
 
-### Shop, giỏ hàng và chi trả
+### Food Mart, kho chung và công nợ
 
-1. Khách đã xác minh số điện thoại vào **Đăng ký mở shop**. Quản trị duyệt tại **Quản lý shop**. Sau khi được duyệt, tài khoản chuyển sang vai trò người bán và đăng nhập lại để vào kênh của shop.
-2. Người bán quản lý sản phẩm, tồn kho, giá, menu, đơn và tin nhắn của shop. Để giao riêng, shop xác nhận vị trí lấy hàng trong **Hồ sơ cửa hàng**. Quản trị có thể chọn shop ở trang xử lý đơn, sản phẩm và menu để can thiệp.
-3. Khách chọn shop từ **Bảng tin cửa hàng** hoặc bộ lọc **Hàng trong ngày**. Giỏ và đơn tách theo shop. Chọn shop trong **Giỏ hàng** rồi thanh toán riêng; món của các shop còn lại tiếp tục nằm trong giỏ.
-4. Quản trị đặt tỷ lệ phí tại **Chi trả shop**. Đơn mới chụp tỷ lệ khi đặt. Phí tính trên tiền hàng, tách khỏi VAT và phí giao, mặc định 0%. Số dư ghi nhận tiền hàng của đơn đã giao và đã thực nhận sau phí sàn; COD cần xác nhận bàn giao tiền. Đơn trước migration `0016` nằm trong lịch sử, ngoài số dư rút được.
-5. Shop vào **Số dư và rút tiền**, lưu tài khoản nhận và nhập số tiền nguyên dương trong phạm vi số dư khả dụng. Điều kiện gửi là số dư khả dụng đạt ít nhất **1.000.000 ₫**. Tối đa **2 lượt mỗi tháng lịch theo giờ Việt Nam**, có thể gửi vào bất kỳ ngày nào. Yêu cầu đang chờ giữ tiền và một lượt. Nếu bị từ chối, hệ thống trả tiền về số dư và trả lượt về tháng của yêu cầu.
-6. Quản trị kiểm tra thông tin tại **Chi trả shop**, chuyển khoản thủ công rồi nhập mã giao dịch để xác nhận **Đã chi trả**, hoặc từ chối kèm lý do. Màn hình này ghi nhận đối soát và lịch sử.
+1. Trong **Kho và nhà cung cấp**, người bán kiểm kê đầu kỳ theo số thực đếm và giá vốn. Phiếu đầu kỳ không tạo công nợ.
+2. Khi nhận hàng, người bán xác nhận phiếu nhập có nhà cung cấp, số lượng, giá nhập và hạn trả nếu có. Nhập số tiền đã trả trước hoặc chọn **Trả đủ**. Kho, giá vốn bình quân và khoản đã trả được ghi nhận trong cùng giao dịch. Lịch sử nằm ngay trong **Nhập kho**. Quản trị xác nhận các lần trả sau theo số còn nợ.
+3. Quản trị tạo điểm nhận tập trung và chọn nhóm khách được dùng. Người bán chọn các điểm áp dụng khi tạo menu. Một giỏ nhận tập trung cần có điểm chung áp dụng cho tất cả menu trong giỏ. Khách đặt trước 17:00 có thể nhận miễn phí trong khung 17:00–18:00 cùng ngày, theo giờ Việt Nam. Đơn lưu ngày và giờ nhận đã xác nhận. Giao riêng tiếp tục báo phí theo tuyến.
+4. Mỗi dòng menu có hạn mức riêng. Duyệt đơn trừ cả tồn kho sản phẩm và lượng còn của menu. Đơn chờ chỉ được trừ khi duyệt. Các giao dịch nhập, trừ tồn, điều chỉnh và hoàn hàng xuất hiện trong sổ kho.
+5. Giá bán đề xuất lấy từ giá vốn bình quân và quy tắc nhóm. Người bán có thể chỉnh giá niêm yết và từng giá nhóm khi mở menu. Giá niêm yết phải ít nhất bằng giá nhóm cao nhất.
+6. Quản trị xem doanh thu, giá vốn, lãi gộp và VAT ở **Tổng quan** hoặc **Thu / hoàn tiền**. Tại **Kho và nhà cung cấp → Công nợ**, quản trị chọn **Trả nợ** trên phiếu còn nợ, nhập số tiền hoặc chọn **Trả đủ**, rồi điền mã chứng từ và xác nhận. Mỗi khoản được lưu vào lịch sử. Khi số dư về 0, phiếu hiển thị **Đã trả đủ**.
+
+### Nâng cấp từ bản nhiều shop
+
+- Trước ngày chuyển đổi, hoàn tất hoặc đối soát các đơn đang xử lý, link payOS còn hiệu lực, COD chưa bàn giao và hoàn tiền đang chờ. Sao lưu SQL cùng `runtime/uploads`, rồi thử migration trên bản sao.
+- Migration `0019` gộp catalog về Food Mart, chuyển người bán sang kho chung, đóng menu cũ và đánh dấu đơn trước chuyển đổi để tra cứu. Giao dịch thu/hoàn và nhật ký cũ được giữ. Quản trị xem bản ghi chi trả cũ trong **Thu / hoàn tiền**.
+- Sau `alembic upgrade head`, lập phiếu kiểm kê cho số tồn thực tế và sao chép hoặc tạo menu mới. Không đưa lượng còn trong menu cũ vào tồn chung. Nếu cần quay lại bản trước, khôi phục bản sao lưu vào database riêng.
 
 ### Cấu hình payOS và hoàn tiền
 
@@ -197,7 +204,12 @@ Các đường dẫn dưới đây nối sau `/api/v1`; thao tác từ trình du
 | API | Dữ liệu / kết quả chính |
 | --- | --- |
 | `GET /checkout/config` | `vatRate`, `vatVersion`, `payosAvailable`; không chứa khóa nhà cung cấp |
-| `POST /orders` | Bổ sung `paymentMethod: COD hoặc PAYOS`, `vatVersion`; các trường món/địa chỉ/báo phí giữ nguyên. Phản hồi có snapshot VAT, trạng thái và tổng đã thu/hoàn/còn phải trả |
+| `POST /orders` | Bổ sung `paymentMethod: COD hoặc PAYOS`, `vatVersion`; mỗi món gửi `expectedVatRate`. Giao tập trung gửi `pickupSlotId`, `pickupSlotVersion` và `pickupStartsAt` theo kết quả báo giờ để phát hiện đổi ngày. Giao riêng gửi địa chỉ và mã báo phí. Phản hồi có snapshot VAT, trạng thái và tổng đã thu/hoàn/còn phải trả |
+| `GET /delivery/options?menuId=...` | Gửi lặp `menuId` cho mỗi menu trong giỏ; trả điểm nhận chung mà nhóm khách được chọn. |
+| `GET /{admin\|shop}/stock` | Tồn và giá vốn theo sản phẩm; các đường dẫn con gồm `ledger`, `suppliers`, `receipts` và `adjustments`. |
+| `POST /{admin\|shop}/stock/receipts` | `paidAmount` là số tiền đã trả lúc nhận hàng, mặc định 0 và tối đa bằng tổng tiền nhập. Phản hồi gồm `paid` và `outstanding`. |
+| `POST /admin/supplier-payments/{receiptId}` | Quản trị ghi một lần trả nợ bằng `amount` và `reference`. |
+| `PATCH /admin/vat/{categories\|products}/{id}` | Quản trị ghi đè VAT bằng `rate` và `expectedVersion`; `null` để kế thừa. |
 | `POST /orders/{id}/payment-link` | Chỉ chủ đơn online đã duyệt, còn hạn; trả `checkout_url`, `expires_at`, mã yêu cầu. Không nhận số tiền client tự nhập |
 | `POST /shop/orders/{id}/assign` | `expectedVersion`, `courierId`; chỉ người giao đang hoạt động |
 | `POST /shop/orders/{id}/transition` | `expectedVersion`, `status`; giao tập trung dùng `READY_FOR_PICKUP`, giao riêng dùng `SHIPPING` |
@@ -269,13 +281,15 @@ Cài lần đầu cần Internet để tải gói Python và npm. Khi hoàn tấ
 
 - Tạo ba nhóm khách: **Sinh viên**, **Người đi làm** và **Khách hàng thân thiết**; tạo một tài khoản quản trị mẫu và ba tài khoản khách mẫu với mật khẩu ngẫu nhiên. Xem tên đăng nhập/số điện thoại và mật khẩu ở `runtime/demo-accounts.local.json`; không chép tệp này lên Git hoặc gửi công khai.
 - Cài mới còn tạo một người bán và một người giao hàng; thông tin nằm trong `staffAccounts` của cùng tệp cục bộ. CSDL đã có người dùng không tự thêm hoặc đổi mật khẩu nhân viên; quản trị tạo nhân viên tại mục **Nhân viên**.
-- Nạp **56 sản phẩm** từ [`backend/seed_catalog.json`](backend/seed_catalog.json), gồm tên, SKU, danh mục, đơn vị, bước số lượng, mô tả, nhóm được phép mua và ảnh mẫu (54 URL HTTPS tại thời điểm chuẩn bị dữ liệu). URL thuộc máy chủ bên ngoài nên ảnh có thể đổi hoặc ngừng hoạt động. Đây là dữ liệu minh họa, không phải giá bán hiện hành của cửa hàng.
-- Giá vốn nhập mẫu của từng sản phẩm được lưu ở `products.default_cost_price`. Giá bán mẫu chuẩn cho người đi làm bằng **150% giá vốn**, làm tròn đến đồng gần nhất; giá theo nhóm được tính từ giá chuẩn: sinh viên **giảm 5%**, khách hàng thân thiết **giảm 10%**. Quy tắc lưu tại `system_settings` với khóa `price_rules`. Ví dụ giá vốn 50.000đ → giá người đi làm 75.000đ, sinh viên 71.250đ, khách hàng thân thiết 67.500đ. Khi tạo menu, giá vốn mặc định được điền từ sản phẩm; thay đổi giá vốn trong menu sẽ tính lại giá của từng nhóm theo quy tắc đang lưu. Thay đổi dữ liệu seed không sửa lại sản phẩm/giá đã tồn tại.
-- Tạo khu giao mẫu Hà Đông và chính sách giao theo quãng đường: sinh viên giao riêng **3.000đ/km trong 10km đầu**, sau đó **4.000đ/km vượt**, tối đa **15km**; người đi làm và khách hàng thân thiết **3.500đ/km trong 10km đầu**, sau đó **5.000đ/km vượt**, tối đa **15km**. Khoảng cách tính theo km thực của tuyến; phí cuối được làm tròn lên nghìn đồng gần nhất. Giao tập trung cho sinh viên miễn phí. Chính sách giao mẫu không đặt mức đơn tối thiểu.
+- Nạp **56 sản phẩm** từ [`backend/seed_catalog.json`](backend/seed_catalog.json), gồm tên, SKU, danh mục, đơn vị, bước số lượng, mô tả, nhóm được phép mua và ảnh mẫu. URL ảnh thuộc máy chủ bên ngoài nên có thể đổi hoặc ngừng hoạt động. Đây là dữ liệu minh họa, không phải giá bán hiện hành của cửa hàng.
+- Mỗi sản phẩm có giá vốn mẫu trong `products.default_cost_price`, giá bán chuẩn trong `default_sale_price` và giá niêm yết khởi tạo. Giá người đi làm bằng **150% giá vốn**, làm tròn đến đồng gần nhất; giá sinh viên giảm **5%**, khách hàng thân thiết giảm **10%** so với chuẩn. Quy tắc lưu tại `system_settings` với khóa `price_rules`. Ví dụ giá vốn 50.000đ → giá chuẩn 75.000đ, sinh viên 71.250đ, khách thân thiết 67.500đ.
+- Database mới nhận **10 đơn vị tồn mẫu cho mỗi sản phẩm** (tính theo đơn vị đã khai báo, ví dụ 10 kg hoặc 10 gói). Seed ghi một phiếu **Tồn đầu kỳ** cùng các dòng phiếu, giá vốn bình quân và sổ kho `stock_ledger`; tổng giá trị phiếu được tính từ giá vốn sản phẩm. Đây là dữ liệu phục vụ demo. Muốn dùng kho thật, cần kiểm kê và nhập số thực tế. Seed chỉ chạy khi database chưa có tài khoản, không cập nhật hoặc cộng lại tồn trong database đang dùng.
+- Mỗi nhóm khách có một chính sách giao riêng. Sinh viên trả **3.000đ/km trong 10km đầu** và **4.000đ/km vượt**; người đi làm và khách hàng thân thiết trả **3.500đ/km trong 10km đầu** và **5.000đ/km vượt**. Các mức mẫu giới hạn **15km**, tính theo quãng đường thực của tuyến và làm tròn phí lên nghìn đồng. Địa chỉ nhận chỉ cần thông tin người nhận và vị trí đã xác nhận trên bản đồ để báo phí.
+- Có sáu điểm nhận tập trung mẫu quanh Thanh Xuân, Hà Đông và Nam Từ Liêm. Người bán chọn các điểm áp dụng cho từng menu; khách đủ điều kiện nhận miễn phí từ **17:00–18:00** khi đặt trước 17:00.
 - Đặt vị trí kho mẫu tại **96A Trần Phú, Học viện Công nghệ Bưu chính Viễn thông, Hà Đông** theo điểm đã xác nhận cho demo. Trước khi dùng một database mới ở máy khác, quản trị cần kiểm tra và xác nhận lại vị trí thực tế trong cấu hình; tọa độ mặc định không tự chứng minh kho đang ở đó.
 - Không tạo menu hoặc đợt mở bán tự động. Sau đăng nhập quản trị, tạo menu ngày, chọn sản phẩm và nhập lượng hàng để mặt hàng xuất hiện cho khách. Seed tạo một điểm giao mẫu và địa chỉ giả cho ba tài khoản demo; không dùng chúng cho giao hàng thật.
 
-Các bảng chính sau seed gồm `customer_groups`, `products`, `product_images`, `offer_prices`, `delivery_zones`, `delivery_policies` và `system_settings`. Mật khẩu tài khoản mẫu không cố định; nếu tệp đăng nhập demo bị mất sau khi seed thành công thì không chạy seed để khôi phục, vì seed cố ý không ghi đè database đang có dữ liệu.
+Các bảng chính sau seed gồm `customer_groups`, `products`, `product_images`, `product_stock`, `stock_receipts`, `stock_receipt_items`, `stock_ledger`, `offer_prices`, `delivery_policies`, `pickup_slots` và `system_settings`. Mật khẩu tài khoản mẫu không cố định; nếu tệp đăng nhập demo bị mất sau khi seed thành công thì không chạy seed để khôi phục, vì seed cố ý không ghi đè database đang có dữ liệu.
 
 ### Khởi động server
 
@@ -586,6 +600,7 @@ Một lệnh đo tải mẫu trong môi trường audit:
 | Trình duyệt báo chứng thư localhost không tin cậy | Chứng thư localhost là chứng thư thử. Xác nhận đúng `https://localhost:3443`; cách tin cậy CA cho LAN nằm ở mục chạy trong cùng mạng. Link Cloudflare dùng chứng thư công khai và không cần cài CA localhost trên client. |
 | Trang báo 502 hoặc đang khởi động | Kiểm tra trạng thái backend, frontend, proxy, cổng tương ứng và log lỗi trong `runtime`; xác nhận MySQL đang chạy, rồi thử lại sau khi dịch vụ sẵn sàng. |
 | Không thấy giao diện mới | Build lại frontend, dừng/chạy lại dịch vụ rồi tải lại bằng **Ctrl+F5**. Khi đang dùng tunnel, mở đúng link tunnel thay vì `localhost`. |
+| Dừng ở “Đang kiểm tra phiên đăng nhập” khi mở qua tunnel | Chạy `npm run build` trong `frontend`, rồi mở tunnel bằng `Start-Remote.cmd`. Next.js ở chế độ `npm run dev` có thể chặn tệp JavaScript của giao diện khi truy cập từ tên miền tunnel. Nếu trang hiện nút **Thử lại**, kiểm tra kết nối tới máy chủ rồi bấm nút để kiểm tra lại phiên. |
 | Link Cloudflare không hoạt động hoặc đổi link | Kiểm tra `scripts/remote.ps1 status` và `runtime/tunnel-error.log`; chạy `Start-Remote.cmd` và dùng link vừa in. Máy server cần bật, không ngủ và có Internet; Quick Tunnel cấp link mới khi khởi tạo lại. |
 | Màn hình hiển thị đang kết nối lại | Kiểm tra mạng, `/api/health`, tunnel/proxy và backend. Client tự kết nối lại, nhưng đợi đồng bộ xong trước khi gửi thao tác. |
 | Menu trống hoặc nút mua bị khóa | Kiểm tra đợt đã mở trong đúng thời gian, nhóm khách được phép, giá và tồn. Đơn chờ chưa giữ hàng; tồn bị trừ khi duyệt. |
@@ -655,40 +670,9 @@ Google quy định cách hiển thị, ghi nguồn và lưu dữ liệu Places/R
 
 Đăng ký VIETMAP Services key, bật Autocomplete v4, Place v4 và Route v4. Trong .env đặt MAP_PROVIDER=vietmap và VIETMAP_API_KEY=<Services key>, sau đó khởi động lại. Key dịch vụ chỉ dùng ở server. Địa chỉ chỉ tìm khi người dùng bấm nút, kết quả ưu tiên quanh Hà Đông. Route v4 sử dụng mô hình xe máy. Bản đồ chọn ghim tiếp tục dùng OpenStreetMap. Kiểm tra độ chính xác của ghim trước khi xác nhận; không nhập địa chỉ nhạy cảm vào bản đồ công cộng. Quản lý quota và quyền theo điều kiện tài khoản VIETMAP.
 
-### Doanh thu theo shop
+### payOS QR của Food Mart
 
-- Quản trị mở **Tổng quan**, chọn **Shop báo cáo** để lọc số liệu. Chọn **Tất cả shop** để xem tổng hợp cùng bảng doanh thu riêng từng cửa hàng.
-- Người bán mở **Tổng quan** (`/shop/reports`); backend tự giới hạn theo shop của tài khoản và từ chối yêu cầu xem shop khác.
-- Bộ lọc áp dụng đồng nhất cho banner, biểu đồ, trạng thái đơn, sản phẩm bán chạy, báo cáo ngày/tháng, so sánh và CSV. CSV có tên shop và ID shop trong tên tệp.
-- Doanh thu hàng tính từ đơn giao thành công, theo giờ Việt Nam. Phí giao và VAT tách riêng. **Lãi gộp = doanh thu hàng − giá vốn**; **tiền hàng sau phí sàn = doanh thu hàng − phí sàn**, chưa trừ giá vốn và không đồng nghĩa số dư có thể rút. Giá vốn thiếu vẫn hiển thị chưa đủ dữ liệu.
-
-Phí nền tảng mặc định **10% tiền hàng** và được chụp khi tạo đơn. Thay đổi mức phí không sửa các đơn cũ. Tổng quan của shop hiển thị doanh thu trước/sau phí; lãi sau phí = doanh thu hàng − giá vốn − phí nền tảng. Số dư khả dụng lấy tiền hàng sau phí của đơn đã giao, đã thu đủ tiền, không còn chờ hoàn tiền; trừ tiền đã chi và đang chờ rút. Số dư không phải lợi nhuận vì chưa trừ giá vốn.
-
-### payOS QR: khách trả tiền về sàn, shop nhận số dư sau phí
-
-1. Đăng ký tại https://my.payos.vn/login, xác thực email và hoàn thành xác minh theo hướng dẫn payOS. Liên kết tài khoản ngân hàng của người đại diện sàn. Tạo kênh thanh toán RealtimeOrders và chọn tài khoản này làm nơi nhận tiền; không dùng tài khoản rút tiền của từng shop.
-2. Trong kênh thanh toán, lấy Client ID, API Key và Checksum Key. Lưu riêng trên server vào `.env`:
-
-```dotenv
-PAYOS_CLIENT_ID=<Client ID của kênh sàn>
-PAYOS_API_KEY=<API Key của kênh sàn>
-PAYOS_CHECKSUM_KEY=<Checksum Key của kênh sàn>
-```
-
-Không commit `.env` và không đưa các khóa này lên frontend. Các shop không được cấu hình kênh payOS riêng.
-
-3. Cài dependency bằng `python -m pip install -r backend/requirements.txt`. Chạy migration từ thư mục backend: `python -m alembic upgrade head`, rồi khởi động lại ứng dụng.
-4. Trong kênh payOS, cấu hình webhook thành `APP_ORIGIN/api/v1/payments/payos/webhook`, thay `APP_ORIGIN` bằng địa chỉ HTTPS công khai thực tế. Không nhập localhost. Nếu dùng Quick Tunnel và link thay đổi, cập nhật lại APP_ORIGIN và webhook.
-5. Khách chọn payOS lúc đặt hàng, đợi shop duyệt giữ kho, rồi vào **Đơn của tôi → Quét QR thanh toán**. Cửa sổ hiển thị tổng tiền (tiền hàng + VAT + phí giao), người nhận và QR do server tạo từ dữ liệu payOS; có thể mở trang thanh toán payOS nếu nhà cung cấp không trả chuỗi QR khi khôi phục link.
-6. Server xác minh chữ ký webhook, đối chiếu mã thanh toán và lưu giao dịch duy nhất theo tham chiếu ngân hàng. Màn hình tự kiểm tra trạng thái sau mỗi 5 giây và nhận cập nhật WebSocket. Redirect về website hoặc bấm nút kiểm tra không tự đánh dấu đã thanh toán. Đóng QR cũng không hủy đơn.
-7. Tiền trả về ngân hàng của sàn. Phần tiền hàng của shop sau phí nền tảng nằm ở **Chờ hoàn tất đơn** khi đã thu đủ nhưng chưa giao xong; chỉ chuyển sang **Số dư khả dụng** sau khi giao thành công, tiền đã về sàn và không chờ hoàn tiền. Với COD, cần xác nhận đã bàn giao tiền về sàn. VAT và phí giao không cộng vào số dư shop.
-8. Số dư khả dụng trừ yêu cầu đang rút/đã chi. Giữ quy tắc tối đa 2 lượt/tháng và số dư tối thiểu 1 triệu; quản trị chi trả thủ công rồi ghi mã giao dịch. payOS QR ở đây là kênh thu, không tự chuyển tiền rút về ngân hàng shop.
-
-Phí nền tảng 10% tiền hàng được chụp khi tạo đơn mới. Ví dụ tiền hàng 100.000đ, phí giao 10.000đ: khách trả 110.000đ về sàn; phần tiền hàng sau phí của shop là 90.000đ. Đơn đã tạo giữ mức phí đã chốt.
-
-**Xử lý sự cố:** không thấy tùy chọn payOS thì kiểm tra đủ 3 khóa rồi restart; lỗi chữ ký thì kiểm tra Checksum Key cùng kênh; không nhận webhook thì kiểm tra URL công khai/tunnel và cấu hình kênh; khách đã chuyển tiền nhưng chưa cập nhật thì không chuyển lại, dùng nút kiểm tra và chờ đối soát. Chuyển thiếu tiền chưa mở chuẩn bị hàng. Chuyển muộn sau hủy hoặc chuyển dư tạo yêu cầu hoàn tiền, không cộng thành số dư rút.
-
-Tài liệu chính thức: https://payos.vn/docs/ ; API và dữ liệu QR: https://payos.vn/docs/api/ . payOS dùng production API, không có sandbox ngân hàng riêng; kiểm thử nhà cung cấp giả không chứng minh chuyển tiền thật. Chỉ kiểm tra live sau khi có khóa, liên kết ngân hàng và webhook, với giao dịch giá trị nhỏ do người dùng thực hiện.
+Kênh payOS nhận tiền về tài khoản ngân hàng của cửa hàng. Checkout cho phép khách quét QR sau khi đơn đã được duyệt. Cấu hình ba khóa và webhook theo mục **Cấu hình payOS và hoàn tiền** ở trên.
 
 Sau khi đã lưu khóa và chạy website công khai, có thể đăng ký/kiểm tra webhook tự động từ gốc dự án:
 

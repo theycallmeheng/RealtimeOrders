@@ -17,9 +17,8 @@ FIELDS={
  'customer_groups':{'code':'code','name':'name','active':'active'},
  'categories':{'name':'name','active':'active'},
  'units':{'code':'code','label':'label'},
- 'delivery_zones':{'code':'code','name':'name','description':'description','active':'active'},
- 'delivery_policies':{'groupId':'group_id','zoneId':'zone_id','method':'method','minimumSubtotal':'minimum_subtotal','shippingFee':'shipping_fee','active':'active','distanceEnabled':'distance_enabled','includedKm':'included_km','extraKmFee':'extra_km_fee','maxDistanceKm':'max_distance_km','pricingMode':'pricing_mode','perKmFee':'per_km_fee','distanceRounding':'distance_rounding','feeRoundingStep':'fee_rounding_step'},
- 'pickup_slots':{'zoneId':'zone_id','name':'name','addressLine':'address_line','startsAt':'starts_at','endsAt':'ends_at','active':'active'},
+ 'delivery_policies':{'groupId':'group_id','method':'method','minimumSubtotal':'minimum_subtotal','shippingFee':'shipping_fee','active':'active','distanceEnabled':'distance_enabled','includedKm':'included_km','extraKmFee':'extra_km_fee','maxDistanceKm':'max_distance_km','pricingMode':'pricing_mode','perKmFee':'per_km_fee','distanceRounding':'distance_rounding','feeRoundingStep':'fee_rounding_step'},
+ 'pickup_slots':{'name':'name','addressLine':'address_line','active':'active','allowedGroupIds':'allowed_group_ids'},
  'moderation_rules':{'phrase':'phrase_normalized','matchMode':'match_mode','active':'active'},
 }
 
@@ -56,36 +55,32 @@ async def configuration(s,user,table,id,body,method='POST'):
         if table=='customer_groups':
             check(old is not None,'NOT_FOUND','Không tìm thấy nhóm khách hàng',404)
             check(old['code']!='WORKER','GROUP_REQUIRED','Không thể xóa nhóm mặc định của tài khoản mới',409)
-            if old['code']=='STUDENT':
-                collective=await one(s,'delivery_policies',T['delivery_policies'].c.group_id==old['id'],
-                    T['delivery_policies'].c.method=='COLLECTIVE',T['delivery_policies'].c.active==True,required=False)
-                check(not collective,'GROUP_IN_USE','Hãy tắt chính sách giao tập trung trước khi xóa nhóm sinh viên',409)
         values={'active':False}
     else:
         values={}
         for external,column in FIELDS[table].items():
             if external not in body: continue
             value=body[external]
-            if column.endswith('_id'): value=uuid(value)
+            if column == 'allowed_group_ids':
+                from .menus import group_ids
+                value = await group_ids(s, value)
+            elif column.endswith('_id'): value=uuid(value)
             elif column=='fee_rounding_step': value=number(value,places=0,minimum=Decimal(1))
             elif column in ('minimum_subtotal','shipping_fee','extra_km_fee','per_km_fee'): value=number(value,places=0)
             elif column in ('included_km','max_distance_km'): value=None if column=='max_distance_km' and value in ('',None) else number(value)
-            elif column.endswith('_at'): value=date_time(value)
             elif column in ('active','distance_enabled'): check(isinstance(value,bool),'INVALID_BOOLEAN','Giá trị bật/tắt không hợp lệ')
             else: value=text(value,500 if column in ('description','address_line') else 150,1)
             values[column]=value
             length=getattr(T[table].c[column].type,'length',None)
             if length and isinstance(value,str):check(len(value)<=length,'INVALID_TEXT',f'{external}: tối đa {length} ký tự')
+        if table=='delivery_policies' and not old:
+            values.setdefault('method','INDIVIDUAL')
         merged={**(old or {}),**values}
         if table=='customer_groups' and old:
             if old['code'] in ('STUDENT','WORKER') and 'code' in values:
                 check(values['code']==old['code'],'GROUP_CODE_LOCKED','Mã nhóm hệ thống không thể đổi',409)
             if old['active'] and values.get('active',old['active']) is False:
                 check(old['code']!='WORKER','GROUP_REQUIRED','Không thể tắt nhóm mặc định của tài khoản mới',409)
-                if old['code']=='STUDENT':
-                    collective=await one(s,'delivery_policies',T['delivery_policies'].c.group_id==old['id'],
-                        T['delivery_policies'].c.method=='COLLECTIVE',T['delivery_policies'].c.active==True,required=False)
-                    check(not collective,'GROUP_IN_USE','Hãy tắt chính sách giao tập trung trước khi xóa nhóm sinh viên',409)
         if table=='delivery_policies':
             mode=merged.get('pricing_mode','BASE_PLUS_EXTRA')
             check(mode in ('BASE_PLUS_EXTRA','TIERED_KM'),'INVALID_DELIVERY','Cách tính phí không hợp lệ')
@@ -96,11 +91,21 @@ async def configuration(s,user,table,id,body,method='POST'):
                       (mode=='TIERED_KM' and merged.get('per_km_fee') is not None or mode=='BASE_PLUS_EXTRA' and maximum is not None) and
                       (maximum is None or Decimal(str(maximum))>0 and Decimal(str(merged['included_km']))<=Decimal(str(maximum))),
                       'INVALID_DISTANCE_POLICY','Nhập mốc km, phí và giới hạn giao hợp lệ')
-            check(merged.get('method') in ('INDIVIDUAL','COLLECTIVE'),'INVALID_DELIVERY','Cách giao không hợp lệ')
-            group=await one(s,'customer_groups',T['customer_groups'].c.id==merged.get('group_id'))
-            check(merged['method']!='COLLECTIVE' or (group['code']=='STUDENT' and Decimal(str(merged.get('shipping_fee',0)))==0),
-                  'INVALID_DELIVERY','Giao tập trung chỉ cho sinh viên, không thu phí')
-        if table=='pickup_slots': check(merged.get('ends_at',now())>merged.get('starts_at',now()),'INVALID_DATE','Giờ kết thúc phải sau giờ bắt đầu')
+            check(merged.get('method')=='INDIVIDUAL','INVALID_DELIVERY','Cấu hình nhận tập trung tại mục Điểm nhận tập trung')
+            group_id=merged.get('group_id')
+            await one(s,'customer_groups',T['customer_groups'].c.id==group_id,lock=True)
+            if merged.get('active',True):
+                from .shipping import individual_policy
+                other=await individual_policy(s,group_id,required=False)
+                check(not other or other['id']==id,'DELIVERY_POLICY_EXISTS',
+                      'Nhóm đã có chính sách giao đang dùng. Hãy sửa chính sách đó hoặc tắt trước khi bật chính sách mới.',409)
+        if table=='pickup_slots':
+            from .menus import pickup_window
+            # Retain timestamps for compatibility with the existing point table.
+            # Checkout calculates a dated window from the order time.
+            if not old:
+                starts, ends = pickup_window(now())
+                values.update(starts_at=starts,ends_at=ends)
         if table=='moderation_rules':
             check(merged.get('match_mode') in ('TOKEN','PHRASE'),'INVALID_MODE','Cách lọc không hợp lệ')
             if 'phrase_normalized' in values:
@@ -116,7 +121,7 @@ async def configuration(s,user,table,id,body,method='POST'):
         id=uid(); await add(s,table,id=id,**values)
     await audit(s,user,table+'.update',table,id,old,values)
     emit(s,'admin:ops','CONFIG_CHANGED',{'table':table,'id':id})
-    if table in ('customer_groups','delivery_policies','pickup_slots','delivery_zones'):
+    if table in ('customer_groups','delivery_policies','pickup_slots'):
         if table=='customer_groups' and old and old['active'] and values.get('active',old['active']) is False:
             from .menus import invalidate
             await invalidate(s,user)
@@ -146,9 +151,11 @@ async def product(s,user,id,body,method='POST'):
             values[col]=v
         if old and any(k in values and values[k]!=old[k] for k in ('unit_id','quantity_step')):
             used=await one(s,'offers',T['offers'].c.product_id==id,required=False)
-            check(not used,'UNIT_IN_USE','Không đổi đơn vị/bước khi sản phẩm đã mở bán',409)
+            from .stock import position
+            stock = await position(s, id)
+            check(not used and not (stock and stock['opened']),'UNIT_IN_USE','Không đổi đơn vị/bước khi sản phẩm đã mở bán',409)
     if method!='DELETE':
-        for field,col in (('defaultCostPrice','default_cost_price'),('defaultSalePrice','default_sale_price')):
+        for field,col in (('listPrice','list_price'),):
             if field in body: values[col]=None if body[field] in ('',None) else number(body[field],places=0)
         if 'allowedGroupIds' in body: values['allowed_group_ids']=await group_ids(s,body['allowedGroupIds'])
     values['updated_at']=now()
@@ -162,6 +169,7 @@ async def product(s,user,id,body,method='POST'):
             T['sku_sequences'].c.sequence_key=='product').values(next_value=sku_number+1))
         shop=await manage_shop(s,user,body.get('shopId'))
         id=uid(); await add(s,'products',id=id,shop_id=shop['id'],version=1,created_at=now(),**values)
+        await add(s,'product_stock',product_id=id)
     image_entries=None
     if 'images' in body:
         image_entries=body['images']

@@ -28,6 +28,9 @@ if($Action -eq 'stop'){
     Write-Host 'Public tunnel stopped; previous network profile restored.'
     exit
 }
+if(-not(Test-Path -LiteralPath (Join-Path $projectRoot 'frontend\.next\BUILD_ID') -PathType Leaf)){
+    throw 'Frontend build missing. Run npm run build in frontend before opening the public tunnel.'
+}
 if(Owned $state){
     Write-Host ('Tunnel already running: '+$state.origin)
     & (Join-Path $PSScriptRoot 'services.ps1') 'start'

@@ -58,6 +58,11 @@ def tax(subtotal, rate):
     return (Decimal(subtotal)*number(rate, places=2, maximum=Decimal(100))/100).quantize(Decimal(1), rounding=ROUND_HALF_UP)
 
 
+async def item_vat_rate(s, product, default_rate):
+    category = await one(s, 'categories', T['categories'].c.id == product['category_id'])
+    return next(rate for rate in (product['vat_rate'], category['vat_rate'], default_rate) if rate is not None)
+
+
 async def balance(s, order_id):
     t = T['money_entries']
     data = (await s.execute(select(t.c.kind, func.sum(t.c.amount)).where(t.c.order_id == order_id).group_by(t.c.kind))).all()
@@ -97,7 +102,7 @@ def payment_view(request):
         'id', 'order_id', 'order_code', 'amount', 'expires_at', 'state',
         'checkout_url', 'account_name', 'account_number', 'bank_bin',
     )}
-    result['receiver'] = 'PLATFORM'
+    result['receiver'] = 'STORE'
     result['qr_image'] = None
     if request.get('qr_code'):
         import qrcode
@@ -121,6 +126,7 @@ async def link(user, order_id):
     check(configured(), 'PAYMENT_NOT_CONFIGURED', 'Thanh toán payOS chưa được cấu hình', 503)
     async with Session.begin() as s:
         o = await one(s, 'orders', T['orders'].c.id == order_id, lock=True)
+        check(not o['legacy_store_order'], 'HISTORICAL_ORDER', 'Đơn lịch sử chỉ dùng để tra cứu', 409)
         check(o['customer_id'] == user['id'] and user['role'] == 'CUSTOMER', 'FORBIDDEN', 'Không có quyền thanh toán đơn', 403)
         check(o['status'] == 'APPROVED' and o['payment_method'] == 'PAYOS' and o['payment_status'] == 'UNPAID', 'INVALID_STATE', 'Đơn chưa được duyệt hoặc không còn chờ thanh toán', 409)
         check(o['payment_deadline'] and now() < o['payment_deadline'], 'PAYMENT_EXPIRED', 'Đã hết thời hạn thanh toán', 409)
@@ -169,9 +175,6 @@ async def webhook(s, body):
     req = await one(s, 'payment_requests', T['payment_requests'].c.order_code == int(code), required=False)
     # Provider webhook verification sends a signed example not belonging to an order.
     if not req: return {'received': True, 'ignored': True}
-    initial = await one(s, 'orders', T['orders'].c.id == req['order_id'])
-    # Serialize changes to withdrawable backing funds with withdrawal decisions.
-    await one(s, 'shops', T['shops'].c.id == initial['shop_id'], lock=True)
     o = await one(s, 'orders', T['orders'].c.id == req['order_id'], lock=True)
     check(o['payment_method'] == 'PAYOS', 'INVALID_PAYMENT', 'Đơn không dùng payOS', 409)
     check(not req['provider_link_id'] or data.get('paymentLinkId') == req['provider_link_id'], 'PAYMENT_LINK_MISMATCH', 'Sai link thanh toán', 400)
@@ -182,6 +185,7 @@ async def webhook(s, body):
     if old:
         check(old['order_id'] == o['id'] and old['amount'] == amount, 'PAYMENT_CONFLICT', 'Giao dịch bị trùng tham chiếu', 409)
         return {'received': True}
+    check(not o['legacy_store_order'], 'HISTORICAL_ORDER', 'Cần đối soát giao dịch đến sau khi chuyển đổi', 409)
     receipt_id=uid()
     await add(s, 'money_entries', id=receipt_id, order_id=o['id'], kind='PAYMENT', method='PAYOS', amount=amount, provider_ref=reference, created_at=now())
     paid, refunded = await balance(s, o['id'])
@@ -198,13 +202,15 @@ async def webhook(s, body):
 async def expire_order(s, order):
     from .commerce import move_stock, catalog_event, audit
     o = await one(s, 'orders', T['orders'].c.id == order['id'], lock=True)
-    if o['status'] != 'APPROVED' or o['payment_status'] not in ('UNPAID',): return
+    if o['legacy_store_order'] or o['status'] != 'APPROVED' or o['payment_status'] not in ('UNPAID',): return
     if not o['payment_deadline'] or o['payment_deadline'] > now(): return
     system = await one(s, 'users', T['users'].c.id == o['customer_id'])
     items = (await s.execute(select(T['order_items']).where(T['order_items'].c.order_id == o['id']).order_by(T['order_items'].c.offer_id))).mappings().all()
-    for i in items:
-        offer = await one(s, 'offers', T['offers'].c.id == i['offer_id'], lock=True)
-        await move_stock(s, system, offer, i['quantity'], 'PAYMENT_EXPIRED', o['id'], o['id'])
+    offers = [await one(s, 'offers', T['offers'].c.id == i['offer_id'], lock=True) for i in items]
+    from .stock import lock_products
+    await lock_products(s, [offer['product_id'] for offer in offers])
+    for i, offer in zip(items, offers):
+        await move_stock(s, system, offer, i['quantity'], 'PAYMENT_EXPIRED', o['id'], o['id'], cost=i['cost_price_snapshot'])
     await change(s, 'orders', o['id'], status='CANCELLED', cancelled_at=now(), version=o['version']+1, updated_at=now())
     from sqlalchemy import update
     await s.execute(update(T['cancellation_requests']).where(T['cancellation_requests'].c.order_id==o['id'],T['cancellation_requests'].c.state=='OPEN').values(state='ACCEPTED',decision_note='Hệ thống hủy do hết hạn thanh toán',decided_at=now()))
@@ -214,7 +220,7 @@ async def expire_order(s, order):
     await changed(s, o)
     await notify(s, o['customer_id'], 'PAYMENT_EXPIRED', {'id': o['id'], 'message': 'Đơn đã hết hạn thanh toán và được hoàn kho.'})
     await audit(s, system, 'order.payment-expired', 'order', o['id'])
-    await catalog_event(s, [i['offer_id'] for i in items])
+    await catalog_event(s, [i['offer_id'] for i in items], stock_products={offer['product_id'] for offer in offers})
 
 
 async def reconcile(req, remote):
@@ -241,6 +247,7 @@ async def expiry_worker():
             if configured():
                 async with Session() as s:
                     reqs=(await s.execute(select(T['payment_requests']).where(T['payment_requests'].c.state.in_(('CREATING','PENDING','PARTIAL')),
+                        T['payment_requests'].c.order_id.in_(select(T['orders'].c.id).where(T['orders'].c.legacy_store_order.is_(False))),
                         T['payment_requests'].c.updated_at<now()-timedelta(seconds=15)).order_by(T['payment_requests'].c.updated_at).limit(5))).mappings().all()
                 for req in reqs:
                     try:
@@ -257,7 +264,7 @@ async def expiry_worker():
                     except Fault:skipped.add(req['order_id'])
             async with Session.begin() as s:
                 pending = (await s.execute(select(T['orders']).where(T['orders'].c.payment_method == 'PAYOS', T['orders'].c.payment_status == 'UNPAID',
-                    T['orders'].c.status == 'APPROVED', T['orders'].c.payment_deadline <= now()).limit(20))).mappings().all()
+                    T['orders'].c.legacy_store_order.is_(False), T['orders'].c.status == 'APPROVED', T['orders'].c.payment_deadline <= now()).limit(20))).mappings().all()
                 for o in pending:
                     if o['id'] not in skipped:await expire_order(s, dict(o))
                 await flush_events(s)

@@ -280,13 +280,19 @@ def cart_hash(items):
                           'expectedPriceVersion':str(i['expectedPriceVersion'])} for i in items],key=lambda i:i['offerId']))
 
 
+async def individual_policy(s, group_id, *, lock=False, required=True):
+    policies = T['delivery_policies']
+    policy = await one(s,'delivery_policies',policies.c.active_individual_group==group_id,lock=lock,required=False)
+    check(not required or policy is not None,'DELIVERY_UNAVAILABLE','Nhóm khách hàng chưa có chính sách giao riêng',409)
+    return policy
+
+
 async def prepare(s,user,body):
     from .commerce import catalog
     address_id=uuid(body.get('addressId'))
     addr=await one(s,'addresses',T['addresses'].c.id==address_id,T['addresses'].c.user_id==user['id'],T['addresses'].c.deleted_at==None)
     check(addr['latitude'] is not None and addr['longitude'] is not None,'ADDRESS_LOCATION_REQUIRED','Xác nhận vị trí địa chỉ nhận trên bản đồ',409)
-    policy=await one(s,'delivery_policies',T['delivery_policies'].c.group_id==user['group_id'],
-        T['delivery_policies'].c.zone_id==addr['zone_id'],T['delivery_policies'].c.method=='INDIVIDUAL',T['delivery_policies'].c.active==True)
+    policy=await individual_policy(s,user['group_id'])
     fee_for(policy,0)
     items=body.get('items'); check(isinstance(items,list) and 0<len(items)<=20 and all(isinstance(i,dict) for i in items),'INVALID_ITEMS','Giỏ hàng không hợp lệ')
     ids=[uuid(i.get('offerId')) for i in items]; check(len(ids)==len(set(ids)),'DUPLICATE_ITEM','Mặt hàng bị lặp')

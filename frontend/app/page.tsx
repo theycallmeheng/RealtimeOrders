@@ -5,11 +5,13 @@ import { tabForPath, pathForTab } from "../lib/navigation";
 import { menuPrices } from "../lib/pricing";
 import PointMap, { type MapPoint } from "./point-map";
 import GooglePointMap from "./google-point-map";
-import BusinessScreen, { ProductReviews } from "./business-ui";
+import BusinessScreen, { ProductReviews, PostComments, PostReactions } from "./business-ui";
 import OverviewDashboard, { type OverviewData } from "./overview";
-import MarketplaceScreen, { ShopSelect } from "./marketplace-ui";
+import StockScreen from "./stock-ui";
+import VatSettings from "./vat-settings";
 import ProductRequests from "./product-requests";
-import { DEFAULT_SHOP, storefrontShopKey, chatShopKey, shopOf, readCart, clearShopCart } from "../lib/marketplace";
+import ExpandablePostText from "./expandable-post-text";
+import { readCart } from "../lib/marketplace";
 import React, {
   useState,
   useEffect,
@@ -48,7 +50,7 @@ type Row = Record<string, any>;
 type Session = { user: Row; csrfToken: string; demo: boolean };
 const TAB_STORAGE_KEY = "ro-tab-session";
 const defaultTab = (session: Session) =>
-  session.user.role === "CUSTOMER" ? "feed" : "orders";
+  session.user.role === "CUSTOMER" ? "catalog" : "orders";
 function restoreTab(session: Session) {
   const direct = tabForPath(session.user.role, window.location.pathname);
   if (direct) return direct;
@@ -80,6 +82,7 @@ async function api(
   method = "GET",
   body?: unknown,
   key?: string,
+  signal?: AbortSignal,
 ): Promise<any> {
   if (activeRole === "SELLER" && path.startsWith("/admin/")) path = path.replace("/admin/", "/shop/");
   const headers: Record<string, string> = {};
@@ -89,6 +92,7 @@ async function api(
   const response = await fetch("/api/v1" + path, {
     method,
     headers,
+    signal,
     credentials: "same-origin",
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -299,7 +303,8 @@ const useApp = () => useContext(AppContext);
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null),
-    [loading, setLoading] = useState(true),
+    [sessionCheck, setSessionCheck] = useState<"loading" | "ready" | "error">("loading"),
+    [sessionAttempt, setSessionAttempt] = useState(0),
     [tab, setTab] = useState("catalog"),
     [online, setOnline] = useState(false),
     [refresh, setRefresh] = useState(0),
@@ -473,15 +478,30 @@ export default function App() {
   );
   const reload = useCallback(() => setRefresh((x) => x + 1), []);
   useEffect(() => {
-    api("/auth/session")
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
+    let active = true;
+    api("/auth/session", "GET", undefined, undefined, controller.signal)
       .then((s) => {
+        if (!active) return;
         csrfToken = s.csrfToken;
         setSession(s);
         setTab(restoreTab(s));
+        setSessionCheck("ready");
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+      .catch((error) => {
+        if (!active) return;
+        const signedOut = error instanceof ApiError &&
+          (error.code === "AUTH_REQUIRED" || error.code === "SESSION_EXPIRED");
+        setSessionCheck(signedOut ? "ready" : "error");
+      })
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [sessionAttempt]);
   useEffect(() => {
     if (toast) {
       const id = setTimeout(() => setToast(null), 7000);
@@ -535,9 +555,11 @@ export default function App() {
       const durable =
         path === "/orders" ||
         /\/product-requests(?:\/|$)/.test(path) ||
+        /^\/(feed|admin\/menus)\/[^/]+\/(comments|reactions)$/.test(path) ||
         /^\/((admin|shop|courier)\/)?orders\//.test(path) ||
         /^\/(admin\/refunds|shop\/money)\//.test(path) ||
-        path === "/admin/inventory-adjustments" ||
+        /^\/admin\/(stock|supplier-payments)\//.test(path) ||
+        path === "/admin/products/bulk" ||
         /\/convert$/.test(path) ||
         /\/messages$/.test(path);
       let list: Row[] = [];
@@ -567,6 +589,8 @@ export default function App() {
               "VERSION_CONFLICT",
               "REQUOTE_REQUIRED",
               "INSUFFICIENT_STOCK",
+              "MENU_STOCK_EXCEEDED",
+              "PAYMENT_EXCEEDS_DEBT",
               "SOLD_OUT",
             ].includes(e.code)
           )
@@ -842,7 +866,7 @@ export default function App() {
         const result = await api(e.path, e.method, e.body, e.key);
         if (e.path === "/orders") {
           const storageKey = "ro-daily-cart-" + sessionRef.current!.user.id;
-          clearShopCart(storageKey, shopOf(result));
+          sessionStorage.removeItem(storageKey);
         }
         window.dispatchEvent(
           new CustomEvent("ro:operation-resolved", {
@@ -869,8 +893,33 @@ export default function App() {
     }
     reload();
   };
-  if (loading)
-    return <div className="spinner">Đang kiểm tra phiên đăng nhập…</div>;
+  if (sessionCheck === "loading")
+    return <div className="spinner" role="status">Đang kiểm tra phiên đăng nhập…</div>;
+  if (sessionCheck === "error")
+    return (
+      <main className="auth-form">
+        <div className="auth-inner">
+          <h2>Chưa kiểm tra được phiên đăng nhập</h2>
+          <p role="alert">Kiểm tra kết nối mạng rồi thử lại.</p>
+          <button type="button" className="primary" onClick={() => {
+            setSessionCheck("loading");
+            setSessionAttempt((attempt) => attempt + 1);
+          }}>Thử lại</button>
+        </div>
+      </main>
+    );
+  const actionToast = toast && (
+    <div role="alert" className={"toast " + (toast.error ? "error" : "")}>
+      <span>{toast.message}</span>
+      <button
+        className="ghost"
+        onClick={() => setToast(null)}
+        aria-label="Đóng thông báo thao tác"
+      >
+        ✕
+      </button>
+    </div>
+  );
   if (!session)
     return (
       <>
@@ -882,26 +931,19 @@ export default function App() {
             setTab(restoreTab(s));
           }}
         />
-        {toast && (
-          <div role="alert" className={"toast " + (toast.error ? "error" : "")}>
-            {toast.message}
-          </div>
-        )}
+        {actionToast && <div className="live-notifications live-notifications-guest">{actionToast}</div>}
       </>
     );
   const seller = session.user.role === "SELLER";
   const admin = session.user.role === "ADMIN" || seller;
-  const marketKind = tab === "shop" && !seller ? "shops" : ["apply", "balance", "withdrawals"].includes(tab) ? tab : "";
   const nav = session.user.role === "SHIPPER" ? [["orders", "Đơn được giao", faListCheck], ["notifications", "Thông báo", faBell]] : seller
     ? [
-        ["reports", "Tổng quan", faChartColumn],
-        ["orders", "Đơn của shop", faListCheck],
+        ["orders", "Xử lý đơn", faListCheck],
         ["offers", "Menu theo ngày", faBasketShopping],
-        ["products", "Sản phẩm của shop", faBoxOpen],
+        ["products", "Sản phẩm", faBoxOpen],
+        ["stock", "Kho và nhà cung cấp", faBoxOpen],
         ["requests", "Yêu cầu sản phẩm", faClipboardList],
         ["chat", "Tin nhắn khách", faCommentDots],
-        ["shop", "Hồ sơ cửa hàng", faBoxOpen],
-        ["balance", "Số dư và rút tiền", faChartColumn],
         ["reviews", "Đánh giá", faListCheck],
       ]
     : admin ? [
@@ -909,15 +951,15 @@ export default function App() {
         ["orders", "Xử lý đơn", faListCheck],
         ["offers", "Menu theo ngày", faBasketShopping],
         ["products", "Sản phẩm", faBoxOpen],
+        ["stock", "Kho và nhà cung cấp", faBoxOpen],
         ["requests", "Yêu cầu sản phẩm", faClipboardList],
 
         ["chat", "Tin nhắn", faCommentDots],
         ["users", "Khách hàng", faUsers],
         ["config", "Cấu hình", faSliders],
         ["audit", "Nhật ký", faListCheck],
-        ["shop", "Quản lý shop", faBoxOpen],
+        ["shop", "Hồ sơ cửa hàng", faBoxOpen],
         ["finance", "Thu / hoàn tiền", faChartColumn],
-        ["withdrawals", "Chi trả shop", faChartColumn],
         ["staff", "Nhân viên", faUsers],
         ["reviews", "Đánh giá", faListCheck],
       ]
@@ -931,8 +973,24 @@ export default function App() {
         ["chat", "Nhắn người bán", faCommentDots],
 
         ["profile", "Hồ sơ & địa chỉ", faUser],
-        ["apply", "Đăng ký mở shop", faBoxOpen],
       ];
+  const navGroups: { label: string; items: typeof nav }[] = session.user.role === "ADMIN"
+    ? [
+        { label: "Điều hành", items: nav.slice(0, 6) },
+        { label: "Phục vụ khách", items: nav.slice(6, 9) },
+        { label: "Quản trị", items: nav.slice(9) },
+      ]
+    : seller
+      ? [
+          { label: "Bán hàng", items: nav.slice(0, 5) },
+          { label: "Kết nối khách", items: nav.slice(5) },
+        ]
+      : session.user.role === "SHIPPER"
+        ? [{ label: "Nhiệm vụ", items: nav }]
+        : [
+            { label: "Mua sắm", items: nav.slice(0, 5) },
+            { label: "Tài khoản", items: nav.slice(5) },
+          ];
   return (
     <AppContext.Provider
       value={{
@@ -1050,6 +1108,13 @@ export default function App() {
           </button>
         </div>
       </header>
+      {session.user.role === "CUSTOMER" && <nav className="food-mobile-nav" aria-label="Điều hướng mua hàng">
+        {[["catalog","Mua hàng",faBasketShopping],["checkout","Giỏ hàng",faCartShopping],["orders","Đơn hàng",faListCheck],["profile","Tài khoản",faUser]].map(([id,label,icon]) =>
+          <a key={String(id)} href={pathForTab("CUSTOMER",String(id))} aria-current={tab===id?"page":undefined}
+            onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); navigateTo(String(id)); }}>
+            <Icon icon={icon as any} /><span>{String(label)}</span>
+          </a>)}
+      </nav>}
       {navOpen && (
         <button
           className="nav-scrim"
@@ -1066,31 +1131,38 @@ export default function App() {
       >
         <aside className="nav">
           <div className="nav-label">
-            {seller ? "Kênh người bán" : admin ? "Quản trị sàn" : session.user.role === "SHIPPER" ? "Giao nhận hàng" : "Cửa hàng của bạn"}
+            {seller ? "Kênh người bán" : admin ? "Quản trị cửa hàng" : session.user.role === "SHIPPER" ? "Giao nhận hàng" : "Cửa hàng của bạn"}
           </div>
-          {nav.filter(([id]) => !!pathForTab(session.user.role,String(id))).map(([id, label, icon]) => (
-            <a
-              key={String(id)}
-              href={pathForTab(session.user.role, String(id))}
-              aria-current={tab === id ? "page" : undefined}
-              className={tab === id ? "active" : ""}
-              title={String(label)}
-              aria-label={String(label)}
-              onClick={(event) => {
-                if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
-                event.preventDefault();
-                navigateTo(String(id));
-              }}
-            >
-              <Icon icon={icon as any} />
-              <span className="nav-title">{String(label)}</span>
-              {id === "chat" && unreadChat > 0 && (
-                <span className="nav-badge" aria-label={`${unreadChat} tin nhắn chưa đọc`}>
-                  {unreadChat > 9 ? "9+" : unreadChat}
-                </span>
-              )}
-            </a>
-          ))}
+          {navGroups.map((group) => {
+            const items = group.items.filter(([id]) => !!pathForTab(session.user.role, String(id)));
+            if (!items.length) return null;
+            return <section className="nav-group" aria-label={group.label} key={group.label}>
+              <h2 className="nav-group-title">{group.label}</h2>
+              {items.map(([id, label, icon]) => (
+                <a
+                  key={String(id)}
+                  href={pathForTab(session.user.role, String(id))}
+                  aria-current={tab === id ? "page" : undefined}
+                  className={tab === id ? "active" : ""}
+                  title={String(label)}
+                  aria-label={String(label)}
+                  onClick={(event) => {
+                    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
+                    event.preventDefault();
+                    navigateTo(String(id));
+                  }}
+                >
+                  <Icon icon={icon as any} />
+                  <span className="nav-title">{String(label)}</span>
+                  {id === "chat" && unreadChat > 0 && (
+                    <span className="nav-badge" aria-label={`${unreadChat} tin nhắn chưa đọc`}>
+                      {unreadChat > 9 ? "9+" : unreadChat}
+                    </span>
+                  )}
+                </a>
+              ))}
+            </section>;
+          })}
           <div className="nav-foot">
             Nhóm 15 · Lập trình mạng
             <br />
@@ -1120,8 +1192,8 @@ export default function App() {
           {(tab === "catalog" || tab === "checkout") && (
             <DailyCatalog mode={tab === "checkout" ? "checkout" : "catalog"} />
           )}
-          {!marketKind && ["orders","feed","shop","staff","finance","reviews"].includes(tab) && <BusinessScreen kind={tab} user={session.user} online={online && pending.length===0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} />}{" "}
-          {marketKind && <MarketplaceScreen kind={marketKind} user={session.user} online={online && pending.length === 0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} money={money} />}
+          {["orders","feed","shop","staff","finance","reviews"].includes(tab) && <BusinessScreen kind={tab} user={session.user} online={online && pending.length===0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} />}{" "}
+          {tab === "stock" && <StockScreen user={session.user} online={online && pending.length===0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} />}
           {tab === "shop" && seller && <WarehouseSettings />}
           {tab === "chat" && <Chat admin={admin} />}{" "}
           {tab === "notifications" && <Notifications />}{" "}
@@ -1129,11 +1201,14 @@ export default function App() {
           {tab === "profile" && <Profile />}{" "}
           {tab === "offers" && <DailyMenus />}{" "}
           {tab === "products" && <Products />} {tab === "users" && <Users />}{" "}
-          {tab === "config" && <Configuration />}{" "}
+          {tab === "config" && session.user.role === "ADMIN" && <>
+            <VatSettings user={session.user} online={online && pending.length===0} refresh={refresh} request={api} mutate={mutate} navigate={navigateTo} />
+            <Configuration />
+          </>}{" "}
           {tab === "reports" && <Overview />} {tab === "audit" && <Audit />}
         </main>
       </div>
-      {(messageNotice || orderNotice || customerNotice) && (
+      {(messageNotice || orderNotice || customerNotice || toast) && (
         <div className="live-notifications">
           {customerNotice && (
             <div key={customerNotice.id} className="message-notice" role="status" aria-live="polite">
@@ -1221,18 +1296,7 @@ export default function App() {
               </button>
             </div>
           )}
-        </div>
-      )}
-      {toast && (
-        <div role="alert" className={"toast " + (toast.error ? "error" : "")}>
-          <span>{toast.message}</span>
-          <button
-            className="ghost"
-            onClick={() => setToast(null)}
-            aria-label="Đóng thông báo"
-          >
-            ✕
-          </button>
+          {actionToast}
         </div>
       )}
     </AppContext.Provider>
@@ -1628,10 +1692,14 @@ function Heading({
   children?: React.ReactNode;
   className?: string;
 }) {
+  const { session } = useApp();
+  const area = session?.user.role === "ADMIN" ? "Quản trị" : session?.user.role === "SELLER" ? "Người bán" : session?.user.role === "SHIPPER" ? "Giao nhận" : "Cửa hàng";
   return (
     <div className={className ? "page-heading " + className : "page-heading"}>
       <div>
-        <div className="eyebrow">RealtimeOrders</div>
+        <nav className="breadcrumbs" aria-label="Đường dẫn">
+          <span>RealtimeOrders</span><span aria-hidden="true">/</span><strong>{area}</strong>
+        </nav>
         <h1>{title}</h1>
         <p>{sub}</p>
       </div>
@@ -1642,8 +1710,7 @@ function Heading({
 
 function Profile() {
   const { session, mutate, notify, online, setSession } = useApp(),
-    { data: addresses } = useData("/me/addresses"),
-    { data: delivery } = useData("/delivery/options");
+    { data: addresses } = useData("/me/addresses");
   const [editing, setEditing] = useState<Row | null>(null),
     [busy, setBusy] = useState(false),
     [name, setName] = useState(session.user.display_name),
@@ -1683,7 +1750,6 @@ function Profile() {
                   recipientName: session.user.display_name,
                   phone: session.user.phone_e164,
                   addressLine: "",
-                  zoneId: delivery?.zones[0]?.id,
                   note: "",
                 })
               }
@@ -1714,7 +1780,6 @@ function Profile() {
                       phone: a.phone_e164,
                       addressLine: a.address_line,
                       note: a.note ?? "",
-                      zoneId: a.zone_id,
                     })
                   }
                 >
@@ -1885,24 +1950,6 @@ function Profile() {
                 }
               />
             </Field>
-            <Field label="Khu vực giao" wide>
-              <select
-                required
-                value={editing.zoneId ?? ""}
-                onChange={(e) =>
-                  setEditing({ ...editing, zoneId: e.target.value })
-                }
-              >
-                <option value="" disabled>
-                  Chọn khu vực
-                </option>
-                {delivery?.zones.map((z: Row) => (
-                  <option key={z.id} value={z.id}>
-                    {z.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <div className="wide">
               <LocationPicker
                 initial={editing.addressLine}
@@ -1979,13 +2026,11 @@ function Chat({ admin }: { admin: boolean }) {
     [busy, setBusy] = useState(false),
     [more, setMore] = useState(true);
   const bottom = useRef<HTMLDivElement>(null);
-  const { data: shops } = useData("/marketplace/shops");
-  const [chatShop, setChatShop] = useState(() => sessionStorage.getItem(chatShopKey(session.user.id)) || DEFAULT_SHOP);
   useEffect(() => {
     let live = true;
     (admin
       ? api("/admin/conversations")
-      : api("/conversations/me?shopId=" + chatShop).then(() => api("/marketplace/conversations"))
+      : api("/conversations/me").then(() => api("/conversations"))
     )
       .then((c) => {
         if (live) {
@@ -1995,7 +2040,7 @@ function Chat({ admin }: { admin: boolean }) {
           const requestedConversation = c.find(
             (conversation: Row) => conversation.id === requested,
           );
-          const next = requestedConversation?.id ?? c.find((conversation: Row) => conversation.shop_id === chatShop)?.id ?? c[0]?.id ?? "";
+          const next = requestedConversation?.id ?? c[0]?.id ?? "";
           setSelected((old) => requestedConversation ? next : c.some((conversation: Row) => conversation.id === old) ? old : next);
           if (requestedConversation) sessionStorage.removeItem(targetKey);
         }
@@ -2004,7 +2049,7 @@ function Chat({ admin }: { admin: boolean }) {
     return () => {
       live = false;
     };
-  }, [admin, chatShop, refresh, notify, session.user.id]);
+  }, [admin, refresh, notify, session.user.id]);
   useEffect(() => {
     const openConversation = (event: Event) => {
       const id = (event as CustomEvent<string>).detail;
@@ -2058,14 +2103,6 @@ function Chat({ admin }: { admin: boolean }) {
         title={admin ? "Tin nhắn khách hàng" : "Nhắn người bán"}
         sub="Hội thoại riêng, lưu lịch sử và nhận cập nhật khi có kết nối."
       />
-      {!admin && shops && <div className="toolbar"><ShopSelect shops={shops} value={chatShop} label="Nhắn cho shop" onChange={(id) => {
-        sessionStorage.setItem(chatShopKey(session.user.id), id);
-        setChatShop(id);
-        setSelected("");
-        setMessages([]);
-        setContent("");
-        setAssets([]);
-      }} /></div>}
       <div className="panel chat-layout">
         <div className="chat-sidebar">
           {conversations.map((c) => (
@@ -2222,6 +2259,7 @@ function Notifications() {
             </div>
             {n.payload.status && <Status value={n.payload.status} />}
             <div className="actions">
+              {n.kind === "POST_INTERACTION" && <button type="button" className="small" onClick={() => window.dispatchEvent(new CustomEvent("ro:navigate", {detail: ["ADMIN","SELLER"].includes(activeRole) ? "offers" : "feed"}))}>{["ADMIN","SELLER"].includes(activeRole) ? "Xem lịch sử mở bán" : "Xem bảng tin"}</button>}
               {n.read_at ? (
                 <small>Đã đọc</small>
               ) : (
@@ -2246,20 +2284,42 @@ function Notifications() {
   );
 }
 
+function QuickConfigCreate({ kind, close }: { kind: "groups" | "categories"; close: () => void }) {
+  const { mutate, notify, online } = useApp();
+  const [busy, setBusy] = useState(false);
+  const isGroup = kind === "groups";
+  return <section className="panel inline-create" aria-label={isGroup ? "Thêm nhóm khách hàng" : "Thêm danh mục"}>
+    <div className="row-heading"><h2>{isGroup ? "Thêm nhóm khách hàng" : "Thêm danh mục"}</h2><button type="button" disabled={busy} onClick={close}>Đóng</button></div>
+    <form className="form form-grid" onSubmit={async event => {
+      event.preventDefault(); if (busy || !online) return;
+      const data = new FormData(event.currentTarget);
+      setBusy(true);
+      try {
+        await mutate("/admin/config/" + kind, {name: String(data.get("name") ?? "").trim(), ...(isGroup ? {code: String(data.get("code") ?? "").trim()} : {}), active: true});
+        notify(isGroup ? "Đã thêm nhóm khách hàng" : "Đã thêm danh mục"); close();
+      } catch {} finally { setBusy(false); }
+    }}>
+      {isGroup && <Field label="Mã nhóm"><input name="code" required maxLength={50} /></Field>}
+      <Field label={isGroup ? "Tên nhóm" : "Tên danh mục"}><input name="name" required maxLength={150} /></Field>
+      <div className="actions"><button className="primary" disabled={busy || !online}>Lưu {isGroup ? "nhóm" : "danh mục"}</button></div>
+    </form>
+  </section>;
+}
+
 function Products() {
   const { session, mutate, notify, online } = useApp();
   const adminView = session.user.role === "ADMIN";
-  const [shopId, setShopId] = useState(DEFAULT_SHOP);
-  const { data: shops } = useData("/marketplace/shops");
-  const { data } = useData("/admin/products" + (adminView ? "?shopId=" + shopId : "")),
+  const { data } = useData("/admin/products"),
     { data: categories } = useData("/admin/config/categories"),
     { data: units } = useData("/admin/config/units"),
     { data: groups } = useData("/admin/config/groups");
   const [form, setForm] = useState<Row | null>(null),
+    [bulk, setBulk] = useState<Row[] | null>(null),
     [busy, setBusy] = useState(false),
     [imageUrlDraft, setImageUrlDraft] = useState(""),
     [catalogSearch, setCatalogSearch] = useState(""),
-    [catalogCategory, setCatalogCategory] = useState("all");
+    [catalogCategory, setCatalogCategory] = useState("all"),
+    [addingCategory, setAddingCategory] = useState(false);
   const edit = (p?: Row) => {
     setImageUrlDraft("");
     setForm(
@@ -2270,8 +2330,7 @@ function Products() {
             categoryId: p.category_id,
             unitId: p.unit_id,
             quantityStep: p.quantity_step,
-            defaultCostPrice: p.default_cost_price ?? "",
-            defaultSalePrice: p.default_sale_price ?? "",
+            listPrice: p.list_price ?? "",
             allowedGroupIds: p.allowed_group_ids,
             active:
               p.active === true || p.active === 1 || p.active === "1",
@@ -2284,14 +2343,12 @@ function Products() {
             ),
           }
         : {
-            shopId: adminView ? shopId : undefined,
             name: "",
             description: "",
             categoryId: categories?.[0]?.id,
             unitId: units?.[0]?.id,
             quantityStep: "1",
-            defaultCostPrice: "",
-            defaultSalePrice: "",
+            listPrice: "",
             allowedGroupIds: null,
             active: true,
             imageEntries: [],
@@ -2329,7 +2386,6 @@ function Products() {
       : "Đã thêm ảnh vào danh sách. Bấm Lưu sản phẩm để lưu.");
   };
   const filteredProducts = (data ?? []).filter((p: Row) => {
-    if (adminView && shopOf(p) !== shopId) return false;
     const matchesCategory =
       catalogCategory === "all" || p.category_id === catalogCategory;
     const matchesSearch =
@@ -2346,130 +2402,68 @@ function Products() {
         title="Danh mục sản phẩm"
         sub="Quản lý SKU, đơn vị, bước số lượng và ảnh. Lịch sử đơn giữ nguyên dữ liệu cũ."
       >
-        <button className="primary" disabled={!online} onClick={() => edit()}>
+        {adminView && <button disabled={!online} onClick={() => setAddingCategory(value => !value)}>Thêm danh mục</button>}
+        <button className="primary" disabled={!online} onClick={() => { setBulk(null); edit(); }}>
           <Icon icon={faPlus} /> Thêm sản phẩm
         </button>
       </Heading>
-      <section className="panel">
-        <div className="form-grid">
-          {adminView && <ShopSelect shops={shops ?? []} value={shopId} onChange={(id) => {
-            setForm(null);
-            setShopId(id);
-          }} />}
-          <Field label="Lọc theo danh mục">
-            <select
-              value={catalogCategory}
-              onChange={(e) => setCatalogCategory(e.target.value)}
-            >
-              <option value="all">Tất cả danh mục</option>
-              {categories
-                ?.filter((category: Row) => category.active)
-                .map((category: Row) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-            </select>
+      {addingCategory && <QuickConfigCreate kind="categories" close={() => setAddingCategory(false)} />}
+      {bulk && <section className="panel inline-create" aria-label="Thêm nhanh sản phẩm">
+        <div className="row-heading"><h2>Thêm nhanh sản phẩm</h2><div className="actions"><button type="button" disabled={busy} onClick={() => {setBulk(null); edit();}}>Thêm một sản phẩm</button><button type="button" disabled={busy} onClick={() => setBulk(null)}>Đóng</button></div></div>
+        <form className="form" onSubmit={async e => {
+          e.preventDefault();
+          if (busy || !online) return;
+          setBusy(true);
+          try {
+            const saved = await mutate("/admin/products/bulk", {items:bulk});
+            setBulk(null);
+            notify(`Đã thêm ${saved.length} sản phẩm`);
+          } catch {} finally { setBusy(false); }
+        }}>
+          <Field label="Số sản phẩm cần thêm">
+            <input type="number" min="1" max="20" step="1" value={bulk.length}
+              disabled={busy} onChange={e => {
+                const count = Number(e.target.value);
+                if (!Number.isInteger(count) || count < 1 || count > 20) return;
+                setBulk(current => {
+                  if (!current) return current;
+                  const next = current.slice(0, count);
+                  while (next.length < count) next.push({name:"",categoryId:categories[0].id,unitId:units[0].id,quantityStep:"1",listPrice:""});
+                  return next;
+                });
+              }} />
           </Field>
-          <Field label="Tìm theo tên hoặc SKU">
-            <input
-              type="search"
-              value={catalogSearch}
-              onChange={(e) => setCatalogSearch(e.target.value)}
-              placeholder="Nhập tên sản phẩm hoặc mã SKU"
-            />
-          </Field>
-        </div>
-        <p className="muted" style={{ margin: "12px 0" }}>
-          Hiển thị {filteredProducts.length} / {data?.length ?? 0} sản phẩm
-        </p>
-        <div className="table-scroll">
-          <table>
-            <thead>
-            <tr>
-              <th>Ảnh</th>
-              <th>SKU</th>
-              <th>Tên sản phẩm</th>
-              <th>Nhóm được phép mua</th>
-              <th>Đơn vị / bước</th>
-              <th>Trạng thái</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProducts.map((p: Row) => (
-              <tr key={p.id}>
-                <td className="product-list-image-cell">
-                  {p.images?.[0] ? (
-                    <img
-                      className="product-list-image"
-                      src={productImageSrc(p.images[0])}
-                      alt={"Ảnh đại diện " + p.name}
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span className="product-list-no-image">Chưa có ảnh</span>
-                  )}
-                  {p.images?.length > 1 && (
-                    <span className="product-image-count">
-                      {p.images.length} ảnh
-                    </span>
-                  )}
-                </td>
-                <td className="muted">{p.sku}</td>
-                <td>
-                  <strong>{p.name}</strong>
-                  <div className="product-subtitle">{p.description}</div>
-                  <div className="muted">
-                    Giá nhập:{" "}
-                    {p.default_cost_price === null
-                      ? "Chưa nhập"
-                      : money(p.default_cost_price)}{" "}
-                    · Giá bán:{" "}
-                    {p.default_sale_price === null
-                      ? "Chưa nhập"
-                      : money(p.default_sale_price)}
-                  </div>
-                </td>
-                <td>
-                  {p.allowed_group_ids == null
-                    ? "Tất cả nhóm"
-                    : Array.isArray(p.allowed_group_ids)
-                      ? p.allowed_group_ids
-                          .map(
-                            (id: string) =>
-                              groups?.find((group: Row) => group.id === id)
-                                ?.name ?? "Nhóm đã ngừng dùng",
-                          )
-                          .join(", ") || "Chưa chọn nhóm"
-                      : "Chưa cấu hình"}
-                </td>
-                <td>
-                  {units?.find((u: Row) => u.id === p.unit_id)?.label} ·{" "}
-                  {qty(p.quantity_step)}
-                </td>
-                <td>{p.active ? "Đang dùng" : "Ngừng dùng"}</td>
-                <td>
-                  <button className="small" onClick={() => edit(p)}>
-                    Sửa
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {data && filteredProducts.length === 0 && (
-          <Empty title="Không có sản phẩm phù hợp">
-            Thử chọn danh mục khác hoặc xóa bớt từ khóa tìm kiếm.
-          </Empty>
-        )}
-        </div>
-      </section>
+          <p className="muted">Mỗi mặt hàng được cấp SKU tự động. Có thể bổ sung mô tả, ảnh và nhóm khách sau khi lưu.</p>
+          {bulk.map((item, index) => <fieldset className="food-receipt-line" key={index} disabled={busy}>
+            <legend>Sản phẩm {index + 1}</legend>
+            <label>Tên sản phẩm<input required maxLength={150} value={item.name} onChange={e => {
+              const value=e.target.value;
+              setBulk(current => current?.map((row,i) => i===index ? {...row,name:value} : row) ?? null);
+            }} /></label>
+            <label>Danh mục<select required value={item.categoryId} onChange={e => {
+              const value=e.target.value;
+              setBulk(current => current?.map((row,i) => i===index ? {...row,categoryId:value} : row) ?? null);
+            }}>{categories?.map((category: Row) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+            <label>Đơn vị<select required value={item.unitId} onChange={e => {
+              const value=e.target.value;
+              setBulk(current => current?.map((row,i) => i===index ? {...row,unitId:value} : row) ?? null);
+            }}>{units?.map((unit: Row) => <option key={unit.id} value={unit.id}>{unit.label}</option>)}</select></label>
+            <label>Bước số lượng<input type="number" min="0.001" step="0.001" required value={item.quantityStep} onChange={e => {
+              const value=e.target.value;
+              setBulk(current => current?.map((row,i) => i===index ? {...row,quantityStep:value} : row) ?? null);
+            }} /></label>
+            <label>Giá niêm yết (đ)<input type="number" min="0" step="1" value={item.listPrice} onChange={e => {
+              const value=e.target.value;
+              setBulk(current => current?.map((row,i) => i===index ? {...row,listPrice:value} : row) ?? null);
+            }} /></label>
+          </fieldset>)}
+          <button className="primary" disabled={!online || busy}>Lưu {bulk.length} sản phẩm</button>
+        </form>
+      </section>}
       {form && (
-        <Modal
-          title={form.id ? "Sửa sản phẩm" : "Thêm sản phẩm"}
-          close={() => setForm(null)}
-        >
+        <section className="panel inline-create" aria-label={form.id ? "Sửa sản phẩm" : "Thêm sản phẩm"}>
+          <div className="row-heading"><h2>{form.id ? "Sửa sản phẩm" : "Thêm sản phẩm"}</h2><button type="button" disabled={busy} onClick={() => setForm(null)}>Đóng</button></div>
+          {!form.id && <button type="button" disabled={busy || !categories?.length || !units?.length} onClick={() => {setForm(null); setBulk([{name:"",categoryId:categories[0].id,unitId:units[0].id,quantityStep:"1",listPrice:""}]);}}>Thêm nhanh nhiều sản phẩm</button>}
           <form
             className="form form-grid"
             onSubmit={async (e) => {
@@ -2503,27 +2497,9 @@ function Products() {
               }
             }}
           >
-            <Field label="Giá nhập mặc định / đơn vị (đ)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={form.defaultCostPrice}
-                onChange={(e) =>
-                  setForm({ ...form, defaultCostPrice: e.target.value })
-                }
-              />
-            </Field>
-            <Field label="Giá bán mặc định / đơn vị (đ)">
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={form.defaultSalePrice}
-                onChange={(e) =>
-                  setForm({ ...form, defaultSalePrice: e.target.value })
-                }
-              />
+            <Field label="Giá niêm yết (đ)">
+              <input type="number" min="0" step="1" value={form.listPrice}
+                onChange={e => setForm({ ...form, listPrice: e.target.value })} />
             </Field>
             <AudienceFields
               groups={groups ?? []}
@@ -2754,15 +2730,122 @@ function Products() {
               </button>
             )}
           </form>
-        </Modal>
+        </section>
       )}
+      <section className="panel">
+        <div className="form-grid">
+          <Field label="Lọc theo danh mục">
+            <select
+              value={catalogCategory}
+              onChange={(e) => setCatalogCategory(e.target.value)}
+            >
+              <option value="all">Tất cả danh mục</option>
+              {categories
+                ?.filter((category: Row) => category.active)
+                .map((category: Row) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+          <Field label="Tìm theo tên hoặc SKU">
+            <input
+              type="search"
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              placeholder="Nhập tên sản phẩm hoặc mã SKU"
+            />
+          </Field>
+        </div>
+        <p className="muted" style={{ margin: "12px 0" }}>
+          Hiển thị {filteredProducts.length} / {data?.length ?? 0} sản phẩm
+        </p>
+        <div className="table-scroll">
+          <table>
+            <thead>
+            <tr>
+              <th>Ảnh</th>
+              <th>SKU</th>
+              <th>Tên sản phẩm</th>
+              <th>Nhóm được phép mua</th>
+              <th>Đơn vị / bước</th>
+              <th>Trạng thái</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {filteredProducts.map((p: Row) => (
+              <tr key={p.id}>
+                <td className="product-list-image-cell">
+                  {p.images?.[0] ? (
+                    <img
+                      className="product-list-image"
+                      src={productImageSrc(p.images[0])}
+                      alt={"Ảnh đại diện " + p.name}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="product-list-no-image">Chưa có ảnh</span>
+                  )}
+                  {p.images?.length > 1 && (
+                    <span className="product-image-count">
+                      {p.images.length} ảnh
+                    </span>
+                  )}
+                </td>
+                <td className="muted">{p.sku}</td>
+                <td>
+                  <strong>{p.name}</strong>
+                  <div className="product-subtitle">{p.description}</div>
+                  <div className="muted">
+                    Giá nhập:{" "}
+                    {p.list_price == null ? "Chưa có giá niêm yết" : "Niêm yết " + money(p.list_price)}
+                  </div>
+                </td>
+                <td>
+                  {p.allowed_group_ids == null
+                    ? "Tất cả nhóm"
+                    : Array.isArray(p.allowed_group_ids)
+                      ? p.allowed_group_ids
+                          .map(
+                            (id: string) =>
+                              groups?.find((group: Row) => group.id === id)
+                                ?.name ?? "Nhóm đã ngừng dùng",
+                          )
+                          .join(", ") || "Chưa chọn nhóm"
+                      : "Chưa cấu hình"}
+                </td>
+                <td>
+                  {units?.find((u: Row) => u.id === p.unit_id)?.label} ·{" "}
+                  {qty(p.quantity_step)}
+                </td>
+                <td><span className={"status " + (p.active ? "ACTIVE" : "INACTIVE")}>{p.active ? "Đang dùng" : "Ngừng dùng"}</span></td>
+                <td>
+                  <button className="small" onClick={() => edit(p)}>
+                    Sửa
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {data && filteredProducts.length === 0 && (
+          <Empty title="Không có sản phẩm phù hợp">
+            Thử chọn danh mục khác hoặc xóa bớt từ khóa tìm kiếm.
+          </Empty>
+        )}
+        </div>
+      </section>
+
     </>
   );
 }
 
 function Users() {
   const [page, setPage] = useState(0);
-  const { data } = useData("/admin/users?page=" + page),
+  const [groupFilter, setGroupFilter] = useState("all"), [addingGroup, setAddingGroup] = useState(false);
+  const { data } = useData("/admin/users?role=CUSTOMER&page=" + page + (groupFilter === "all" ? "" : "&groupId=" + encodeURIComponent(groupFilter))),
     { data: groups } = useData("/admin/config/groups");
   const { mutate, notify, session, online } = useApp();
   const [selected, setSelected] = useState<Row | null>(null),
@@ -2772,7 +2855,11 @@ function Users() {
       <Heading
         title="Khách hàng"
         sub="Phân nhóm khách hàng, khóa và mở tài khoản. Mọi thay đổi đều được ghi lịch sử."
-      />
+      >
+        {session.user.role === "ADMIN" && <button className="primary" disabled={!online} onClick={() => setAddingGroup(value => !value)}>Thêm nhóm khách hàng</button>}
+      </Heading>
+      {addingGroup && <QuickConfigCreate kind="groups" close={() => setAddingGroup(false)} />}
+      <div className="panel customer-filters"><Field label="Lọc theo nhóm khách hàng"><select value={groupFilter} onChange={event => {setGroupFilter(event.target.value); setPage(0);}}><option value="all">Tất cả nhóm</option>{groups?.map((group: Row) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field></div>
       <div className="panel table-scroll">
         <table>
           <thead>
@@ -2924,20 +3011,10 @@ const configSpecs: Record<string, { title: string; fields: ConfigField[] }> = {
       ["label", "Tên hiển thị", "text"],
     ],
   },
-  zones: {
-    title: "Khu giao",
-    fields: [
-      ["code", "Mã khu", "text"],
-      ["name", "Tên khu vực", "text"],
-      ["description", "Mô tả", "text"],
-    ],
-  },
   policies: {
     title: "Chính sách giao",
     fields: [
       ["groupId", "Nhóm khách hàng", "select", "groups"],
-      ["zoneId", "Khu giao", "select", "zones"],
-      ["method", "Cách giao", "select", "methods"],
       ["minimumSubtotal", "Tiền hàng tối thiểu (đ)", "number"],
       ["shippingFee", "Phí cơ bản (đ)", "number"],
       ["pricingMode", "Cách tính phí", "select", "pricingModes"],
@@ -2951,13 +3028,10 @@ const configSpecs: Record<string, { title: string; fields: ConfigField[] }> = {
     ],
   },
   "pickup-slots": {
-    title: "Điểm / giờ giao",
+    title: "Điểm nhận tập trung",
     fields: [
-      ["zoneId", "Khu giao", "select", "zones"],
-      ["name", "Tên điểm và khung giờ", "text"],
+      ["name", "Tên điểm nhận", "text"],
       ["addressLine", "Địa chỉ nhận tập trung", "text"],
-      ["startsAt", "Bắt đầu (UTC)", "datetime-local"],
-      ["endsAt", "Kết thúc (UTC)", "datetime-local"],
     ],
   },
   "moderation-rules": {
@@ -2975,17 +3049,11 @@ function Configuration() {
     [form, setForm] = useState<Row | null>(null),
     [busy, setBusy] = useState(false);
   const { data } = useData("/admin/config/" + kind),
-    { data: groups } = useData("/admin/config/groups"),
-    { data: zones } = useData("/admin/config/zones");
+    { data: groups } = useData("/admin/config/groups");
   const { mutate, online, notify } = useApp();
   const spec = configSpecs[kind];
   const options: Record<string, Row[]> = {
     groups: groups ?? [],
-    zones: zones ?? [],
-    methods: [
-      { id: "INDIVIDUAL", name: "Giao riêng" },
-      { id: "COLLECTIVE", name: "Tập trung sinh viên" },
-    ],
     pricingModes: [
       { id: "BASE_PLUS_EXTRA", name: "Phí cơ bản + km vượt" },
       { id: "TIERED_KM", name: "Theo km, hai mức giá" },
@@ -3021,23 +3089,30 @@ function Configuration() {
       if (kind === "policies" && key === "maxDistanceKm" && f.pricingMode === "TIERED_KM" && v == null) f[key] = "";
       if (key === "feeRoundingStep" && v == null) f[key] = "1";
     }
+    if (kind === "pickup-slots") f.allowedGroupIds = row?.allowed_group_ids ?? null;
     setForm(f);
   };
-  const deactivateGroup = async (row: Row) => {
+  const deactivateConfig = async (row: Row) => {
+    const label = row.name ?? row.label ?? row.phrase_normalized ?? spec.title.toLowerCase();
+    const impact = kind === "groups"
+      ? " Khách thuộc nhóm này sẽ không còn thấy món giới hạn theo nhóm."
+      : kind === "pickup-slots"
+        ? " Khách sẽ không thể chọn điểm này cho đơn mới."
+        : "";
     if (
       !window.confirm(
-        `Ngừng sử dụng nhóm “${row.name}”? Khách thuộc nhóm này sẽ không còn thấy món được giới hạn theo nhóm; dữ liệu đơn cũ vẫn được giữ.`,
+        `Xóa “${label}” khỏi danh sách đang dùng?${impact} Lịch sử vẫn được giữ.`,
       )
     )
       return;
     setBusy(true);
     try {
       await mutate(
-        "/admin/config/groups/" + row.id,
+        "/admin/config/" + kind + "/" + row.id,
         { expectedVersion: String(row.version) },
         "DELETE",
       );
-      notify("Đã ngừng sử dụng nhóm khách hàng");
+      notify("Đã ngừng sử dụng cấu hình");
     } catch {
     } finally {
       setBusy(false);
@@ -3071,11 +3146,12 @@ function Configuration() {
           <Icon icon={faPlus} /> Thêm
         </button>
       </div>
+      {kind === "policies" && <p className="muted">Mỗi nhóm khách có một chính sách giao riêng đang dùng. Phí dựa trên quãng đường từ kho đến địa chỉ nhận.</p>}
+      {kind === "pickup-slots" && <p className="muted">Nhận từ 17:00–18:00, giờ Việt Nam. Đặt trước 17:00 để nhận trong ngày.</p>}
       {kind === "groups" && (
         <p className="muted">
           Ngừng dùng sẽ ẩn món khỏi nhóm đó nhưng vẫn giữ đơn cũ. Nhóm Người đi
-          làm là mặc định đăng ký; nhóm Sinh viên cần tắt giao tập trung trước
-          khi ngừng dùng.
+          làm là mặc định đăng ký.
         </p>
       )}
       <div className="panel table-scroll configuration-table-wrap">
@@ -3110,19 +3186,19 @@ function Configuration() {
                     </td>
                   );
                 })}
-                <td>{row.active != null && !isEnabled(row.active) ? "Tắt" : "Đang dùng"}</td>
+                <td><span className={"status " + (row.active != null && !isEnabled(row.active) ? "INACTIVE" : "ACTIVE")}>{row.active != null && !isEnabled(row.active) ? "Tắt" : "Đang dùng"}</span></td>
                 <td className="configuration-actions">
                   <div className="actions">
                     <button className="small" disabled={!online || busy} onClick={() => edit(row)}>
                       Sửa
                     </button>
-                    {kind === "groups" && row.active && row.code !== "WORKER" && (
+                    {isEnabled(row.active) && !(kind === "groups" && row.code === "WORKER") && (
                       <button
-                        className="small"
+                        className="small danger"
                         disabled={!online || busy}
-                        onClick={() => deactivateGroup(row)}
+                        onClick={() => deactivateConfig(row)}
                       >
-                        Ngừng dùng
+                        Xóa
                       </button>
                     )}
                   </div>
@@ -3165,6 +3241,8 @@ function Configuration() {
               }
             }}
           >
+            {kind === "pickup-slots" && <AudienceFields groups={groups ?? []} value={form.allowedGroupIds ?? null}
+              onChange={allowedGroupIds => setForm({...form,allowedGroupIds})} legend="Nhóm được chọn điểm nhận" />}
             {kind === "policies" && form.pricingMode === "TIERED_KM" && (
               <p className="field-hint wide">Mốc km đầu quyết định khi nào đổi giá / km. Khoảng cách tối đa là giới hạn nhận giao. Tổng phí được làm tròn lên theo bội số tiền đã chọn.</p>
             )}
@@ -3627,14 +3705,12 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   const [promoIds, setPromoIds] = useState<string[] | null>(null);
   useEffect(() => { setPromoClosed(sessionStorage.getItem(promoKey) === "1"); }, [promoKey]);
 
-  const { data: shops } = useData("/marketplace/shops");
-  const [storeShop, setStoreShop] = useState(() => sessionStorage.getItem(storefrontShopKey(session.user.id)) ?? "");
-  const { data: upcomingData } = useData("/catalog/upcoming" + (storeShop ? "?shopId=" + storeShop : ""));
-  const { data: allOffers } = useData("/catalog/offers"),
-    { data: checkoutConfig } = useData("/checkout/config"),
-    { data: addresses } = useData("/me/addresses");
-  const offers = storeShop ? allOffers?.filter((offer: Row) => shopOf(offer) === storeShop) : allOffers;
-  const upcoming = storeShop ? upcomingData?.filter((product: Row) => shopOf(product) === storeShop) : upcomingData;
+  const { data: upcoming } = useData("/catalog/upcoming");
+  const { data: allOffers } = useData("/catalog/offers");
+  const { data: feed } = useData("/feed");
+  const { data: checkoutConfig } = useData("/checkout/config");
+  const { data: addresses } = useData("/me/addresses");
+  const offers = allOffers;
   useEffect(() => {
     if (!offers || promoIds !== null) return;
     const eligible = offers.filter((o: Row) => milli(o.available_qty) > BigInt(0)).map((o: Row) => o.id);
@@ -3662,7 +3738,6 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
       null,
     ),
     [address, setAddress] = useState(""),
-    [policyId, setPolicyId] = useState(""),
     [slotId, setSlotId] = useState(""),
     [note, setNote] = useState(""),
     [quote, setQuote] = useState<Row | null>(null),
@@ -3671,22 +3746,14 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     [nowMs, setNowMs] = useState(Date.now()),
     [search, setSearch] = useState(""),
     [category, setCategory] = useState("ALL");
-  const [chosenCartShop, setChosenCartShop] = useState(() => sessionStorage.getItem(cartKey + "-shop") || DEFAULT_SHOP);
-  const activeCartShop = allCart.some((item) => shopOf(item) === chosenCartShop) ? chosenCartShop : allCart[0] ? shopOf(allCart[0]) : chosenCartShop;
-  const cart = allCart.filter((item) => shopOf(item) === activeCartShop);
-  const cartShops = [...new Map(allCart.map((item) => [shopOf(item), { id: shopOf(item), name: item.shop_name ?? "RealtimeOrders", address: "" }])).values()];
-  const chooseCart = (id: string) => {
-    setChosenCartShop(id);
-    sessionStorage.setItem(cartKey + "-shop", id);
-    setQuote(null);
-    setPreviousFee(null);
-    setConfirmed(false);
-  };
-  const setCart = (update: (items: Row[]) => Row[]) => setAllCart((old) => [
-    ...old.filter((item) => shopOf(item) !== activeCartShop),
-    ...update(old.filter((item) => shopOf(item) === activeCartShop)),
-  ]);
-  const { data: delivery } = useData("/delivery/options?shopId=" + activeCartShop);
+  const cart = allCart;
+  const setCart = setAllCart;
+  const deliveryQuery = new URLSearchParams();
+  for (const id of [...new Set<string>(cart.map(item => String(item.menu_id)))].sort()) {
+    if (id && id !== "undefined" && id !== "null") deliveryQuery.append("menuId", id);
+  }
+  const { data: delivery } = useData("/delivery/options?" + deliveryQuery);
+  const [deliveryMethod, setDeliveryMethod] = useState("INDIVIDUAL");
   const [paymentMethod,setPaymentMethod] = useState("COD");
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
   const view =
@@ -3706,26 +3773,24 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   }, [cartMotionKey]);
   const chosenAddress =
     (addresses ?? []).find((a: Row) => a.id === address) ?? addresses?.[0];
-  const policies = (delivery?.policies ?? []).filter(
-    (p: Row) => p.zone_id === chosenAddress?.zone_id,
-  );
-  const policy = policies.find((p: Row) => p.id === policyId) ?? policies[0];
-  const slots = (delivery?.pickupSlots ?? []).filter(
-    (s: Row) => s.zone_id === chosenAddress?.zone_id,
-  );
+  const policy = delivery?.policies?.[0];
+  const slots: Row[] = delivery?.pickupSlots ?? [];
   const slot = slots.find((s: Row) => s.id === slotId) ?? slots[0];
   const fingerprint = JSON.stringify([
-    cart.map((c) => [c.id, c.quantity, c.price_version]),
+    cart.map((c) => [c.id, c.quantity, c.price_version, allOffers?.find((o: Row) => o.id === c.id)?.vat_rate]),
     chosenAddress?.id,
     chosenAddress?.version,
     policy?.id,
     policy?.version,
     checkoutConfig?.vatVersion,
-    paymentMethod,
+    deliveryMethod,
+    slot?.id,
+    slot?.version,
+    slot?.starts_at,
   ]);
   useEffect(() => {
     setConfirmed(false);
-  }, [fingerprint]);
+  }, [fingerprint, paymentMethod]);
   useEffect(() => {
     sessionStorage.setItem(cartKey, JSON.stringify(allCart));
   }, [allCart, cartKey]);
@@ -3746,8 +3811,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   useEffect(() => {
     const handler = (e: Event) => {
       if ((e as CustomEvent).detail.path === "/orders") {
-        const order = (e as CustomEvent).detail.result;
-        setAllCart((old) => old.filter((item) => shopOf(item) !== shopOf(order)));
+        setAllCart([]);
         setQuantityDrafts({});
         setView(null);
       }
@@ -3768,7 +3832,9 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     (sum: bigint, c) => sum + lineMoney(c.unit_price, c.quantity),
     BigInt(0),
   );
-  const vatAmount=(subtotal * BigInt(Math.round(Number(checkoutConfig?.vatRate ?? 0)*100))+BigInt(5000))/BigInt(10000);
+  const vatRateFor = (item: Row) => Number(allOffers?.find((offer: Row) => offer.id === item.id)?.vat_rate ?? 0);
+  const vatAmount = cart.reduce((sum, item) =>
+    sum + (lineMoney(item.unit_price, item.quantity) * BigInt(Math.round(vatRateFor(item) * 100)) + 5000n) / 10000n, 0n);
   const quantityError = (c: Row, raw: string): string | null => {
     if (!raw.trim()) return "Nhập số lượng.";
     let normalized = raw.trim().replace(",", ".");
@@ -3822,7 +3888,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
   };
   const quoteStale = !!quote && quote.fingerprint !== fingerprint;
   const expired = !!quote && new Date(quote.expiresAt).getTime() <= nowMs;
-  const fee = policy?.method === "COLLECTIVE" ? "0" : quote?.shippingFee;
+  const fee = deliveryMethod === "COLLECTIVE" && slot ? "0" : quote?.shippingFee;
   const categories: string[] = Array.from(
     new Set<string>(
       (offers ?? [])
@@ -3850,6 +3916,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
       offerId: c.id,
       quantity: c.quantity,
       expectedPriceVersion: String(c.price_version),
+      expectedVatRate: vatRateFor(c),
     }));
   const add = (o: Row) => {
     clearQuantityDraft(o.id);
@@ -3861,7 +3928,6 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
       return;
     }
     setAllCart((old) => [...old.filter((c) => c.id !== o.id), { ...o, quantity: fromMilli(quantity) }]);
-    if (activeCartShop !== shopOf(o)) chooseCart(shopOf(o));
     setView("cart");
   };
   const adjust = (c: Row, delta: bigint) => {
@@ -3883,23 +3949,24 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
     );
   };
   const submit = async () => {
-    if (!policy || !chosenAddress) return;
+    if (deliveryMethod === "INDIVIDUAL" ? !policy || !chosenAddress : !slot) return;
     setBusy(true);
     try {
       await mutate("/orders", {
         clientOrderId: crypto.randomUUID(),
-        addressId: chosenAddress.id,
-        deliveryMethod: policy.method,
+        addressId: chosenAddress?.id,
+        deliveryMethod,
         paymentMethod,
         vatVersion: checkoutConfig?.vatVersion,
-        policyVersion: String(policy.version),
+        policyVersion: String(policy?.version ?? ""),
         pickupSlotId: slot?.id,
         pickupSlotVersion: String(slot?.version ?? ""),
+        pickupStartsAt: slot?.starts_at,
         deliveryQuoteId: quote?.id,
         items: items(),
         note,
       });
-      setAllCart(clearShopCart<Row>(cartKey, activeCartShop));
+      setAllCart([]);
       setQuantityDrafts({});
       setView(null);
       notify("Đã gửi đơn, đang chờ người bán duyệt");
@@ -3953,26 +4020,20 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               {cart.length > 0 && <strong>{money(subtotal)}</strong>}
             </button>
           </Heading>
-          {shops && <section className="storefront-shops" aria-label="Chọn cửa hàng">
-            <div className="storefront-shops-label">Cửa hàng</div>
-            <div className="storefront-shop-list" role="group" aria-label="Lọc theo shop">
-              {[{ id: "", name: "Tất cả cửa hàng", logoUrl: "" }, ...shops].map((shop: Row) => <button type="button" key={shop.id} className="storefront-shop-choice" aria-pressed={storeShop === shop.id} onClick={() => {
-                sessionStorage.setItem(storefrontShopKey(session.user.id), shop.id);
-                setStoreShop(shop.id); setCategory("ALL"); setPromoIds(null);
-              }}>
-                <span className="storefront-shop-mark" aria-hidden="true">{shop.id ? String(shop.name).trim().charAt(0).toUpperCase() : <Icon icon={faBasketShopping} />}{shop.logoUrl && <img src={shop.logoUrl} alt="" loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} />}</span>
-                <span>{shop.name}<small>{shop.id ? "Xem sản phẩm" : "Khám phá các shop"}</small></span>
-              </button>)}
-            </div>
-          </section>}
           {!promoClosed && promoOffers.length > 0 && <section className="menu-promotion" aria-label="Gợi ý sản phẩm đang mở bán">
             <div className="row-heading"><div><div className="eyebrow">Đang mở bán</div><h2>Gợi ý hôm nay</h2></div>
               <button className="ghost small" aria-label="Đóng gợi ý sản phẩm" onClick={() => { setPromoClosed(true); sessionStorage.setItem(promoKey, "1"); }}>✕</button>
             </div>
             <div className="promotion-products">{promoOffers.map((o: Row) => <article key={o.id} className="promotion-product">
-              <div className="promotion-thumb"><Icon icon={faImage} aria-hidden="true" />{o.images?.length > 0 && <img src={productImageSrc(o.images[0])} alt={o.name} loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} />}</div>
-              <strong>{o.name}</strong><span>{money(o.unit_price)} / {o.unit}</span>
-              <button className="small" disabled={!online} onClick={() => add(o)}>Thêm vào giỏ</button>
+              <div className="promotion-thumb"><Icon icon={faImage} aria-hidden="true" />{o.images?.length > 0 && <img src={productImageSrc(o.images[0])} alt={o.name} loading="lazy" onError={e => { e.currentTarget.style.display = "none"; }} />}
+                {Number(o.list_price) > Number(o.unit_price) && Number(o.discount_percent) > 0 && <span className="promotion-discount">−{o.discount_percent}%</span>}
+              </div>
+              <strong className="promotion-name">{o.name}</strong>
+              <div className="promotion-price">
+                {Number(o.list_price) > Number(o.unit_price) && <del>{money(o.list_price)}</del>}
+                <div><strong>{money(o.unit_price)}</strong> <span>/ {o.unit}</span></div>
+              </div>
+              <button className="small primary" aria-label={"Thêm " + o.name + " vào giỏ"} disabled={!online} onClick={() => add(o)}>Thêm vào giỏ</button>
             </article>)}</div>
           </section>}
           <p className="stock-note">
@@ -4062,8 +4123,24 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               {offers.length ? "Thử từ khóa hoặc danh mục khác." : "Xem mặt hàng sắp mở bán và theo dõi để nhận thông báo khi có đợt mới."}
             </Empty>
           ) : (
-            <div className="daily-products">
-              {filteredOffers.map((o: Row) => (
+            <div className="daily-rounds">
+              {Array.from(new Set<string>(filteredOffers.map((offer: Row) => String(offer.menu_id)))).map((menuId) => {
+                const roundOffers = filteredOffers.filter((offer: Row) => String(offer.menu_id) === menuId);
+                const post = feed?.posts?.find((entry: Row) => entry.id === menuId);
+                const first = roundOffers[0];
+                return <section className="daily-round" key={menuId}>
+                  <div className="daily-round-heading">
+                    <div><span className="round-post-label">Sản phẩm thuộc bài đăng</span><h2>{post?.post_title || `Đợt bán ${menuId.slice(-6).toUpperCase()}`}</h2>
+                      <p className="muted">{date(first.opens_at)} → {date(first.closes_at)}</p></div>
+                    <span className="muted">{roundOffers.length} sản phẩm</span>
+                  </div>
+                  {post?.pickup_points?.length > 0 && <div className="daily-round-pickup">
+                    <strong>Điểm nhận tập trung miễn phí của bài đăng</strong>
+                    <span>{post.pickup_points.map((point: Row) => point.name).join(" · ")}</span>
+                    <small>{date(post.pickup_points[0].starts_at)} – {date(post.pickup_points[0].ends_at)}</small>
+                  </div>}
+                  <div className="daily-products">
+              {roundOffers.map((o: Row) => (
                 <article
                   key={o.id}
                   className="daily-product"
@@ -4071,8 +4148,8 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                 >
                   <ProductImageGallery images={o.images ?? []} name={o.name} />
                   <div className="daily-product-info">
+                    <span className="daily-post-label">{post?.post_title || `Đợt bán ${menuId.slice(-6).toUpperCase()}`}</span>
                     <h2>{o.name}</h2>
-                    {o.shop_name && <small className="product-shop-name"><Icon icon={faBasketShopping} aria-hidden="true" /> {o.shop_name}</small>}
                     <details className="offer-round-details"><summary>Thông tin đợt bán</summary><small className="offer-round-label">Đợt {String(o.menu_id).slice(-6).toUpperCase()} · {date(o.opens_at)} → {date(o.closes_at)}</small></details>
                     <p className="muted">{o.description}</p>
                     <ProductReviews productId={o.product_id} request={api} />
@@ -4081,9 +4158,10 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                     </p>
                   </div>
                   <div className="daily-product-buy">
-                    <strong>
-                      {money(o.unit_price)} / {o.unit}
-                    </strong>
+                    <div className="food-product-price">
+                      {Number(o.list_price) > Number(o.unit_price) && <span><del>{money(o.list_price)}</del> {o.discount_percent > 0 && <small>−{o.discount_percent}%</small>}</span>}
+                      <strong>{money(o.unit_price)} / {o.unit}</strong>
+                    </div>
                     <button
                       className="primary"
                       disabled={!online || milli(o.available_qty) <= BigInt(0)}
@@ -4111,6 +4189,9 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                   </div>
                 </article>
               ))}
+                  </div>
+                </section>;
+              })}
             </div>
           )}
           </>}
@@ -4138,7 +4219,6 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
               if (mode === "checkout") goTo("catalog");
             }}
           >
-            {cartShops.length > 0 && <div className="cart-shop-select"><ShopSelect shops={cartShops} value={activeCartShop} onChange={(id) => { if (!busy) chooseCart(id); }} label="Giỏ hàng của shop" /></div>}
             {!cart.length ? (
               <Empty title="Giỏ hàng chưa có món" />
             ) : (
@@ -4291,65 +4371,34 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                   </div>
                 ) : (
                   <div className="form">
-                    {!addresses?.length ? (
-                      <div className="notice warn">
-                        Thêm địa chỉ nhận hàng trước khi đặt.{" "}
-                        <button onClick={() => goTo("profile")}>
-                          Thêm địa chỉ
-                        </button>
-                      </div>
+                    <Field label="Cách nhận hàng">
+                      <select value={deliveryMethod} onChange={e => setDeliveryMethod(e.target.value)}>
+                        <option value="INDIVIDUAL">Giao riêng · Tính phí theo km</option>
+                        {(slots.length > 0 || deliveryMethod === "COLLECTIVE") && <option value="COLLECTIVE" disabled={!slots.length}>Nhận tập trung · Miễn phí</option>}
+                      </select>
+                    </Field>
+                    {deliveryMethod === "COLLECTIVE" ? (
+                      <>
+                      <Field label="Điểm nhận tập trung">
+                        <select value={slot?.id ?? ""} onChange={e => setSlotId(e.target.value)}>
+                          {!slots.length && <option value="">Chưa có điểm nhận cho giỏ hàng này</option>}
+                          {slots.map(s => <option key={s.id} value={s.id}>{s.name} · {s.address_line}</option>)}
+                        </select>
+                      </Field>
+                      {slot && <small>Nhận từ 17:00–18:00 ngày {new Date(slot.starts_at).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</small>}
+                      </>
                     ) : (
                       <>
                         <Field label="Địa chỉ nhận">
-                          <select
-                            value={chosenAddress?.id ?? ""}
-                            onChange={(e) => setAddress(e.target.value)}
-                          >
-                            {addresses.map((a: Row) => (
-                              <option key={a.id} value={a.id}>
-                                {a.recipient_name} · {a.address_line}
-                              </option>
-                            ))}
+                          <select value={chosenAddress?.id ?? ""} onChange={e => setAddress(e.target.value)}>
+                            {!addresses?.length && <option value="">Chưa có địa chỉ</option>}
+                            {addresses?.map((a: Row) => <option key={a.id} value={a.id}>{a.recipient_name} · {a.address_line}</option>)}
                           </select>
                         </Field>
-                        <button
-                          className="ghost"
-                          onClick={() => goTo("profile")}
-                        >
-                          Quản lý địa chỉ / xác nhận vị trí
-                        </button>
-                        <Field label="Cách nhận hàng">
-                          <select
-                            value={policy?.id ?? ""}
-                            onChange={(e) => setPolicyId(e.target.value)}
-                          >
-                            {policies.map((p: Row) => (
-                              <option key={p.id} value={p.id}>
-                                {p.method === "COLLECTIVE"
-                                  ? "Nhận tập trung · Miễn phí"
-                                  : "Giao tới địa chỉ · Tính phí theo km"}
-                              </option>
-                            ))}
-                          </select>
-                        </Field>
-                        {policy?.method === "COLLECTIVE" ? (
-                          <Field label="Điểm và giờ nhận">
-                            <select
-                              value={slot?.id ?? ""}
-                              onChange={(e) => {
-                                setSlotId(e.target.value);
-                                setConfirmed(false);
-                              }}
-                            >
-                              {slots.map((s: Row) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.name} · {s.address_line}
-                                </option>
-                              ))}
-                            </select>
-                          </Field>
-                        ) : (
-                          <>
+                        <button className="ghost" onClick={() => goTo("profile")}>Quản lý địa chỉ / xác nhận vị trí</button>
+                            {delivery && !policy && (
+                              <p className="notice warn">Nhóm khách của bạn chưa có chính sách giao riêng.</p>
+                            )}
                             {delivery?.warehouse && !delivery.warehouse.configured && (
                               <p className="notice warn">Người bán chưa xác nhận vị trí kho để tính quãng đường.</p>
                             )}
@@ -4447,8 +4496,6 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                                 </p>
                               </div>
                             )}
-                          </>
-                        )}
                       </>
                     )}
                     <Field label="Thanh toán">
@@ -4457,6 +4504,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                         <option value="PAYOS" disabled={!checkoutConfig?.payosAvailable}>payOS VietQR · Trả đủ sau khi shop duyệt{!checkoutConfig?.payosAvailable ? " (chưa cấu hình)" : ""}</option>
                       </select>
                     </Field>
+                    {paymentMethod === "PAYOS" && <p className="notice" role="status">Sau khi đặt hàng, người bán cần duyệt đơn. Khi đơn được duyệt, vào mục Đơn của tôi và chọn “Quét QR thanh toán”.</p>}
                     <Field label="Ghi chú giao hàng">
                       <textarea
                         value={note}
@@ -4471,7 +4519,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                       </strong>
                     </div>
                     <div className="summary-line">
-                      <strong>VAT {Number(checkoutConfig?.vatRate ?? 0)}%</strong><strong>{checkoutConfig ? money(vatAmount) : "Đang tải…"}</strong>
+                      <strong>VAT</strong><strong>{checkoutConfig ? money(vatAmount) : "Đang tải…"}</strong>
                     </div>
                     <div className="summary-line">
                       <strong>Tổng thanh toán</strong>
@@ -4481,7 +4529,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                           : money(subtotal + vatAmount + BigInt(String(fee)))}
                       </strong>
                     </div>
-                    {policy &&
+                    {deliveryMethod === "INDIVIDUAL" && policy &&
                       subtotal < BigInt(String(policy.minimum_subtotal)) && (
                         <p className="notice warn">
                           Tiền hàng tối thiểu cho cách giao này:{" "}
@@ -4496,6 +4544,7 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                       />
                       Tôi đã kiểm tra món, địa chỉ, VAT, phí giao và cách thanh toán.
                     </label>
+                    {!confirmed && <p className="muted" role="status">Vui lòng tích xác nhận phía trên để đặt hàng. Khi thay đổi cách thanh toán, bạn cần xác nhận lại.</p>}
                     <div className="actions">
                       <button
                         onClick={() => {
@@ -4514,13 +4563,10 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                           invalidQuantity ||
                           !checkoutConfig ||
                           !confirmed ||
-                          !chosenAddress ||
-                          !policy ||
-                          subtotal <
-                            BigInt(String(policy?.minimum_subtotal ?? 0)) ||
-                          (policy?.method === "INDIVIDUAL" &&
-                            (!quote || expired || quoteStale)) ||
-                          (policy?.method === "COLLECTIVE" && !slot)
+                          (deliveryMethod === "INDIVIDUAL" &&
+                            (!chosenAddress || !policy || subtotal < BigInt(String(policy?.minimum_subtotal ?? 0)) ||
+                              !quote || expired || quoteStale)) ||
+                          (deliveryMethod === "COLLECTIVE" && !slot)
                         }
                         onClick={submit}
                       >
@@ -4536,6 +4582,22 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
       )}
     </>
   );
+}
+
+function MenuPostSocial({ menu, state }: { menu: Row; state: string }) {
+  const [open, setOpen] = useState(false);
+  const {session, online, refresh, mutate} = useApp();
+  const social = menu.social;
+  if (!social) return <p className="muted menu-social-unavailable">Không thể xem tương tác của đợt lịch sử này.</p>;
+  const props = {user:session.user,online,refresh,mutate,request:api,navigate:() => {}};
+  const readOnly = !['OPEN','SOLD_OUT'].includes(state);
+  return <section className="menu-social" aria-label="Tương tác bài đăng">
+    <PostReactions postId={menu.id} readOnly={readOnly} summary={{counts:social.reactions, mine:social.myReaction}} {...props} />
+    <button type="button" className="menu-social-toggle" aria-expanded={open} aria-controls={"comments-" + menu.id} onClick={() => setOpen(value => !value)}>
+      {open ? "Ẩn bình luận" : "Xem và viết bình luận"} · {social.commentCount}
+    </button>
+    {open && <div id={"comments-" + menu.id}><PostComments postId={menu.id} readOnly={readOnly} {...props} /></div>}
+  </section>;
 }
 
 function MenuStock({ menu, products, state }: { menu: Row; products: Row[]; state: string }) {
@@ -4574,12 +4636,14 @@ function MenuStock({ menu, products, state }: { menu: Row; products: Row[]; stat
   </section>;
 }
 
+const menuProductPageSize = 12;
+
 function DailyMenus() {
   const { session, mutate, online, notify } = useApp();
   const adminView = session.user.role === "ADMIN";
-  const [shopId, setShopId] = useState(DEFAULT_SHOP);
-  const { data: shops } = useData("/marketplace/shops");
-  const scope = adminView ? "?shopId=" + shopId : "";
+  const scope = "";
+  const { data: inventory } = useData("/admin/stock");
+  const { data: pickupPoints } = useData("/admin/config/pickup-slots");
   const { data: menus } = useData("/admin/menus" + scope),
     { data: products } = useData("/admin/products" + scope),
     { data: categories } = useData("/admin/config/categories"),
@@ -4589,6 +4653,7 @@ function DailyMenus() {
   const [form, setForm] = useState<Row | null>(null),
     [stockMenuId, setStockMenuId] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
+    [uploadingPostImage, setUploadingPostImage] = useState(false),
     [copying, setCopying] = useState<Row | null>(null),
     [targetDay, setTargetDay] = useState(
       vnDay(new Date(Date.now() + 86400000)),
@@ -4596,7 +4661,10 @@ function DailyMenus() {
     [productSearch, setProductSearch] = useState(""),
     [productCategory, setProductCategory] = useState("all"),
     [selectedOnly, setSelectedOnly] = useState(false),
+    [expandedProductId, setExpandedProductId] = useState<string | null>(null),
+    [shownProductCount, setShownProductCount] = useState(menuProductPageSize),
     [roundFilter, setRoundFilter] = useState("all");
+  const [discountDrafts, setDiscountDrafts] = useState<Record<string, string>>({});
   const editorRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (form) editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4612,6 +4680,8 @@ function DailyMenus() {
     return clock < new Date(m.opens_at).getTime() ? "SCHEDULED" : m.sold_out ? "SOLD_OUT" : "OPEN";
   };
   const edit = async (m?: Row) => {
+    if (busy || uploadingPostImage) return;
+    setDiscountDrafts({});
     if (!priceRules) {
       notify("Đang tải quy tắc giá, vui lòng thử lại sau một lát", true);
       return;
@@ -4619,9 +4689,13 @@ function DailyMenus() {
     setProductSearch("");
     setProductCategory("all");
     setSelectedOnly(false);
+    setExpandedProductId(null);
+    setShownProductCount(menuProductPageSize);
     if (!m) {
       setForm({
-        shopId: adminView ? shopId : undefined,
+        pickupSlotIds: [],
+        postImages: [],
+        postImageInput: "",
         saleDate: vnDay(),
         closeDate: "",
         closeTime: "",
@@ -4631,6 +4705,7 @@ function DailyMenus() {
       });
       return;
     }
+    setBusy(true);
     try {
       const full = await api("/admin/menus/" + m.id);
       const closeMoment = new Date(full.closes_at);
@@ -4648,8 +4723,7 @@ function DailyMenus() {
       const existingItems = full.items.map((o: Row) => ({
           productId: o.product_id,
           availableQty: o.available_qty,
-          costPrice: o.cost_price ?? "",
-          salePrice: o.sale_price_override ?? "",
+          listPrice: o.list_price ?? "",
           allowedGroupIds:
             products?.find((p: Row) => p.id === o.product_id)
               ?.allowed_group_ids == null
@@ -4657,14 +4731,16 @@ function DailyMenus() {
               : null,
           enabled: o.status === "OPEN",
           expectedVersion: o.version,
-          prices: menuPrices(o.cost_price ?? "", groups ?? [], priceRules),
+          prices: o.prices.map((price: Row) => ({groupId:price.group_id,unitPrice:price.unit_price})),
         }));
       setForm({
         ...full,
         postTitle: full.post_title ?? "",
         postBody: full.post_body ?? "",
-        postImageUrl: full.post_image_url ?? "",
+        postImages: full.post_images ?? [],
+        postImageInput: "",
         receivingNote: full.receiving_note ?? "",
+        pickupSlotIds: full.pickup_slot_ids ?? [],
         audienceMode: full.audience_mode ?? "MENU",
         saleDate: full.sale_date,
         closeDate:
@@ -4676,10 +4752,30 @@ function DailyMenus() {
       });
     } catch (e) {
       notify((e as Error).message, true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const uploadPostImages = async (files: File[]) => {
+    if (!form || files.length + (form.postImages?.length ?? 0) > 5) {
+      notify("Bài đăng được chọn tối đa 5 ảnh", true);
+      return;
+    }
+    setUploadingPostImage(true);
+    try {
+      for (const file of files) {
+        const asset = await uploadImage(file, "MENU_POST");
+        setForm(current => current && { ...current, postImages: [...(current.postImages ?? []), {assetId: asset.id}] });
+      }
+    } catch (e) {
+      notify((e as Error).message, true);
+    } finally {
+      setUploadingPostImage(false);
     }
   };
   const save = async (status: string) => {
-    if (!form) return;
+    if (!form || uploadingPostImage) return;
+    if (status === "OPEN" && (!inventory || stockErrors.size)) return;
     if (!priceRules) {
       notify("Chưa tải được quy tắc giá; chưa lưu menu", true);
       return;
@@ -4690,7 +4786,10 @@ function DailyMenus() {
       const closesAt = form.closeTime
         ? `${closeDay}T${form.closeTime}:00+07:00`
         : `${vnDateOffset(closeDay, 1)}T00:00:00+07:00`;
-      const { existingItems, ...menuForm } = form;
+      const { existingItems, postImageInput, post_image_url, post_image_asset_id, post_images, ...menuForm } = form;
+      menuForm.items = form.items.map((item: Row) => ({ ...item,
+        prices: item.prices.filter((price: Row) => price.unitPrice !== ""),
+      }));
       await mutate(
         "/admin/menus" + (form.id ? "/" + form.id : ""),
         { ...menuForm, closesAt, status, expectedVersion: form.version },
@@ -4729,16 +4828,18 @@ function DailyMenus() {
         : f,
     );
   const toggleMenuItem = (product: Row, checked: boolean) => {
+    setExpandedProductId(current => checked ? product.id : current === product.id ? null : current);
     setForm((f) => {
       if (!f) return f;
       const cached = (f.existingItems ?? []).find((i: Row) => i.productId === product.id);
       if (checked) {
+        const level = inventory?.find((row: Row) => row.id === product.id);
+        const prices = menuPrices(level?.average_cost ?? "", groups ?? [], priceRules);
+        const highest = prices.reduce((max, price) => Math.max(max, Number(price.unitPrice)), 0);
         const item = cached ?? {
           productId: product.id, availableQty: "0",
-          costPrice: product.default_cost_price ?? "",
-          salePrice: "",
-          allowedGroupIds: null,
-          prices: menuPrices(product.default_cost_price ?? "", groups ?? [], priceRules),
+          listPrice: Math.max(Number(product.list_price ?? 0), highest) || "",
+          allowedGroupIds: null, prices,
         };
         return { ...f, items: [...f.items, { ...item, enabled: true,
           allowedGroupIds: f.audienceMode === "PRODUCT" ? item.allowedGroupIds : null }] };
@@ -4759,25 +4860,32 @@ function DailyMenus() {
   };
   const menuGroupNames = form?.allowedGroupIds == null ? "Tất cả nhóm" : form.allowedGroupIds
     .map((id: string) => groups?.find((g: Row) => g.id === id)?.name ?? "Nhóm đã ngừng dùng").join(", ");
-  const filteredProducts = (products ?? [])
-    .filter((p: Row) => {
-      if (adminView && shopOf(p) !== shopId) return false;
-      const selected = form?.items.some((i: Row) => i.productId === p.id);
-      const matchesCategory =
-        productCategory === "all" || p.category_id === productCategory;
-      const matchesSearch =
-        !productSearch ||
-        [p.name, p.sku]
-          .join(" ")
-          .toLocaleLowerCase("vi-VN")
-          .includes(productSearch.toLocaleLowerCase("vi-VN"));
-      return p.active && !p.deleted_at && (selectedOnly ? selected : selected || (matchesCategory && matchesSearch));
-    })
-    .sort(
-      (a: Row, b: Row) =>
-        Number(form?.items.some((i: Row) => i.productId === b.id)) -
-        Number(form?.items.some((i: Row) => i.productId === a.id)),
-    );
+  const selectedProducts = new Map<string, Row>((form?.items ?? []).map((item: Row) => [item.productId, item]));
+  const stockByProduct = new Map<string, Row>((inventory ?? []).map((row: Row) => [row.id, row]));
+  const stockErrors = new Map<string, string>();
+  if (inventory) {
+    for (const [id, item] of selectedProducts) {
+      const level = stockByProduct.get(id);
+      const available = level?.quantity ?? 0;
+      if (item.enabled && Number(item.availableQty) > Number(available)) {
+        const productName = level?.name ?? products?.find((product: Row) => product.id === id)?.name ?? "Sản phẩm";
+        stockErrors.set(id, `${productName}: chỉ còn ${qty(available)} ${level?.unit ?? "đơn vị"} trong kho.`);
+      }
+    }
+  }
+  const searchText = productSearch.trim().toLocaleLowerCase("vi-VN");
+  const filteredProducts = (products ?? []).filter((p: Row) => {
+    if (!p.active || p.deleted_at) return false;
+    if (selectedOnly) return selectedProducts.has(p.id);
+    const matchesCategory = productCategory === "all" || p.category_id === productCategory;
+    const matchesSearch = `${p.name} ${p.sku}`.toLocaleLowerCase("vi-VN").includes(searchText);
+    return matchesCategory && matchesSearch;
+  });
+  const showSelectedProducts = (show: boolean) => {
+    if (show === selectedOnly) return;
+    setSelectedOnly(show);
+    setShownProductCount(menuProductPageSize);
+  };
   const roundGroups = [
     { id: "all", label: "Tất cả", states: [] },
     { id: "live", label: "Đang diễn ra", states: ["OPEN", "SOLD_OUT"] },
@@ -4786,7 +4894,6 @@ function DailyMenus() {
     { id: "ended", label: "Đã kết thúc", states: ["CLOSED", "EXPIRED"] },
   ];
   const visibleMenus = (menus ?? []).filter((menu: Row) =>
-    (!adminView || shopOf(menu) === shopId) &&
     (roundFilter === "all" || roundGroups.find((group) => group.id === roundFilter)?.states.includes(effectiveStatus(menu))),
   );
   return (
@@ -4797,29 +4904,227 @@ function DailyMenus() {
       >
         <button
           className="primary"
-          disabled={!online || !products || !categories || !groups || !priceRules}
+          disabled={!online || busy || uploadingPostImage || !products || !categories || !groups || !priceRules || !inventory || !pickupPoints}
           onClick={() => edit()}
         >
           Tạo menu ngày
         </button>
       </Heading>
-      {adminView && <div className="toolbar">
-        <ShopSelect shops={shops ?? []} value={shopId} onChange={(id) => {
-          setForm(null);
-          setStockMenuId(null);
-          setShopId(id);
-        }} />
-      </div>}
       {form && (
         <section className="panel menu-editor" ref={editorRef} aria-label={form.id ? "Sửa menu" : "Tạo menu"}>
           <div className="panel-head menu-editor-head">
             <div><h2>{form.id ? "Sửa menu" : "Tạo menu"}</h2><p className="muted">{form.saleDate} · {form.id ? "Cập nhật đợt bán" : "Đợt bán mới"}</p></div>
-            <button onClick={() => setForm(null)}>Đóng biểu mẫu</button>
+            <button disabled={busy || uploadingPostImage} onClick={() => setForm(null)}>Đóng biểu mẫu</button>
           </div>
           <div className="form">
             <div className="menu-editor-layout">
+            <section className="menu-products-area" aria-label="Chọn sản phẩm mở bán">
+              <div className="menu-products-heading">
+                <h3>Sản phẩm mở bán</h3>
+              </div>
+              <div className="menu-product-toolbar" role="group" aria-label="Danh sách sản phẩm">
+                <button type="button" aria-pressed={!selectedOnly} onClick={() => showSelectedProducts(false)}>Danh mục</button>
+                <button type="button" aria-pressed={selectedOnly} onClick={() => showSelectedProducts(true)}>Đã chọn ({form.items.length})</button>
+              </div>
+            {!selectedOnly && <div className="form-grid menu-product-filters">
+              <Field label="Lọc theo danh mục">
+                <select
+                  value={productCategory}
+                  onChange={(e) => {
+                    setProductCategory(e.target.value);
+                    setShownProductCount(menuProductPageSize);
+                  }}
+                >
+                  <option value="all">Tất cả danh mục</option>
+                  {categories
+                    ?.filter((category: Row) => category.active)
+                    .map((category: Row) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+              <Field label="Tìm theo tên hoặc SKU">
+                <input
+                  value={productSearch}
+                  onChange={(e) => {
+                    setProductSearch(e.target.value);
+                    setShownProductCount(menuProductPageSize);
+                  }}
+                  placeholder="Ví dụ: rau muống hoặc SKU-000009"
+                />
+              </Field>
+            </div>}
+            <div className="menu-product-list">
+              {filteredProducts.slice(0, shownProductCount).map((p: Row) => {
+                  const item = selectedProducts.get(p.id);
+                  const stock = stockByProduct.get(p.id);
+                  const stockQuantity = stock?.quantity ?? 0;
+                  const unit = stock?.unit ?? units?.find((u: Row) => u.id === p.unit_id)?.label ?? "đơn vị";
+                  const expanded = !!item && expandedProductId === p.id;
+                  const settingsId = "menu-product-settings-" + p.id;
+                  const stockError = stockErrors.get(p.id);
+                  const stockErrorId = settingsId + "-stock-error";
+                  return (
+                    <article key={p.id} className={"menu-product" + (item ? " selected" : "") + (expanded ? " expanded" : "")} data-product-id={p.id}>
+                      <div className="menu-product-summary">
+                        <span className="menu-stock-image" aria-hidden="true">
+                          <Icon icon={faImage} />
+                          {!!p.images?.length && <img src={productImageSrc(p.images[0])} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+                        </span>
+                        <div className="menu-pick-title">
+                          <strong>{p.name}</strong>
+                          <small>{p.sku} · {unit}</small>
+                          <small className={Number(stockQuantity) <= 0 ? "menu-stock-empty" : "menu-card-stock"}>
+                            {Number(stockQuantity) > 0 ? `Tồn kho ${qty(stockQuantity)} ${unit}` : "Hết hàng trong kho"}
+                          </small>
+                        </div>
+                      </div>
+                      <div className="menu-product-actions">
+                        {item && (
+                          <span className={stockError ? "menu-stock-empty" : "muted"}>
+                            {stockError ? "Vượt tồn kho" : Number(item.availableQty) > 0 ? `Bán ${qty(item.availableQty)} ${unit}` : "Chưa nhập lượng bán"}
+                          </span>
+                        )}
+                        <button type="button" disabled={!online || busy} aria-expanded={item ? expanded : undefined}
+                          aria-controls={expanded ? settingsId : undefined} onClick={() => {
+                            if (item) setExpandedProductId(expanded ? null : p.id);
+                            else toggleMenuItem(p, true);
+                          }}>{item ? (expanded ? "Thu gọn" : "Chỉnh") : "Chọn"}</button>
+                        {item && (
+                          <button type="button" className="ghost" disabled={!online || busy}
+                            onClick={() => toggleMenuItem(p, false)}>Bỏ chọn</button>
+                        )}
+                      </div>
+                      {expanded && item && (
+                        <div className="menu-selected-product" id={settingsId}>
+                          <ProductImageGallery images={p.images ?? []} name={p.name} />
+                        <div className="menu-line-fields">
+                          <p className="muted menu-pricing-note">Giá vốn bình quân {stock?.average_cost == null ? "chưa có" : money(stock.average_cost) + " / " + unit}</p>
+                          <Field
+                            label={`Lượng còn có thể bán (${unit})`}
+                          >
+                            <input
+                              type="number"
+                              min="0"
+                              max={inventory ? stockQuantity : undefined}
+                              step={p.quantity_step}
+                              aria-invalid={!!stockError}
+                              aria-describedby={stockError ? stockErrorId : undefined}
+                              value={item.availableQty}
+                              onChange={(e) =>
+                                changeItem(p.id, {
+                                  availableQty: e.target.value,
+                                })
+                              }
+                            />
+                          </Field>
+                          {stockError && <small id={stockErrorId} className="menu-stock-empty">{stockError}</small>}
+                          <Field label="Giá niêm yết (đ)">
+                            <input type="number" min="0" step="1" value={item.listPrice}
+                              onChange={e => {
+                                setDiscountDrafts({});
+                                changeItem(p.id, {listPrice:e.target.value});
+                              }} />
+                          </Field>
+                          {(groups ?? []).filter((g: Row) => g.active).map((g: Row) => {
+                            const sale = String(item.prices.find((price: Row) => price.groupId === g.id)?.unitPrice ?? "");
+                            const list = String(item.listPrice ?? "");
+                            const valid = /^\d+$/.test(list) && /^\d+$/.test(sale);
+                            const listAmount = valid ? BigInt(list) : 0n;
+                            const saleAmount = valid ? BigInt(sale) : 0n;
+                            const discount = valid && listAmount > 0n && saleAmount <= listAmount
+                              ? ((listAmount - saleAmount) * 100n * 2n + listAmount) / (2n * listAmount)
+                              : null;
+                            const discountKey = p.id + ":" + g.id;
+                            return <div key={g.id}>
+                              <Field label={"Giá bán · " + g.name}>
+                                <input type="number" min="0" step="1" value={sale}
+                                  onChange={e => {
+                                    setDiscountDrafts(current => {
+                                      const next = {...current};
+                                      delete next[discountKey];
+                                      return next;
+                                    });
+                                    changeItem(p.id, {prices:[...item.prices.filter((price: Row) => price.groupId !== g.id),
+                                      {groupId:g.id,unitPrice:e.target.value}]});
+                                  }} />
+                              </Field>
+                              <Field label={"Giảm (%) · " + g.name}>
+                                <input type="number" min="0" max="100" step="1" inputMode="numeric"
+                                  disabled={!/^\d+$/.test(list) || BigInt(list) === 0n}
+                                  value={discountDrafts[discountKey] ?? discount?.toString() ?? ""}
+                                  onChange={e => {
+                                    const value = e.target.value;
+                                    if (value !== "" && (!/^\d+$/.test(value) || Number(value) > 100)) return;
+                                    setDiscountDrafts(current => ({...current, [discountKey]: value}));
+                                    if (value === "") return;
+                                    const base = BigInt(list);
+                                    const price = (base * (100n - BigInt(value)) + 50n) / 100n;
+                                    changeItem(p.id, {prices:[...item.prices.filter((entry: Row) => entry.groupId !== g.id),
+                                      {groupId:g.id,unitPrice:price.toString()}]});
+                                  }} />
+                              </Field>
+                              <small className="menu-discount">Giá bán được làm tròn đến đồng.</small>
+                              {valid && saleAmount > listAmount && <small className="menu-stock-empty">Giá bán vượt giá niêm yết</small>}
+                            </div>;
+                          })}
+                          {form.audienceMode !== "PRODUCT" ? (
+                            <p className="muted">Nhóm mua theo menu: {menuGroupNames}.
+                              {p.allowed_group_ids != null && <> Sản phẩm vẫn giữ giới hạn nhóm đã cấu hình trong danh mục.</>}
+                            </p>
+                          ) : p.allowed_group_ids == null ? (
+                            <AudienceFields
+                              groups={groups ?? []}
+                              value={item.allowedGroupIds ?? null}
+                              onChange={(allowedGroupIds) =>
+                                changeItem(p.id, { allowedGroupIds })
+                              }
+                              legend="Nhóm được phép mua món này"
+                            />
+                          ) : (
+                            <p className="muted">
+                              Nhóm mua được khóa theo sản phẩm: {p.allowed_group_ids
+                                .map(
+                                  (id: string) =>
+                                    groups?.find((g: Row) => g.id === id)?.name ??
+                                    "Nhóm đã ngừng dùng",
+                                )
+                                .join(", ")}
+                            </p>
+                          )}
+                          {form.id && ["OPEN", "SOLD_OUT"].includes(effectiveStatus(form)) && (
+                          <label className="check">
+                            <input
+                              type="checkbox"
+                              checked={item.enabled}
+                              onChange={(e) =>
+                                changeItem(p.id, { enabled: e.target.checked })
+                              }
+                            />
+                            Đang bán món này
+                          </label>
+                          )}
+                        </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              {!filteredProducts.length && (
+                <p className="empty">{selectedOnly ? "Chưa có sản phẩm được chọn." : "Không có sản phẩm phù hợp với bộ lọc."}</p>
+              )}
+            </div>
+            {shownProductCount < filteredProducts.length && <button type="button" className="menu-products-more"
+              onClick={() => setShownProductCount(count => count + menuProductPageSize)}>
+              Xem thêm · {filteredProducts.length - shownProductCount} sản phẩm
+            </button>}
+            </section>
             <aside className="menu-settings" aria-label="Thiết lập menu">
-            <h3>Lịch bán</h3>
+            <details className="menu-form-disclosure" name="menu-settings-section">
+            <summary>Thời gian mở bán</summary>
+            <div className="menu-settings-body">
             <div className="form-grid menu-schedule-grid">
               <Field label="Ngày bắt đầu bán">
                 <input
@@ -4885,9 +5190,28 @@ function DailyMenus() {
               </Field>
             </div>
             <p className="muted">
-              Các đợt có thể trùng thời gian nếu không trùng sản phẩm. Để trống
-              giờ đóng để bán đến hết ngày đã chọn.
+              Để trống giờ đóng để bán đến hết ngày đã chọn.
             </p>
+            </div>
+            </details>
+            <details className="menu-form-disclosure" name="menu-settings-section">
+            <summary>Chọn các điểm giao</summary>
+            <div className="menu-settings-body">
+            <fieldset className="audience-fields" aria-label="Điểm nhận tập trung miễn phí">
+              {(pickupPoints ?? []).filter((point: Row) => point.active || form.pickupSlotIds.includes(point.id)).map((point: Row) =>
+                <label key={point.id} className="check">
+                  <input type="checkbox" checked={form.pickupSlotIds.includes(point.id)} onChange={e =>
+                    setForm({ ...form, pickupSlotIds: e.target.checked ? [...form.pickupSlotIds, point.id] : form.pickupSlotIds.filter((id: string) => id !== point.id) })} />
+                  <span>{point.name}{!point.active && " (đã ngừng dùng)"}</span>
+                </label>)}
+              {!pickupPoints?.some((point: Row) => point.active) &&
+                <p className="muted">Chưa có điểm nhận khả dụng.</p>}
+            </fieldset>
+            </div>
+            </details>
+            <details className="menu-form-disclosure" name="menu-settings-section">
+            <summary>Nhóm khách hàng</summary>
+            <div className="menu-settings-body">
             <fieldset className="audience menu-audience">
               <legend>Nhóm được phép mua trong menu</legend>
               <label className="check">
@@ -4914,187 +5238,78 @@ function DailyMenus() {
                 Tùy chỉnh theo từng sản phẩm
               </label>
             </fieldset>
-            <details className="menu-form-disclosure" open={!!(form.id && form.postTitle)}>
-              <summary>Bài đăng và lịch nhận hàng <small>Tùy chọn</small></summary>
-              <div className="form">
-              <Field label="Tiêu đề bài trên bảng tin"><input value={form.postTitle ?? ""} maxLength={150} onChange={e=>setForm({...form,postTitle:e.target.value})}/></Field>
-              <Field label="Nội dung giới thiệu"><textarea value={form.postBody ?? ""} maxLength={2000} onChange={e=>setForm({...form,postBody:e.target.value})}/></Field>
-              <Field label="Ảnh bài đăng (URL HTTPS)"><input type="url" value={form.postImageUrl ?? ""} onChange={e=>setForm({...form,postImageUrl:e.target.value})}/></Field>
-              <Field label="Thời gian / hướng dẫn nhận hàng"><textarea value={form.receivingNote ?? ""} maxLength={500} onChange={e=>setForm({...form,receivingNote:e.target.value})}/></Field>
+            </div>
+            </details>
+            <details className="menu-form-disclosure" name="menu-settings-section">
+              <summary>Bài đăng</summary>
+              <div className="menu-settings-body form menu-post-editor">
+              <div className="post-editor-heading"><div><h3>Soạn bài mở bán</h3><p>Giới thiệu sản phẩm và thông tin nhận hàng tới khách.</p></div><span>{form.items.length} sản phẩm đã chọn</span></div>
+              <div className="post-editor-columns"><div className="post-editor-fields">
+              <Field label="Tiêu đề bài trên bảng tin"><input placeholder="Ví dụ: Thực phẩm tươi hôm nay" value={form.postTitle ?? ""} maxLength={150} onChange={e=>setForm({...form,postTitle:e.target.value})}/></Field>
+              <Field label="Nội dung giới thiệu"><textarea placeholder="Giới thiệu các sản phẩm và thông tin cần lưu ý…" value={form.postBody ?? ""} maxLength={2000} onChange={e=>setForm({...form,postBody:e.target.value})}/></Field>
+              <div className="post-upload"><label className="post-upload-label"><span className="post-upload-icon" aria-hidden="true">＋</span><span><strong>Thêm ảnh từ thiết bị</strong><small>{(form.postImages ?? []).length}/5 ảnh · JPEG, PNG, WebP</small></span>
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp"
+                  disabled={!online || busy || uploadingPostImage}
+                  aria-describedby="menu-post-image-hint"
+                  onChange={e => {
+                    const files = Array.from(e.currentTarget.files ?? []);
+                    e.currentTarget.value = "";
+                    if (files.length) void uploadPostImages(files);
+                  }} />
+              </label><small id="menu-post-image-hint" className="muted">Tối đa 5 ảnh, mỗi ảnh 5 MiB. Ảnh đầu tiên là ảnh đại diện.</small></div>
+              {uploadingPostImage && <small role="status">Đang tải ảnh…</small>}
+              <Field label="Hoặc dán URL ảnh HTTPS">
+                <div className="menu-post-url"><input type="url" disabled={uploadingPostImage} value={form.postImageInput ?? ""}
+                  placeholder="https://…" onChange={e => setForm({ ...form, postImageInput: e.target.value })} />
+                  <button type="button" disabled={busy || uploadingPostImage || !form.postImageInput?.trim()} onClick={() => {
+                    const url = form.postImageInput.trim();
+                    if ((form.postImages ?? []).length >= 5) return notify("Bài đăng được chọn tối đa 5 ảnh", true);
+                    if (!/^https:\/\//i.test(url)) return notify("URL ảnh phải bắt đầu bằng https://", true);
+                    if ((form.postImages ?? []).some((image: Row) => image.url === url)) return notify("URL ảnh đã được thêm", true);
+                    setForm({ ...form, postImages: [...(form.postImages ?? []), {url}], postImageInput: "" });
+                  }}>Thêm ảnh</button></div>
+              </Field>
+              {(form.postImages ?? []).length > 0 && <div className="menu-post-gallery">{form.postImages.map((image: Row, index: number) =>
+                <div className="menu-post-image" key={image.assetId ?? image.url}>
+                  <img src={image.assetId ? productImageSrc(image.assetId) : image.url} alt={`Ảnh bài đăng ${index + 1}`} />
+                  <div><small>{index === 0 ? "Ảnh đại diện" : `Ảnh ${index + 1}`}</small>
+                    <button type="button" className="small" disabled={busy || uploadingPostImage} onClick={() =>
+                      setForm({ ...form, postImages: form.postImages.filter((_: Row, i: number) => i !== index) })}>Gỡ</button></div>
+                </div>)}</div>}
+              <Field label="Hướng dẫn nhận hàng"><textarea value={form.receivingNote ?? ""} maxLength={500} onChange={e=>setForm({...form,receivingNote:e.target.value})}/></Field>
+              </div><aside className="post-preview" aria-label="Xem trước bài đăng">
+                <div className="post-preview-caption">Xem trước trên bảng tin</div>
+                <div className="post-preview-card"><div className="feed-author"><span className="feed-avatar" aria-hidden="true">F</span><div><strong>Cửa hàng</strong><small>Bài đăng mở bán</small></div></div>
+                  <h4>{form.postTitle || "Tiêu đề bài đăng"}</h4>
+                  <p className={form.postBody ? "" : "muted"}>{form.postBody || "Nội dung giới thiệu sẽ xuất hiện tại đây."}</p>
+                  {(form.postImages ?? []).length > 0 ? <div className="post-preview-images">{form.postImages.map((image: Row, index: number) => <img key={image.assetId ?? image.url} src={image.assetId ? productImageSrc(image.assetId) : image.url} alt={`Ảnh xem trước ${index + 1}`} />)}</div> : <div className="post-preview-empty">Ảnh bài đăng sẽ xuất hiện ở đây</div>}
+                  <div className="post-preview-products"><strong>Sản phẩm mở bán</strong>{form.items.length ? form.items.slice(0,3).map((item: Row) => <span key={item.productId}>{products?.find((p: Row) => p.id === item.productId)?.name ?? "Sản phẩm"}</span>) : <span>Chọn sản phẩm để hiển thị trong bài.</span>}{form.items.length > 3 && <small>Và {form.items.length - 3} sản phẩm khác</small>}</div>
+                  <small>Giá và ưu đãi hiển thị theo nhóm khách hàng.</small>
+                </div>
+              </aside></div>
               </div>
             </details>
             </aside>
-            <section className="menu-products-area" aria-label="Chọn sản phẩm mở bán">
-              <div className="menu-products-heading">
-                <h3>Sản phẩm mở bán</h3>
-                <span className="muted">Đã chọn {form.items.length} sản phẩm</span>
-              </div>
-              <p className="muted">Chọn món để nhập lượng bán, giá nhập và nhóm khách. Các món đã chọn nằm ở đầu danh sách.</p>
-            <div className="form-grid menu-product-filters">
-              <Field label="Lọc theo danh mục">
-                <select
-                  value={productCategory}
-                  onChange={(e) => setProductCategory(e.target.value)}
-                >
-                  <option value="all">Tất cả danh mục</option>
-                  {categories
-                    ?.filter((category: Row) => category.active)
-                    .map((category: Row) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                </select>
-              </Field>
-              <Field label="Tìm theo tên hoặc SKU">
-                <input
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Ví dụ: rau muống hoặc SKU-000009"
-                />
-              </Field>
-            </div>
-            <label className="check menu-selected-filter"><input type="checkbox" checked={selectedOnly} onChange={(e) => setSelectedOnly(e.target.checked)} /> Chỉ hiện sản phẩm đã chọn</label>
-            <div className="menu-product-list">
-              {filteredProducts.map((p: Row) => {
-                  const item = form.items.find(
-                    (i: Row) => i.productId === p.id,
-                  );
-                  return (
-                    <article key={p.id} className={"menu-product" + (item ? " selected" : "")} data-product-id={p.id}>
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={!!item}
-                          disabled={!online || busy}
-                          onChange={(e) => toggleMenuItem(p, e.target.checked)}
-                        />
-                        <span className="menu-stock-image" aria-hidden="true">
-                          <Icon icon={faImage} />
-                          {!!p.images?.length && <img src={productImageSrc(p.images[0])} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
-                        </span>
-                        <span className="menu-pick-title"><strong>{p.name}</strong><small>{p.sku} · {units?.find((u: Row) => u.id === p.unit_id)?.label ?? "đơn vị"}</small></span>
-                      </label>
-                      {item && (
-                        <div className="menu-selected-product">
-                          <ProductImageGallery images={p.images ?? []} name={p.name} />
-                        <div className="menu-line-fields">
-                          {form.audienceMode !== "PRODUCT" ? (
-                            <p className="muted">Nhóm mua theo menu: {menuGroupNames}.
-                              {p.allowed_group_ids != null && <> Sản phẩm vẫn giữ giới hạn nhóm đã cấu hình trong danh mục.</>}
-                            </p>
-                          ) : p.allowed_group_ids == null ? (
-                            <AudienceFields
-                              groups={groups ?? []}
-                              value={item.allowedGroupIds ?? null}
-                              onChange={(allowedGroupIds) =>
-                                changeItem(p.id, { allowedGroupIds })
-                              }
-                              legend="Nhóm được phép mua món này"
-                            />
-                          ) : (
-                            <p className="muted">
-                              Nhóm mua được khóa theo sản phẩm: {p.allowed_group_ids
-                                .map(
-                                  (id: string) =>
-                                    groups?.find((g: Row) => g.id === id)?.name ??
-                                    "Nhóm đã ngừng dùng",
-                                )
-                                .join(", ")}
-                            </p>
-                          )}
-                          <Field
-                            label={`Lượng còn có thể bán (${units?.find((u: Row) => u.id === p.unit_id)?.label ?? "đơn vị"})`}
-                          >
-                            <input
-                              type="number"
-                              min="0"
-                              step={p.quantity_step}
-                              value={item.availableQty}
-                              onChange={(e) =>
-                                changeItem(p.id, {
-                                  availableQty: e.target.value,
-                                })
-                              }
-                            />
-                          </Field>
-                          <Field label="Giá nhập / đơn vị (đ)">
-                            <input
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={item.costPrice}
-                              onChange={(e) =>
-                                changeItem(p.id, {
-                                  costPrice: e.target.value,
-                                  prices: menuPrices(e.target.value, groups ?? [], priceRules),
-                                })
-                              }
-                            />
-                          </Field>
-                          <Field label="Giá bán chung của món (đ)">
-                            <input type="number" min="0" step="1" placeholder="Theo quy tắc giá"
-                              value={item.salePrice} onChange={(e) => changeItem(p.id, { salePrice: e.target.value })} />
-                          </Field>
-                          <p className="muted menu-pricing-note">Để trống để tính giá bán theo quy tắc từng nhóm. Giá bán chung áp dụng cho các nhóm được mua món.</p>
-                          {groups
-                            ?.filter((g: Row) => g.active)
-                            .map((g: Row) => (
-                              <Field label={"Giá bán · " + g.name} key={g.id}>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={
-                                    item.salePrice !== "" ? item.salePrice : item.prices.find(
-                                      (x: Row) => x.groupId === g.id,
-                                    )?.unitPrice ?? ""
-                                  }
-                                  readOnly
-                                  aria-readonly="true"
-                                />
-                              </Field>
-                            ))}
-                          {form.id && ["OPEN", "SOLD_OUT"].includes(effectiveStatus(form)) && (
-                          <label className="check">
-                            <input
-                              type="checkbox"
-                              checked={item.enabled}
-                              onChange={(e) =>
-                                changeItem(p.id, { enabled: e.target.checked })
-                              }
-                            />
-                            Đang bán món này
-                          </label>
-                          )}
-                        </div>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
-              {!filteredProducts.length && (
-                <p className="empty">{selectedOnly ? "Chưa có sản phẩm được chọn." : "Không có sản phẩm phù hợp với bộ lọc."}</p>
-              )}
-            </div>
-            </section>
             </div>
             <footer className="menu-save-bar">
-              <span><strong>{form.items.length} sản phẩm đã chọn</strong><small>Kiểm tra lịch bán và lượng hàng trước khi lưu.</small></span>
+              <span>
+                <strong>{form.items.length} sản phẩm đã chọn</strong>
+                {stockErrors.size > 0 && <small className="menu-stock-empty" aria-live="polite">{stockErrors.values().next().value}</small>}
+              </span>
             <div className="actions menu-editor-actions">
-              <button disabled={!online || busy || !priceRules} onClick={() => save("DRAFT")}>
+              <button disabled={!online || busy || uploadingPostImage || !priceRules} onClick={() => save("DRAFT")}>
                 Lưu nháp
               </button>
               <button
                 className="primary"
-                disabled={!online || busy || !form.items.length || !priceRules}
+                disabled={!online || busy || uploadingPostImage || !form.items.length || !priceRules || !inventory || stockErrors.size > 0}
                 onClick={() => save("OPEN")}
               >
                 Lưu và mở bán
               </button>
               {form.id && (
                 <button
-                  disabled={!online || busy || !priceRules}
+                  disabled={!online || busy || uploadingPostImage || !priceRules}
                   onClick={() => save("CLOSED")}
                 >
                   Lưu và đóng bán
@@ -5114,41 +5329,28 @@ function DailyMenus() {
             </button>
           ))}
         </div>
-        <div className="panel table-scroll">
-        <table className="menu-round-table">
-          <thead>
-            <tr>
-              <th>Đợt bán</th>
-              <th>Trạng thái</th>
-              <th>Thời gian</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
+        <div className="menu-history-posts">
             {visibleMenus.map((m: Row) => (
-              <React.Fragment key={m.id}><tr className="menu-round-row">
-                <td className="menu-round-name">
-                  <strong>{m.post_title || `Đợt ${m.sale_date}`}</strong>
-                  <small>ID {m.id}</small>
-                </td>
-                <td data-label="Trạng thái">
-                  <Status value={effectiveStatus(m)} />
-                </td>
-                <td className="menu-round-time" data-label="Lịch bán">
-                  <small>Mở {date(m.opens_at)}</small>
-                  <small>Đóng {date(m.closes_at)}</small>
-                </td>
-                <td className="menu-round-action-cell">
+              <article className="panel menu-history-post" key={m.id}>
+                <header className="menu-history-post-head"><div><span className="menu-history-post-kicker">BÀI MỞ BÁN · {m.sale_date}</span><h3>{m.post_title || `Đợt ${m.sale_date}`}</h3><small>ID {m.id}</small></div><Status value={effectiveStatus(m)} /></header>
+                {m.post_body && <ExpandablePostText className="menu-history-post-body" text={m.post_body} />}
+                {(m.post_images?.length || m.post_image_asset_id || m.post_image_url) && <div className="menu-history-images">{(m.post_images?.length ? m.post_images : [{assetId:m.post_image_asset_id,url:m.post_image_url}]).map((image: Row, index: number) =>
+                  <img key={image.assetId || image.url || index} src={image.assetId ? productImageSrc(image.assetId) : image.url} alt={`Ảnh bài đăng ${index+1}`} loading="lazy" />)}</div>}
+                <div className="menu-history-time"><span>Mở <strong>{date(m.opens_at)}</strong></span><span>Đóng <strong>{date(m.closes_at)}</strong></span></div>
+                <MenuPostSocial menu={m} state={effectiveStatus(m)} />
+                {stockMenuId === m.id && <div className="menu-history-stock" id={"menu-stock-" + m.id}>
+                  <MenuStock menu={m} products={products ?? []} state={effectiveStatus(m)} />
+                </div>}
                   <div className="actions menu-round-actions">
                     <button aria-expanded={stockMenuId === m.id} aria-controls={"menu-stock-" + m.id}
                       onClick={() => setStockMenuId(stockMenuId === m.id ? null : m.id)}>
                       {stockMenuId === m.id ? "Ẩn tồn / trạng thái" : "Xem tồn / trạng thái"}
                     </button>
-                    <button disabled={!online || busy || !priceRules} onClick={() => edit(m)}>
+                    <button className="primary" disabled={m.legacy_store_menu || !online || busy || uploadingPostImage || !priceRules} onClick={() => edit(m)}>
                       Sửa món / giá / kho
                     </button>
-                    {m.status !== "OPEN" && new Date(m.closes_at).getTime() > clock && m.sale_date >= vnDay() && (
-                      <button
+                    {!m.legacy_store_menu && m.status !== "OPEN" && new Date(m.closes_at).getTime() > clock && m.sale_date >= vnDay() && (
+                      <button className="primary"
                         disabled={!online || busy}
                         onClick={() => changeStatus(m, "OPEN")}
                       >
@@ -5156,7 +5358,7 @@ function DailyMenus() {
                       </button>
                     )}
                     {m.status === "OPEN" && effectiveStatus(m) !== "EXPIRED" && (
-                      <button
+                      <button className="menu-close-action"
                         disabled={!online || busy}
                         onClick={() => changeStatus(m, "CLOSED")}
                       >
@@ -5170,15 +5372,8 @@ function DailyMenus() {
                       Sao chép
                     </button>
                   </div>
-                </td>
-              </tr>
-              {stockMenuId === m.id && <tr className="menu-stock-row"><td colSpan={4} id={"menu-stock-" + m.id}>
-                <MenuStock menu={m} products={products ?? []} state={effectiveStatus(m)} />
-              </td></tr>}
-              </React.Fragment>
+              </article>
             ))}
-          </tbody>
-        </table>
         {!menus ? <p className="spinner">Đang tải đợt bán…</p> : !visibleMenus.length && <Empty title={menus.length ? "Không có đợt bán phù hợp" : "Chưa có menu"} />}
       </div>
       </section>
@@ -5230,13 +5425,7 @@ const overviewPresets = [
 ] as const;
 
 function Overview() {
-  const { session } = useApp();
-  const isSeller = session.user.role === "SELLER";
-  const [selectedShop, setSelectedShop] = useState("");
-  const shopId = isSeller ? String(session.user.shop_id ?? "") : selectedShop;
-  const { data: shops } = useData("/marketplace/shops");
-  const shopName = isSeller ? "Shop của bạn" : shops?.find((shop: Row) => shop.id === shopId)?.name ?? "Tất cả shop";
-  const reportPrefix = isSeller ? "/shop/reports" : "/admin/reports";
+  const reportPrefix = "/admin/reports";
   const [range, setRange] = useState(() => {
     const end = vnDay();
     return { start: vnDateOffset(end, -6), end };
@@ -5245,9 +5434,9 @@ function Overview() {
   const [preset, setPreset] = useState("week");
   const [details, setDetails] = useState(false);
   const { reload } = useApp();
-  const query = new URLSearchParams({ from: range.start, to: range.end, ...(shopId ? { shopId } : {}) });
+  const query = new URLSearchParams({ from: range.start, to: range.end });
   const { data: response, loading } = useData(reportPrefix + "/overview?" + query);
-  const data: OverviewData | null = response?.from === range.start && response?.to === range.end && (response?.shopId ?? "") === shopId ? response : null;
+  const data: OverviewData | null = response?.from === range.start && response?.to === range.end ? response : null;
   const applyPreset = (id: string) => {
     const end = vnDay();
     const start = id === "today" ? end : id === "month" ? end.slice(0, 7) + "-01" : vnDateOffset(end, -6);
@@ -5257,8 +5446,7 @@ function Overview() {
   };
   return (
     <>
-      <Heading title="Tổng quan" sub="Doanh thu hàng ghi nhận khi giao thành công; phí giao, VAT và phí sàn được tách riêng." />
-      <div className="toolbar report-shop-filter">{!isSeller && <ShopSelect shops={shops ?? []} value={selectedShop} allLabel="Tất cả shop · tổng hợp toàn sàn" label="Shop báo cáo" onChange={setSelectedShop} />}<p className="muted">Đang xem: <strong>{shopName}</strong></p></div>
+      <Heading title="Tổng quan" sub="Doanh thu hàng ghi nhận khi giao thành công. VAT và phí giao hiển thị riêng." />
       <div className="overview-controls">
         <div className="overview-presets" role="group" aria-label="Khoảng thời gian thống kê">
           {overviewPresets.map(({ id, label }) => <button key={id} type="button" aria-pressed={preset === id} onClick={() => applyPreset(id)}>{label}</button>)}
@@ -5269,25 +5457,17 @@ function Overview() {
           <button type="submit">Áp dụng</button>
         </form>
       </div>
-      {data ? <OverviewDashboard data={data} money={money} statusLabels={statuses} afterPlatformFee={isSeller} /> : loading ? <p className="spinner" role="status">Đang tải tổng quan…</p> : <div className="notice warn" role="status">Chưa tải được tổng quan. Chọn khoảng tối đa 366 ngày hoặc <button className="small" type="button" onClick={reload}>Tải lại</button>.</div>}
-      {data && response?.shops && <section className="panel overview-shop-breakdown" aria-label="Doanh thu theo từng shop">
-        <header className="panel-head"><div><h2>Doanh thu theo từng shop</h2><p className="muted">Cùng khoảng ngày đã chọn. Phí sàn là phần ghi nhận cho nền tảng, không cộng thêm vào doanh thu hàng.</p></div></header>
-        <div className="table-scroll"><table><thead><tr><th>Shop</th><th>Đơn đã giao</th><th>Doanh thu trước phí</th><th>Giá vốn</th><th>Lãi gộp</th><th>Phí nền tảng</th><th>Doanh thu sau phí</th><th>Lãi sau phí</th>{!isSeller && <th>Chi tiết</th>}</tr></thead>
-          <tbody>{response.shops.map((shop: Row) => <tr key={shop.shopId}><td><strong>{shop.name}</strong></td><td>{shop.orders}</td><td>{money(shop.merchandise)}</td><td>{shop.cost === null ? "Chưa đủ dữ liệu" : money(shop.cost)}</td><td>{shop.grossProfit === null ? "Chưa đủ dữ liệu" : money(shop.grossProfit)}</td><td>{money(shop.platformFees)}</td><td>{money(shop.afterPlatformFees)}</td><td>{shop.profitAfterFees === null ? "Chưa đủ dữ liệu" : money(shop.profitAfterFees)}</td>{!isSeller && <td><button type="button" className="small" onClick={() => setSelectedShop(shop.shopId)}>Xem shop</button></td>}</tr>)}</tbody>
-        </table></div>
-      </section>}
+      {data ? <OverviewDashboard data={data} money={money} statusLabels={statuses} /> : loading ? <p className="spinner" role="status">Đang tải tổng quan…</p> : <div className="notice warn" role="status">Chưa tải được tổng quan. Chọn khoảng tối đa 366 ngày hoặc <button className="small" type="button" onClick={reload}>Tải lại</button>.</div>}
       <details className="panel overview-report-details" onToggle={(e) => setDetails(e.currentTarget.open)}>
         <summary>Báo cáo chi tiết theo ngày và tháng</summary>
-        {details && <div className="panel-body"><DailyReports key={shopId} shopId={shopId} shopName={shopName} /></div>}
+        {details && <div className="panel-body"><DailyReports /></div>}
       </details>
     </>
   );
 }
 
-function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }) {
-  const { session } = useApp();
-  const prefix = session.user.role === "SELLER" ? "/shop/reports" : "/admin/reports";
-  const shopQuery = shopId ? "&shopId=" + encodeURIComponent(shopId) : "";
+function DailyReports() {
+  const prefix = "/admin/reports";
   const [day, setDay] = useState(vnDay()),
     [compare, setCompare] = useState(vnDay(new Date(Date.now() - 86400000)));
   const [period, setPeriod] = useState("day");
@@ -5299,14 +5479,13 @@ function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }
   const selectedPeriod = period === "month" ? month : day;
   const comparisonPeriod = period === "month" ? compareMonth : compare;
   const { data: reportData } = useData(period === "month"
-    ? prefix + "/monthly?month=" + month + "&compare=" + compareMonth + shopQuery
-    : prefix + "/daily?date=" + day + "&compare=" + compare + shopQuery);
+    ? prefix + "/monthly?month=" + month + "&compare=" + compareMonth
+    : prefix + "/daily?date=" + day + "&compare=" + compare);
   const data = reportData?.selected?.[period === "month" ? "month" : "day"] === selectedPeriod
-    && reportData?.comparison?.[period === "month" ? "month" : "day"] === comparisonPeriod && (reportData?.shopId ?? "") === shopId ? reportData : null;
+    && reportData?.comparison?.[period === "month" ? "month" : "day"] === comparisonPeriod ? reportData : null;
   const exportCSV = () => {
     const rows = [
       [
-        "Shop",
         "Ngày",
         "Đơn đã giao",
         "Doanh thu hàng",
@@ -5315,12 +5494,8 @@ function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }
         "Lãi gộp",
         "Dòng thiếu giá vốn",
         "VAT",
-        "Phí sàn",
-        "Doanh thu sau phí",
-        "Lãi sau phí",
       ],
       ...(data?.daily ?? []).map((r: Row) => [
-        shopName,
         r.day,
         r.orders,
         r.merchandise,
@@ -5329,9 +5504,6 @@ function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }
         r.grossProfit ?? "",
         r.missingCostLines,
         r.vat,
-        r.platformFees,
-        r.afterPlatformFees,
-        r.profitAfterFees ?? "",
       ]),
     ];
     const url = URL.createObjectURL(
@@ -5341,14 +5513,14 @@ function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "lai-gop-" + (shopId || "tat-ca-shop") + "-" + selectedPeriod + ".csv";
+    a.download = "lai-gop-food-mart-" + selectedPeriod + ".csv";
     a.click();
     URL.revokeObjectURL(url);
   };
   return (
     <>
       <div className="page-heading"><div>
-        <h2>Doanh thu và lãi gộp · {shopName}</h2>
+        <h2>Doanh thu và lãi gộp · Food Mart</h2>
         <p>Ghi nhận theo ngày giao thành công, giờ Việt Nam. Phí giao được tách riêng.</p>
       </div></div>
       <div className="tabs" role="group" aria-label="Kỳ báo cáo">
@@ -5384,9 +5556,6 @@ function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }
               ["merchandise", "Doanh thu hàng"],
               ["cost", "Giá vốn"],
               ["grossProfit", "Lãi gộp"],
-              ["platformFees", "Phí nền tảng"],
-              ["afterPlatformFees", "Doanh thu sau phí"],
-              ["profitAfterFees", "Lãi sau phí"],
               ["shipping", "Phí giao"],
               ["vat", "VAT"],
             ].map(([field, label]) => (
@@ -5434,9 +5603,6 @@ function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }
                   <th>Lãi gộp</th>
                   <th>Phí giao</th>
                   <th>VAT</th>
-                  <th>Phí nền tảng</th>
-                  <th>Doanh thu sau phí</th>
-                  <th>Lãi sau phí</th>
                 </tr>
               </thead>
               <tbody>
@@ -5455,9 +5621,6 @@ function DailyReports({ shopId, shopName }: { shopId: string; shopName: string }
                     </td>
                     <td>{money(r.shipping)}</td>
                     <td>{money(r.vat)}</td>
-                    <td>{money(r.platformFees)}</td>
-                    <td>{money(r.afterPlatformFees)}</td>
-                    <td>{r.profitAfterFees === null ? "Chưa đủ dữ liệu" : money(r.profitAfterFees)}</td>
                   </tr>
                 ))}
               </tbody>

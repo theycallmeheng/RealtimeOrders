@@ -1,10 +1,10 @@
-"""Revenue isolation using SQL queries against a disposable in-memory database."""
+"""Storewide revenue using SQL queries against a disposable in-memory database."""
 from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import Column, Date, DateTime, MetaData, Numeric, String, Table, create_engine
-from app import analytics, marketplace
+from app import analytics
 
 
 @pytest.fixture
@@ -45,7 +45,6 @@ def sales(monkeypatch):
         connection.execute(withdrawals.insert(), [dict(shop_id='a', status='PENDING', amount=10000, period_month=analytics.today().replace(day=1)),
             dict(shop_id='a', status='PAID', amount=5000, period_month=analytics.today().replace(day=1))])
         monkeypatch.setattr(analytics, 'T', metadata.tables)
-        monkeypatch.setattr(marketplace, 'T', metadata.tables)
         class Session:
             async def execute(self, query):
                 return connection.execute(query)
@@ -54,59 +53,24 @@ def sales(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_overview_isolates_shops_and_unknown_costs(sales):
-    result = await analytics.overview(sales, '2026-11-08', '2026-11-08', 'a')
-    assert result['shopId'] == 'a'
-    assert result['totals']['createdOrders'] == 1
-    assert result['totals']['orders'] == 1
-    assert result['totals']['merchandise'] == Decimal(150000)
-    assert result['totals']['grossProfit'] == Decimal(50000)
-    assert result['totals']['platformFees'] == Decimal(15000)
-    assert result['totals']['afterPlatformFees'] == Decimal(135000)
-    assert result['totals']['profitAfterFees'] == Decimal(35000)
-    assert [p['productId'] for p in result['topProducts']] == ['a']
-    assert [shop['shopId'] for shop in result['shops']] == ['a']
-    other = await analytics.overview(sales, '2026-11-08', '2026-11-08', 'b')
-    assert other['totals']['createdOrders'] == 2
-    assert other['totals']['grossProfit'] is None
-
-
-@pytest.mark.asyncio
-async def test_all_shop_breakdown_reconciles_and_includes_zero_sales(sales):
+async def test_overview_combines_historical_sales_and_keeps_unknown_costs(sales):
     result = await analytics.overview(sales, '2026-11-08', '2026-11-08')
-    assert result['shopId'] is None
-    assert sum(shop['merchandise'] for shop in result['shops']) == result['totals']['merchandise'] == Decimal(450000)
-    assert sum(shop['platformFees'] for shop in result['shops']) == result['totals']['platformFees'] == Decimal(45000)
+    assert result['totals']['createdOrders'] == 3
+    assert result['totals']['orders'] == 2
+    assert result['totals']['merchandise'] == Decimal(450000)
     assert result['totals']['grossProfit'] is None
-    assert next(shop for shop in result['shops'] if shop['shopId']=='a')['grossProfit'] == Decimal(50000)
-    assert next(shop for shop in result['shops'] if shop['shopId']=='c')['orders'] == 0
+    assert [p['productId'] for p in result['topProducts']] == ['b','a']
+    assert result['topProducts'][1]['grossProfit'] == Decimal(50000)
+    assert 'shops' not in result and 'platformFees' not in result['totals']
 
 
 @pytest.mark.asyncio
-async def test_day_and_month_keep_scope_in_comparisons_and_series(sales):
-    daily = await analytics.report(sales, '2026-11-08', '2026-11-07', 'a')
-    assert daily['shopId'] == 'a'
-    assert daily['selected']['merchandise'] == '150000.000'
+async def test_daily_and_monthly_reports_reconcile_across_legacy_shop_ids(sales):
+    daily = await analytics.report(sales, '2026-11-08', '2026-11-07')
+    assert Decimal(daily['selected']['merchandise']) == Decimal(450000)
     assert daily['comparison']['orders'] == 0
     assert len(daily['daily']) == 7
-    monthly = await analytics.monthly_report(sales, '2026-11', '2026-10', 'a')
-    assert monthly['shopId'] == 'a'
-    assert Decimal(monthly['selected']['merchandise']) == Decimal(150000)
-    assert monthly['selected']['grossProfit'] is not None
-    assert sum(row['orders'] for row in monthly['daily']) == 1
-
-
-@pytest.mark.asyncio
-async def test_balance_uses_after_fee_receipts_less_withdrawals(sales):
-    result = await marketplace.balance(sales, 'a')
-    assert result['available'] == Decimal(120000)  # 150000 - 15000 - 10000 - 5000
-    assert result['fees'] == Decimal(15000)
-    assert (await marketplace.balance(sales, 'b'))['available'] == 0  # COD not remitted
-
-
-@pytest.mark.asyncio
-async def test_new_order_fee_is_ten_percent_of_merchandise(monkeypatch):
-    async def policy(session): return {'rate':'10','version':'1'}
-    monkeypatch.setattr(marketplace, 'fee_policy', policy)
-    rate, fee = await marketplace.order_fee(None, Decimal('150005'))
-    assert rate == Decimal(10) and fee == Decimal(15001)
+    monthly = await analytics.monthly_report(sales, '2026-11', '2026-10')
+    assert Decimal(monthly['selected']['merchandise']) == Decimal(450000)
+    assert monthly['selected']['grossProfit'] is None
+    assert sum(row['orders'] for row in monthly['daily']) == 2

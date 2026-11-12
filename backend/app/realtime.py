@@ -26,8 +26,7 @@ class SocketClosing(Exception):
 async def topics_for(s,user):
     from .marketplace import shop_topic
     if user['role']=='SELLER':
-        check(user.get('shop_id'),'SHOP_REQUIRED','Tài khoản chưa thuộc shop',403)
-        return ['user:'+user['id'],shop_topic(user['shop_id']),'shops:refresh']
+        return ['user:'+user['id'],shop_topic('')]
     topic={'ADMIN':'admin:ops','SHIPPER':'courier:'+user['id']}.get(user['role'],'catalog:'+str(user['group_id']))
     return ['user:'+user['id'],topic]
 
@@ -37,7 +36,6 @@ async def snapshot(s,user):
     q=select(t.c.id).order_by(t.c.created_at.desc(),t.c.id.desc()).limit(50)
     if user['role']=='CUSTOMER': q=q.where(t.c.customer_id==user['id'])
     if user['role']=='SHIPPER': q=q.where(t.c.courier_id==user['id'])
-    if user['role']=='SELLER': q=q.where(t.c.shop_id==user['shop_id'])
     data['orders']=await commerce.get_orders(s,user,list((await s.execute(q)).scalars()))
     from .menus import notification_feed
     data['notifications']=await notification_feed(s,user)

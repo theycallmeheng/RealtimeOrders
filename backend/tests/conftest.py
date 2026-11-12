@@ -74,7 +74,7 @@ async def sale(clients):
 async def order_body(c,sale,quantity='1',other=None):
     offers=await c.get('/catalog/offers'); offer=next(o for o in offers if o['id']==sale['id'])
     addresses=await c.get('/me/addresses'); options=await c.get('/delivery/options')
-    addr=addresses[0]; policy=next(p for p in options['policies'] if p['zone_id']==addr['zone_id'] and p['method']=='INDIVIDUAL')
+    addr=addresses[0]; policy=next(p for p in options['policies'] if p['method']=='INDIVIDUAL')
     lines=[{'offerId':offer['id'],'quantity':quantity,'expectedPriceVersion':str(offer['price_version'])}]
     if other:
         o=next(o for o in offers if o['id']==other['id']); lines.append({'offerId':o['id'],'quantity':'2','expectedPriceVersion':str(o['price_version'])})
@@ -91,6 +91,7 @@ async def quote_fixture(c,body):
         addr=await one(s,'addresses',T['addresses'].c.id==body['addressId'])
         await change(s,'addresses',addr['id'],latitude='20.99',longitude='105.80')
         addr=await one(s,'addresses',T['addresses'].c.id==addr['id'])
-        p=await one(s,'delivery_policies',T['delivery_policies'].c.group_id==c.user['group_id'],T['delivery_policies'].c.zone_id==addr['zone_id'],T['delivery_policies'].c.method=='INDIVIDUAL')
+        from app.shipping import individual_policy
+        p=await individual_policy(s,c.user['group_id'])
         q=await record_quote(s,c.user,(addr,p,await warehouse(s),cart_hash(body['items'])),(3000,600,{'testOnly':True,'provider':'FIXTURE','profile':'driving'}))
         return q['id']

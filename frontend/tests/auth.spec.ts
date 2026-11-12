@@ -1,5 +1,28 @@
 import { expect, test } from "@playwright/test";
 
+test("a stalled session check times out and can be retried", async ({ page }) => {
+  await page.clock.install();
+  let attempts = 0;
+  await page.route("**/api/v1/auth/session", async (route) => {
+    attempts += 1;
+    if (attempts === 1) return;
+    await route.fulfill({
+      status: 401,
+      json: { error: { code: "AUTH_REQUIRED", message: "Vui lòng đăng nhập" } },
+    });
+  });
+  const firstCheck = page.waitForRequest("**/api/v1/auth/session");
+  await page.goto("/");
+  await firstCheck;
+  await expect(page.getByText("Đang kiểm tra phiên đăng nhập…")).toBeVisible();
+
+  await page.clock.fastForward(10000);
+  await expect(page.getByRole("heading", { name: "Chưa kiểm tra được phiên đăng nhập" })).toBeVisible();
+  await page.getByRole("button", { name: "Thử lại" }).click();
+  await expect(page.getByRole("heading", { name: "Đăng nhập", exact: true })).toBeVisible();
+  expect(attempts).toBe(2);
+});
+
 async function openRegistration(page: import("@playwright/test").Page) {
   await page.route("**/api/v1/auth/session", (route) =>
     route.fulfill({

@@ -1,0 +1,333 @@
+/* Food Mart: shared frame, customer storefront and operations workspace. */
+:root {
+  --accent: #165b43;
+  --accent-hover: #104a35;
+  --accent-strong: #123f30;
+  --accent-soft: #e3f0e6;
+  --ink: #1a2b24;
+  --muted: #586b60;
+  --line: #dce5dc;
+  --page: #f4f6f0;
+  --citrus: #bd6135;
+  --content-width: 1920px;
+}
+body { font-size: 15px; }
+.app-header { height: 68px; padding-inline: clamp(16px, 2.5vw, 42px); border-bottom: 1px solid #dae5dc; }
+.app-header .brand { font-size: 20px; letter-spacing: -.5px; }
+.brand-mark { width: 40px; height: 40px; border-radius: 11px; }
+.brand-copy small { font-size: 11px; }
+.shell { min-height: calc(100dvh - 68px); grid-template-columns: 252px minmax(0, 1fr); }
+aside.nav { top: 68px; height: calc(100dvh - 68px); padding: 24px 14px; }
+main { padding: 32px clamp(20px, 3vw, 52px) 64px; }
+main > * { max-width: 1500px; }
+h1 { font-size: clamp(28px, 2.3vw, 38px); letter-spacing: -.9px; }
+h2 { font-size: 19px; }
+.page-heading { margin-bottom: 24px; }
+.page-heading p { font-size: 14px; }
+.eyebrow, .breadcrumbs { font-size: 11px; }
+.nav :is(a, button) { min-height: 44px; font-size: 14px; }
+.nav-group-title, .nav-label { font-size: 11px; }
+.notice.demo-notice { padding: 10px 14px; font-size: 13px; }
+button { font-size: 14px; }
+table { font-size: 14px; }
+th { font-size: 11px; }
+td { padding-block: 15px; }
+
+/* Dark rail keeps operations navigation distinct from the content area. */
+.role-admin aside.nav, .role-seller aside.nav { background: #183b2d; border-right-color: #183b2d; }
+.role-admin .nav-label, .role-seller .nav-label { color: #d4e5d5; }
+.role-admin .nav-group-title, .role-seller .nav-group-title { color: #acc3b2; }
+.role-admin .nav :is(a, button), .role-seller .nav :is(a, button) { color: #e0ebe2; }
+.role-admin .nav :is(a, button) svg, .role-seller .nav :is(a, button) svg { color: #b1cbb8; }
+.role-admin .nav :is(a, button):hover, .role-seller .nav :is(a, button):hover { color: white; background: #2b5843; }
+.role-admin .nav :is(a, button).active, .role-seller .nav :is(a, button).active { color: #173d2c; background: #e2efdf; border-color: #e2efdf; }
+.role-admin .nav :is(a, button).active svg, .role-seller .nav :is(a, button).active svg { color: #165b43; }
+.role-admin .nav-foot, .role-seller .nav-foot { color: #b3c9b8; border-color: #426452; font-size: 11px; }
+
+/* A real storefront introduction, followed by sale rounds and product cards. */
+.role-customer main { max-width: none; }
+.food-hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(180px, .9fr); align-items: center; min-height: 270px; padding: 0; overflow: hidden; border: 1px solid #d4e5d3; border-radius: 18px; background: #e7f0df; }
+.food-hero-copy { padding: clamp(25px, 4vw, 56px); }
+.food-hero-kicker { display: block; margin-bottom: 12px; color: #52745a; font-size: 11px; font-weight: 750; letter-spacing: 1.3px; }
+.food-hero h2 { margin: 0; color: #143d2c; font-size: clamp(30px, 4vw, 48px); line-height: 1.12; letter-spacing: -1.4px; }
+.food-hero p { max-width: 45ch; margin: 13px 0 20px; color: #496451; font-size: 15px; }
+.food-hero button { display: inline-flex; align-items: center; gap: 18px; min-height: 46px; margin-top: 4px; }
+.food-hero-art { display: grid; place-items: center; height: 100%; padding: 20px; background: #d5e7ce; }
+.food-hero-art img { width: min(100%, 330px); max-height: 240px; object-fit: contain; }
+.feed-section-heading { align-items: end; margin: 34px 0 16px; }
+.feed-section-heading h2 { font-size: 23px; letter-spacing: -.4px; }
+.feed-section-heading p { font-size: 14px; }
+.feed-posts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr)); gap: 20px; }
+.feed-post { padding: 22px; border-top: 4px solid #7ba77b; border-radius: 13px; }
+.feed-post-heading h2 { font-size: 20px; }
+.feed-schedule { font-size: 13px; }
+.feed-offers li { grid-template-columns: 58px minmax(0,1fr) auto; gap: 12px; padding: 12px 0; }
+.feed-product-thumb { width: 58px; height: 58px; }
+.feed-offers li strong { font-size: 14px; }
+.feed-offers li small { font-size: 12px; }
+.feed-post-footer { font-size: 13px; }
+.daily-catalog-heading { min-height: 150px; padding: 26px 30px; border-radius: 15px; background: #e5f0df; }
+.daily-catalog-tools { margin-top: 12px; }
+.daily-category-filter button { min-height: 38px; padding: 7px 12px; font-size: 13px; }
+.daily-round-heading { margin-top: 12px; padding-bottom: 14px; }
+.daily-round-heading h2 { font-size: 20px; }
+.daily-round-heading p, .daily-round-heading > span { font-size: 13px; }
+.daily-products { gap: 18px; }
+.daily-product { gap: 12px; padding: 12px; border-radius: 13px; transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.daily-product:hover { border-color: #a8c6a8; box-shadow: 0 8px 22px #143d3012; transform: translateY(-2px); }
+.daily-product-image-main { aspect-ratio: 1 / 1; max-height: 260px; border: 0; background: #f3f7ef; }
+.daily-product-info h2 { font-size: 15px; }
+.daily-product-info > p, .daily-product-info .stock-note { font-size: 12px; }
+.daily-product-buy button { min-height: 44px; font-size: 14px; }
+.food-product-price strong { font-size: 19px; }
+.food-product-price del { font-size: 13px; }
+
+/* Tables, metrics and forms remain dense enough for everyday work. */
+.panel { border-radius: 12px; }
+.order-queue-toolbar { padding: 16px 18px; }
+.order-queue-table td small, .menu-round-table small { font-size: 12px; }
+.order-queue-pages span, .order-queue-toolbar > span { font-size: 13px; }
+.role-admin main table thead th, .role-seller main table thead th { background: #e4ede3; color: #345b46; }
+.role-admin main table tbody tr:nth-child(even) td, .role-seller main table tbody tr:nth-child(even) td { background: #f6f9f4; }
+.role-admin main table tbody tr:hover td, .role-seller main table tbody tr:hover td,
+.role-admin main table tbody tr:focus-within td, .role-seller main table tbody tr:focus-within td { background: #e9f4e8; }
+.role-admin main table tbody tr:hover td:first-child, .role-seller main table tbody tr:hover td:first-child,
+.role-admin main table tbody tr:focus-within td:first-child, .role-seller main table tbody tr:focus-within td:first-child { box-shadow: inset 3px 0 #39815a; }
+.role-admin main table tbody td strong, .role-seller main table tbody td strong { color: #194d37; }
+.food-stock-list { gap: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; }
+.food-stock-row { padding: 13px 15px; border-bottom: 1px solid var(--line); }
+.food-stock-row:nth-child(even) { background: #f6f9f4; }
+.food-stock-row:hover, .food-stock-row:focus-within { background: #e9f4e8; box-shadow: inset 3px 0 #39815a; }
+.food-stock-row > div:nth-child(2) strong { color: var(--accent); }
+.stock-result-count { margin: 0; font-size: 13px; }
+.business-metrics strong, .report-value { font-size: 27px; }
+.overview-kpis { gap: 16px; }
+.overview-kpi { min-height: 142px; padding: 20px; }
+.overview-kpi strong { font-size: clamp(24px, 2.1vw, 32px); }
+.menu-settings { padding: 20px; }
+.menu-history-posts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.menu-history-post { min-width: 0; padding: 18px; }
+.menu-history-post-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.menu-history-post-head h3 { margin: 4px 0; font-size: 17px; overflow-wrap: anywhere; }
+.menu-history-post-head small { display: block; overflow-wrap: anywhere; }
+.menu-history-post-kicker { color: #628069; font-size: 11px; font-weight: 700; letter-spacing: .6px; }
+.menu-history-post-body { margin: 12px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.menu-history-images { display: flex; gap: 6px; margin: 12px 0; overflow: hidden; }
+.menu-history-images img { width: min(30%, 150px); height: 100px; border-radius: 7px; object-fit: cover; background: #eff5ed; }
+.menu-history-time { display: flex; gap: 8px 18px; flex-wrap: wrap; padding: 12px 0; color: var(--muted); font-size: 12px; }
+.menu-history-time strong { color: var(--ink); }
+.menu-history-post .menu-round-actions { padding-top: 12px; border-top: 1px solid var(--line); }
+.menu-history-stock { margin-top: 14px; border-top: 1px solid var(--line); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.menu-editor-layout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.menu-settings { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: #f5f8f2; }
+.menu-settings::before { content: "Thiết lập đợt bán"; display: block; margin-bottom: 6px; color: var(--accent-strong); font-size: 18px; font-weight: 700; }
+.menu-form-disclosure summary { padding: 14px 16px; font-size: 14px; }
+.menu-post-editor { gap: 14px; }
+.menu-post-editor textarea { min-height: 100px; }
+.menu-post-url { display: flex; gap: 8px; align-items: start; }
+.menu-post-url input { flex: 1; }
+.menu-post-url button { flex: 0 0 auto; }
+.menu-post-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.menu-post-image { min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: white; }
+.menu-post-image img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; }
+.menu-post-image > div { display: flex; justify-content: space-between; align-items: center; gap: 5px; padding-top: 7px; }
+.feed-gallery { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.feed-gallery img { height: 170px; max-height: none; object-fit: cover; }
+.feed-gallery img:first-child:last-child { grid-column: 1 / -1; height: auto; max-height: 300px; }
+
+/* A chronological storefront feed and a live post composer. */
+.role-customer main[data-screen="feed"] > .page-heading { margin-bottom: 14px; }
+.role-customer .feed-posts { display: grid; grid-template-columns: minmax(0, 1fr); width: min(100%, 680px); max-width: 680px; margin-inline: auto; gap: 20px; }
+.role-customer .feed-section-heading { width: min(100%, 680px); max-width: 680px; margin: 30px auto 14px; }
+.role-customer .feed-post { padding: 0; overflow: hidden; border: 1px solid #dce7dd; border-radius: 14px; box-shadow: 0 5px 18px #183b2d0a; }
+.feed-post-heading { padding: 20px 22px 4px; }
+.feed-author { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.feed-author > div { min-width: 0; }
+.feed-author strong, .feed-author small { display: block; }
+.feed-author strong { color: #183e2c; font-size: 15px; }
+.feed-author small { margin-top: 2px; color: #6e7e72; font-size: 12px; }
+.feed-avatar { display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 42px; border-radius: 50%; background: #dcecdc; color: #195a3c; font-weight: 800; }
+.feed-post-copy { padding: 12px 22px 0; }
+.feed-post-copy h2 { margin: 0; color: #1a3527; font-size: 21px; }
+.feed-post-copy .business-text { margin: 8px 0; font-size: 14px; white-space: pre-wrap; }
+.feed-post-copy .feed-schedule { margin: 10px 0 14px; font-size: 12px; }
+.role-customer .feed-gallery { gap: 3px; margin: 0; background: #e5eee3; }
+.role-customer .feed-gallery img { width: 100%; height: clamp(140px, 20vw, 220px); border-radius: 0; object-fit: cover; }
+.role-customer .feed-gallery img:first-child:last-child { height: auto; max-height: 320px; object-fit: contain; background: #f4f7f1; }
+.role-customer .feed-post .daily-round-pickup, .role-customer .feed-post .feed-pickup { margin: 16px 22px; }
+.feed-products-heading { display: flex; justify-content: space-between; gap: 10px; padding: 17px 22px 0; color: #274a35; }
+.feed-products-heading span { color: var(--muted); font-size: 12px; }
+.role-customer .feed-offers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 22px 6px; }
+.role-customer .feed-offers li { min-width: 0; grid-template-columns: 58px minmax(0,1fr); gap: 9px; padding: 10px; border: 1px solid #e2ebe0; border-radius: 9px; background: #fafcf8; }
+.role-customer .feed-offers li > div:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.role-customer .feed-offer-price { grid-column: 2; justify-items: start; text-align: left; }
+.role-customer .feed-offer-price > span { justify-content: start; }
+.role-customer .feed-offers .feed-offer-price strong { color: #b64d25; font-size: 16px; }
+.role-customer .feed-post-footer { margin: 14px 22px 0; padding: 14px 0 18px; border-top: 1px solid #e5ece3; }
+.role-customer .feed-post-footer button { border-color: #c9dcc9; color: var(--accent); font-weight: 700; }
+.post-comments { padding: 16px 22px 20px; border-top: 1px solid #e5ece3; background: #fafcf9; }
+.post-comments h3 { margin: 0 0 12px; font-size: 14px; }
+.post-comments > p.muted { margin: 0 0 12px; font-size: 13px; }
+.post-comment-list { display: grid; gap: 12px; max-height: 360px; overflow-y: auto; }
+.post-comment { display: flex; gap: 8px; align-items: start; }
+.comment-avatar { display: grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; background: #dcebdc; color: #24583d; font-weight: 700; }
+.post-comment > div { min-width: 0; }
+.post-comment-bubble { padding: 9px 12px; border-radius: 12px; background: #edf3eb; overflow-wrap: anywhere; }
+.post-comment-bubble strong { font-size: 12px; color: #1d4a34; }
+.post-comment-bubble p { margin: 3px 0 0; font-size: 13px; white-space: pre-wrap; }
+.post-comment > div > small { display: block; margin: 3px 0 0 10px; font-size: 11px; }
+.post-comment-form { display: flex; align-items: end; gap: 8px; margin-top: 13px; }
+.post-comment-input { flex: 1; min-width: 0; }
+.post-comment-form textarea { min-height: 44px; height: 44px; resize: vertical; }
+.post-comment-form button { min-width: 64px; }
+.round-post-label, .daily-post-label { display: block; color: #587762; font-size: 11px; font-weight: 700; letter-spacing: .2px; }
+.round-post-label { margin-bottom: 5px; text-transform: uppercase; }
+.daily-post-label { margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #88ad82; overflow-wrap: anywhere; }
+.daily-round-heading { padding: 16px 18px; border: 1px solid #d9e6d7; border-radius: 10px; background: #eef5e9; }
+.daily-round-heading h2 { color: #194b34; }
+.food-product-price strong { color: #b64d25; }
+.food-product-price small, .feed-offers .feed-offer-price .feed-discount { color: #a33b19; background: #ffeadb; font-weight: 750; }
+.menu-form-disclosure .menu-post-editor { padding: 20px; background: #f7faf5; }
+.post-editor-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.post-editor-heading h3 { margin: 0; font-size: 19px; color: #193e2c; }
+.post-editor-heading p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.post-editor-heading > span { padding: 5px 9px; border-radius: 6px; background: #e5f0e3; color: #285c3d; font-size: 12px; white-space: nowrap; }
+.post-editor-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(260px,.75fr); gap: 22px; align-items: start; }
+.post-editor-fields { display: grid; min-width: 0; gap: 14px; }
+.post-editor-fields textarea { min-height: 110px; }
+.post-upload { display: grid; gap: 7px; }
+.post-upload-label { position: relative; display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 12px 14px; border: 1px dashed #91b59b; border-radius: 9px; background: #edf6eb; cursor: pointer; }
+.post-upload-label:hover, .post-upload-label:focus-within { border-color: var(--accent); background: #e3f1e1; }
+.post-upload-label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.post-upload-label input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.post-upload-label strong, .post-upload-label small { display: block; }
+.post-upload-label strong { color: #21553a; font-size: 14px; }
+.post-upload-label small { margin-top: 3px; font-weight: 400; }
+.post-upload-icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 8px; background: white; color: var(--accent); font-size: 22px; }
+.post-preview { min-width: 0; }
+.post-preview-caption { margin-bottom: 8px; color: #5d7563; font-size: 12px; font-weight: 700; }
+.post-preview-card { padding: 16px; border: 1px solid #dbe7da; border-radius: 12px; background: white; box-shadow: 0 6px 20px #173e2a0a; }
+.post-preview-card h4 { margin: 17px 0 6px; color: #193e2c; font-size: 17px; }
+.post-preview-card p { margin: 0 0 12px; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-preview-images { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 3px; overflow: hidden; border-radius: 8px; }
+.post-preview-images img { width: 100%; height: 105px; object-fit: cover; }
+.post-preview-images img:first-child:last-child { grid-column: 1 / -1; height: 150px; object-fit: contain; background: #f2f6ef; }
+.post-preview-empty { display: grid; place-items: center; min-height: 110px; border: 1px dashed #cbdac9; border-radius: 8px; background: #f7faf5; color: #819488; font-size: 12px; text-align: center; }
+.post-preview-products { display: grid; gap: 5px; margin: 15px 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; }
+.post-preview-products strong { color: #28563b; font-size: 13px; }
+.receipt-picker { display: grid; gap: 12px; padding: 16px; border: 1px solid #dbe7da; border-radius: 10px; background: #f7faf5; }
+.receipt-picker-heading, .receipt-selected-heading { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.receipt-picker-heading h2, .receipt-selected-heading h2 { margin: 0; font-size: 17px; }
+.receipt-picker-heading p { margin: 4px 0 0; font-size: 13px; }
+.receipt-picker-heading > strong, .receipt-selected-heading > span { color: var(--accent); font-size: 13px; }
+.receipt-picker-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; }
+.food-stock-section label.receipt-picker-item { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid #dce6db; border-radius: 7px; background: white; cursor: pointer; }
+.receipt-picker-item.selected { border-color: #72a780 !important; background: #e9f5e9 !important; }
+.receipt-picker-item span { min-width: 0; overflow-wrap: anywhere; }
+.receipt-picker-item strong, .receipt-picker-item small, .receipt-line-name strong, .receipt-line-name small { display: block; }
+.receipt-picker-item small, .receipt-line-name small { margin-top: 3px; color: var(--muted); font-weight: 400; }
+.receipt-line-name { align-self: center; overflow-wrap: anywhere; }
+.food-receipt-line .is-owed { color: #b42318; }
+.food-receipt-line input[aria-invalid="true"] { border-color: #b42318; }
+.menu-product-summary { min-width: 0; }
+.modal { border-radius: 14px; }
+:focus-visible { outline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .app-header { height: 62px; padding-inline: 12px; }
+  .app-header .brand { font-size: 17px; }
+  .brand-mark { width: 36px; height: 36px; }
+  .shell { min-height: calc(100dvh - 62px); }
+  aside.nav { top: 62px; height: calc(100dvh - 62px); }
+  main { padding: 20px 15px 90px; }
+  .role-customer main { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+  .food-hero { grid-template-columns: minmax(0, 1fr) 100px; min-height: 190px; }
+  .food-hero-copy { padding: 22px 18px; }
+  .food-hero h2 { font-size: 28px; }
+  .food-hero p { font-size: 13px; margin: 9px 0 14px; }
+  .food-hero-art { padding: 8px; }
+  .food-hero button { gap: 8px; font-size: 12px; }
+  .feed-posts { grid-template-columns: 1fr; }
+  .feed-post { padding: 16px; }
+  .feed-section-heading h2 { font-size: 20px; }
+  .daily-products { gap: 9px; }
+  .role-customer .daily-product { padding: 9px; }
+  .daily-product-info h2 { font-size: 14px; }
+  .food-product-price strong { font-size: 16px; }
+  .role-customer .daily-product-buy button { font-size: 13px; }
+  .food-mobile-nav { box-shadow: 0 -5px 20px #183b2d12; }
+  .food-mobile-nav a { font-size: 12px; }
+  .menu-settings { padding: 14px; border: 1px solid var(--line); }
+  .menu-post-url { flex-wrap: wrap; }
+  .menu-post-url input { flex-basis: 100%; }
+  .feed-gallery img { height: 120px; }
+  .role-customer .feed-post-heading { padding: 16px 15px 4px; }
+  .feed-post-copy { padding: 12px 15px 0; }
+  .feed-post-copy h2 { font-size: 18px; }
+  .role-customer .feed-post .daily-round-pickup, .role-customer .feed-post .feed-pickup { margin: 12px 15px; }
+  .feed-products-heading { padding: 14px 15px 0; }
+  .role-customer .feed-offers { grid-template-columns: minmax(0,1fr); margin: 9px 15px 4px; }
+  .role-customer .feed-post-footer { margin-inline: 15px; }
+  .post-comments { padding: 14px 15px 18px; }
+  .menu-history-posts { grid-template-columns: minmax(0,1fr); }
+  .menu-history-post { padding: 14px; }
+  .post-editor-columns { grid-template-columns: minmax(0,1fr); }
+  .menu-form-disclosure .menu-post-editor { padding: 14px; }
+  .post-editor-heading { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .daily-product { transition: none; }
+  .daily-product:hover { transform: none; }
+}
+
+/* Nhãn trạng thái thống nhất giữa các màn hình nghiệp vụ. */
+.status {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid #cbd7cf;
+  border-radius: 6px;
+  background: #edf2ee;
+  color: #344d3e;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.status.OPEN, .status.OPENED, .status.ACTIVE, .status.APPROVED,
+.status.DELIVERED, .status.ACCEPTED, .status.PAID, .status.RECEIVED,
+.status.CONVERTED { background: #ddf2e4; border-color: #9dcfaf; color: #155b36; }
+.status.PENDING, .status.NEW, .status.UNPAID, .status.QUOTED,
+.status.REFUND_PENDING, .status.WAITING, .status.SCHEDULED {
+  background: #fff0cb; border-color: #e6c276; color: #754600;
+}
+.status.PREPARING, .status.SHIPPING, .status.READY_FOR_PICKUP,
+.status.REVIEWING { background: #e1efff; border-color: #a8c8ec; color: #164f82; }
+.status.CANCELLED, .status.REJECTED, .status.LOCKED, .status.DELETED,
+.status.DELIVERY_FAILED, .status.DEBT { background: #fce6e2; border-color: #e9b0a6; color: #982f25; }
+.status.SOLD_OUT { background: #fff0db; border-color: #e4bb82; color: #864405; }
+.status.CLOSED, .status.EXPIRED, .status.DRAFT, .status.LEGACY,
+.status.PAUSED, .status.INACTIVE, .status.REFUNDED {
+  background: #edf0ed; border-color: #cbd4cb; color: #46554b;
+}
+.food-receipt-amounts .status { width: fit-content; }
+@media (max-width: 760px) {
+  .status { font-size: 12px; padding: 5px 8px; }
+  .feed-post-heading .status { white-space: normal; }
+}
+.post-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-text-clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.post-text-toggle { border: 0; padding: 2px 0; min-height: 0; background: transparent; color: #195c42; font-size: 13px; font-weight: 700; }
+.post-text-toggle:hover { text-decoration: underline; }
+.inline-create { margin-bottom: 20px; padding: clamp(16px, 3vw, 24px); }
+.inline-create > .row-heading { margin-bottom: 16px; }
+.inline-create > .row-heading h2 { margin: 0; }
+.inline-create > button { margin-bottom: 14px; }
+.customer-filters { margin-bottom: 16px; padding: 16px; }
+.customer-filters select { max-width: 360px; }
+.receipt-picker-image { flex: 0 0 48px; width: 48px; height: 48px; border-radius: 6px; overflow: hidden; background: #f0f4ed; }
+.receipt-picker-image img { display: block; width: 100%; height: 100%; object-fit: contain; }

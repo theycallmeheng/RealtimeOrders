@@ -7,7 +7,7 @@ from sqlalchemy import select, func, or_
 from .db import T, add, change, check, now, number, one, public, text, uid, uuid
 from .commerce import audit, lock_user, version
 from .events import emit, notify
-from .marketplace import assert_owner, get_shop, scope, shop_topic
+from .marketplace import assert_owner, get_shop, shop_topic
 from .menus import bounds, today
 
 ACTIVE = ('PENDING', 'REVIEWING', 'WAITING')
@@ -73,8 +73,7 @@ async def detail(s, user, id):
 
 async def listing(s, user, params):
     t, u, shops = T['product_requests'], T['users'], T['shops']
-    conditions = [t.c.customer_id == user['id']] if user['role'] == 'CUSTOMER' else scope(t, user, params.get('shopId'))
-    if user['role'] == 'CUSTOMER' and params.get('shopId'): conditions.append(t.c.shop_id == uuid(params['shopId']))
+    conditions = [t.c.customer_id == user['id']] if user['role'] == 'CUSTOMER' else []
     if params.get('status'):
         check(params['status'] in LABELS, 'INVALID_STATE', 'Trạng thái không hợp lệ')
         conditions.append(t.c.status == params['status'])
@@ -97,11 +96,12 @@ def changed(s, row):
 async def create(s, user, body):
     customer_only(user)
     await lock_user(s, user['id'])  # Serializes the daily quota and duplicate-name check.
-    shop = await get_shop(s, uuid(body.get('shopId')), active=True)
+    from .marketplace import DEFAULT_SHOP
+    shop = await get_shop(s, DEFAULT_SHOP, active=True)
     t = T['product_requests']; start, end = bounds(today())
     count = await s.scalar(select(func.count()).select_from(t).where(
         t.c.customer_id == user['id'], t.c.created_at >= start, t.c.created_at < end))
-    check(count < 5, 'REQUEST_LIMIT', 'Bạn chỉ được gửi tối đa 5 yêu cầu mỗi ngày trên toàn sàn', 429)
+    check(count < 5, 'REQUEST_LIMIT', 'Bạn chỉ được gửi tối đa 5 yêu cầu mỗi ngày', 429)
     data = await fields(s, user, body)
     await duplicate(s, user, shop['id'], data['name_key'])
     row = await add(s, 'product_requests', id=uid(), customer_id=user['id'], shop_id=shop['id'],
@@ -176,13 +176,15 @@ async def opened_batch(s, request_id=None):
     def allowed(column):
         return or_(column.is_(None), func.json_type(column) == 'NULL', func.json_contains(column, func.json_quote(u.c.group_id)) == 1)
     conditions = [t.c.status == 'WAITING', o.c.status == 'OPEN', o.c.archived_at.is_(None),
-        o.c.available_qty >= p.c.quantity_step, p.c.active.is_(True), p.c.deleted_at.is_(None),
+        o.c.available_qty >= p.c.quantity_step, T['product_stock'].c.quantity>=p.c.quantity_step,
+        p.c.active.is_(True), p.c.deleted_at.is_(None),
         m.c.status == 'OPEN', m.c.opens_at <= now(), m.c.closes_at > now(),
         shops.c.active.is_(True), u.c.status == 'ACTIVE', groups.c.active.is_(True),
         allowed(p.c.allowed_group_ids), allowed(o.c.allowed_group_ids), allowed(m.c.allowed_group_ids)]
     if request_id: conditions.append(t.c.id == request_id)
     eligible = (select(t.c.id, t.c.customer_id, o.c.id.label('offer_id'))
         .join(o, o.c.product_id == t.c.product_id).join(p, p.c.id == o.c.product_id)
+        .join(T['product_stock'], T['product_stock'].c.product_id == p.c.id)
         .join(m, m.c.id == o.c.menu_id).join(u, u.c.id == t.c.customer_id)
         .join(price, (price.c.offer_id == o.c.id) & (price.c.group_id == u.c.group_id))
         .join(groups, groups.c.id == u.c.group_id).join(shops, shops.c.id == t.c.shop_id)

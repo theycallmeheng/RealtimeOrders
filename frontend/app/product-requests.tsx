@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { BusinessHeading, useLoad, type BusinessProps } from "./business-ui";
-import { ShopSelect } from "./marketplace-ui";
-import { storefrontShopKey } from "../lib/marketplace";
 
 type Row = Record<string, any>;
 const labels: Record<string, string> = { PENDING: "Chờ tiếp nhận", REVIEWING: "Đang xem xét", WAITING: "Chờ mở bán", OPENED: "Đã mở bán", REJECTED: "Từ chối", CANCELLED: "Khách đã hủy" };
@@ -18,17 +16,15 @@ function image(url: string) {
 export default function ProductRequests(props: BusinessProps) {
   const customer = props.user.role === "CUSTOMER";
   const prefix = customer ? "" : props.user.role === "SELLER" ? "/shop" : "/admin";
-  const [status, setStatus] = useState(""), [shop, setShop] = useState(""), [page, setPage] = useState(0);
+  const [status, setStatus] = useState(""), [page, setPage] = useState(0);
   const [selected, setSelected] = useState<string | null>(null), [form, setForm] = useState<Row | null>(null);
   const [busy, setBusy] = useState(false), [actionError, setActionError] = useState(""), [notice, setNotice] = useState("");
   const query = new URLSearchParams({ offset: String(page * 50) });
   if (status) query.set("status", status);
-  if (shop) query.set("shopId", shop);
   const list = useLoad(prefix + "/product-requests?" + query, props);
-  const shops = useLoad(props.user.role !== "SELLER" ? "/marketplace/shops" : null, props).data ?? [];
   const detail = useLoad(selected ? prefix + "/product-requests/" + selected : null, props);
   const current = detail.data?.id === selected ? detail.data : null;
-  const products = useLoad(!customer && current ? prefix + "/products?shopId=" + current.shop_id : null, props).data ?? [];
+  const products = useLoad(!customer && current ? prefix + "/products" : null, props).data ?? [];
   const disabled = busy || !props.online;
   const run = async (path: string, body: Row, method = "POST") => {
     if (disabled) return null;
@@ -45,20 +41,19 @@ export default function ProductRequests(props: BusinessProps) {
   };
   return <>
     <BusinessHeading title="Yêu cầu sản phẩm" sub={customer
-      ? "Gửi nhu cầu tới một shop. Yêu cầu chưa tạo đơn hoặc giữ hàng; bạn tự đặt khi sản phẩm mở bán."
-      : "Tiếp nhận nhu cầu, liên kết sản phẩm của shop và thông báo khách khi thực sự mở bán."} />
+      ? "Gửi nhu cầu tới Food Mart. Yêu cầu chưa tạo đơn hoặc giữ hàng; bạn tự đặt khi sản phẩm mở bán."
+      : "Tiếp nhận nhu cầu, liên kết sản phẩm của cửa hàng và thông báo khách khi thực sự mở bán."} />
     <div className="request-toolbar">
       <label>Trạng thái<select value={status} onChange={e => { setStatus(e.target.value); setPage(0); }}>
         <option value="">Tất cả trạng thái</option>{Object.entries(labels).map(([id, name]) => <option value={id} key={id}>{name}</option>)}
       </select></label>
-      {props.user.role !== "SELLER" && <ShopSelect shops={shops} value={shop} allLabel="Tất cả shop" onChange={id => { setShop(id); setPage(0); }} />}
       {customer && <button className="primary" disabled={disabled} onClick={() => openForm()}>Gửi yêu cầu sản phẩm</button>}
     </div>
     {(list.error || detail.error || actionError) && <p className="notice error" role="alert">{actionError || detail.error || list.error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {form && <section className="panel request-form" aria-label={form.id ? "Sửa yêu cầu sản phẩm" : "Yêu cầu sản phẩm mới"}>
       <div className="row-heading"><h2>{form.id ? "Sửa yêu cầu" : "Bạn muốn shop bổ sung sản phẩm nào?"}</h2><button disabled={busy} onClick={() => setForm(null)}>Đóng biểu mẫu</button></div>
-      <p className="muted">Tối đa 5 yêu cầu/ngày theo giờ Việt Nam trên toàn sàn. Giá mong muốn chỉ để shop tham khảo.</p>
+      <p className="muted">Tối đa 5 yêu cầu/ngày theo giờ Việt Nam. Giá mong muốn chỉ để shop tham khảo.</p>
       <form key={form.id || "new"} onSubmit={async e => {
         e.preventDefault(); const data = Object.fromEntries(new FormData(e.currentTarget));
         const row = await run("/product-requests" + (form.id ? "/" + form.id : ""),
@@ -66,9 +61,6 @@ export default function ProductRequests(props: BusinessProps) {
         if (row) setForm(null);
       }}>
         <fieldset disabled={disabled} className="request-fields">
-          {!form.id && <label>Shop tiếp nhận<select name="shopId" required defaultValue={shop || (typeof window !== "undefined" ? sessionStorage.getItem(storefrontShopKey(props.user.id)) : "") || ""}>
-            <option value="">Chọn shop</option>{shops.map((s: Row) => <option value={s.id} key={s.id}>{s.name}</option>)}
-          </select></label>}
           <label>Tên sản phẩm<input name="name" required maxLength={200} defaultValue={form.name} placeholder="Ví dụ: sữa yến mạch không đường" /></label>
           <label className="request-wide">Mô tả mong muốn<textarea name="description" required maxLength={2000} defaultValue={form.description} placeholder="Thương hiệu, quy cách, đặc điểm sản phẩm…" /></label>
           <label>Số lượng mong muốn<input type="number" name="quantity" required min="0.001" max="999999999" step="0.001" defaultValue={form.quantity || "1"} /></label>
@@ -106,7 +98,7 @@ export default function ProductRequests(props: BusinessProps) {
             {active.includes(current.status) && <button disabled={disabled} onClick={() => {
               if (window.confirm("Hủy yêu cầu sản phẩm này?")) void run("/product-requests/" + current.id + "/cancel", { expectedVersion: current.version });
             }}>Hủy yêu cầu</button>}
-            {current.status === "OPENED" && <button className="primary" onClick={() => { sessionStorage.setItem(storefrontShopKey(props.user.id), current.shop_id); props.navigate("catalog"); }}>Xem hàng của shop</button>}
+            {current.status === "OPENED" && <button className="primary" onClick={() => { props.navigate("catalog"); }}>Xem hàng trong ngày</button>}
           </div>}
           {!customer && active.includes(current.status) && <form key={current.id + ":" + current.version} onSubmit={e => {
             e.preventDefault(); const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement;

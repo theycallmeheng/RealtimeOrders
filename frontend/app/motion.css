@@ -30,7 +30,6 @@
   .modal-backdrop { animation: veil-in 180ms ease-out; }
   .modal-backdrop > .modal { animation: panel-in 230ms cubic-bezier(.2,.7,.3,1); }
   .cart-drawer .modal, .cart-drawer-docked > .modal { animation: drawer-in 250ms cubic-bezier(.2,.7,.3,1); }
-  .toast { animation: drawer-in 220ms ease-out; }
   .message { animation: enter-soft 180ms ease-out; }
   .shell.nav-open aside.nav { animation: drawer-in 200ms ease-out; }
   .daily-product { transition: border-color 180ms, box-shadow 180ms, translate 180ms; }

@@ -10,11 +10,11 @@ from .marketplace import DEFAULT_SHOP, get_shop, shop_topic
 async def conversation(s,user,id=None,shop_id=None):
     if id:
         result=await one(s,'conversations',T['conversations'].c.id==id)
-        check(user['role']=='ADMIN' or (user['role']=='SELLER' and user.get('shop_id')==result['shop_id'])
+        check(is_shop(user)
               or (user['role']=='CUSTOMER' and result['customer_id']==user['id']),'FORBIDDEN','Hội thoại riêng tư',403)
         return result
     check(user['role']=='CUSTOMER','FORBIDDEN','Chỉ khách được tạo hội thoại',403)
-    shop=await get_shop(s,uuid(shop_id) if shop_id else DEFAULT_SHOP,active=True)
+    shop=await get_shop(s,DEFAULT_SHOP,active=True)
     await lock_user(s,user['id'])
     old=await one(s,'conversations',T['conversations'].c.customer_id==user['id'],T['conversations'].c.shop_id==shop['id'],required=False)
     if old: return old
