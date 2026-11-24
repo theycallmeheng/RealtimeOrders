@@ -406,19 +406,27 @@ async def test_shared_stock_supplier_debt_prices_pickup_and_vat(monkeypatch):
                               {'expectedVersion':post['version'],'postImageUrl':'https://example.com/post.jpg'})
         assert replaced['post_image_asset_id'] is None and replaced['post_image_url']=='https://example.com/post.jpg'
         assert (await student.get(image['url'])).status_code == 403
-        before={row['id']:Decimal(row['quantity']) for row in await call(seller,'GET','/shop/stock')}
+        checked_product_ids = {first['id'], second['id']}
+
+        async def checked_stock():
+            return {
+                row['id']: Decimal(row['quantity'])
+                for row in await call(seller, 'GET', '/shop/stock')
+                if row['id'] in checked_product_ids
+            }
+
+        before = await checked_stock()
         invalid={'supplierId':supplier['id'],'items':[{'productId':first['id'],'quantity':'0','unitCost':'200'},
                   {'productId':second['id'],'quantity':'1','unitCost':'-1'}]}
         error=await call(seller,'POST','/shop/stock/receipts',invalid,status=400)
         assert error['error']['code']=='INVALID_RECEIPT_LINES' and len(error['error']['details']['lines'])==2
-        after={row['id']:Decimal(row['quantity']) for row in await call(seller,'GET','/shop/stock')}
-        assert after[first['id']]==before[first['id']] and after[second['id']]==before[second['id']]
+        assert await checked_stock() == before
         multi={'supplierId':supplier['id'],'paidAmount':'250','items':[{'productId':first['id'],'quantity':'2','unitCost':'100'},
                {'productId':second['id'],'quantity':'3','unitCost':'200'}]}
         key=uid(); receipt=await call(seller,'POST','/shop/stock/receipts',multi,key=key)
         assert Decimal(receipt['total'])==800 and Decimal(receipt['outstanding'])==550
         assert (await call(seller,'POST','/shop/stock/receipts',multi,key=key))['id']==receipt['id']
-        after={row['id']:Decimal(row['quantity']) for row in await call(seller,'GET','/shop/stock')}
+        after = await checked_stock()
         assert after[first['id']]==before[first['id']]+2 and after[second['id']]==before[second['id']]+3
     finally:
         for client in sessions:

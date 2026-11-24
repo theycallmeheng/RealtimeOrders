@@ -1,0 +1,439 @@
+/* RealtimeOrders design tokens. Feature rules continue to use these shared roles. */
+:root {
+  color-scheme: light;
+  --accent: #2447a6;
+  --accent-hover: #1d3788;
+  --accent-strong: #23366e;
+  --accent-soft: #e5ecff;
+  --accent-wash: #f0f4ff;
+  --focus: #4168c9;
+  --focus-wash: #2447a62e;
+  --ink: #16223a;
+  --muted: #4c5b76;
+  --line: #dce3ef;
+  --line-strong: #a7b4cc;
+  --page: #f6f8fc;
+  --surface: #fff;
+  --surface-warm: #fafbfe;
+  --offer-ink: #a94717;
+  --offer-soft: #fff2e9;
+  --offer-line: #f0d4c1;
+  --sand: var(--offer-soft);
+  --citrus: var(--offer-ink);
+  --rail: #1b2a54;
+  --rail-text: #f2f5ff;
+  --rail-muted: #c2ceea;
+  --rail-hover: #2b3d70;
+  --rail-line: #465780;
+  --danger: #a3372a;
+  --danger-soft: #fce6e2;
+  --success: #155b36;
+  --success-soft: #e6f4ea;
+  --warning: #78521d;
+  --warning-soft: #fff4dc;
+  --info: #164f82;
+  --info-soft: #e8f2ff;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --content-width: 1920px;
+  --shadow-overlay: 0 18px 52px #16223a25;
+  --font-ui: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+body { background: var(--page); color: var(--ink); font-family: var(--font-ui); }
+::selection { background: var(--accent-soft); color: var(--accent-strong); }
+.app-header { background: var(--surface); border-bottom-color: var(--line); }
+.brand-mark { background: var(--accent); box-shadow: inset 0 -3px 0 #101b3b24; }
+.app-header .brand { letter-spacing: -.45px; }
+.page-heading h1, .business-heading h1 { letter-spacing: -.8px; }
+.page-heading p, .business-heading p { max-width: 68ch; color: var(--muted); }
+.breadcrumbs, .eyebrow { color: var(--muted); letter-spacing: .75px; }
+button.primary, .daily-category-filter button.active { background: var(--accent); border-color: var(--accent); color: white; }
+button.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); color: white; }
+button:hover:not(:disabled) { border-color: var(--line-strong); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); outline-color: var(--focus-wash); }
+:focus-visible { outline-color: var(--accent); }
+.panel { border-color: var(--line); box-shadow: 0 1px 2px #16223a08; }
+
+/* Thanh điều hướng hiển thị rõ vị trí đang làm việc. */
+.role-admin aside.nav, .role-seller aside.nav { background: var(--rail); border-right-color: var(--rail); }
+.role-admin .nav-label, .role-seller .nav-label { color: var(--rail-text); }
+.role-admin .nav-group-title, .role-seller .nav-group-title { color: var(--rail-muted); }
+.role-admin .nav :is(a, button), .role-seller .nav :is(a, button) { color: var(--rail-text); }
+.role-admin .nav :is(a, button) svg, .role-seller .nav :is(a, button) svg { color: var(--rail-muted); }
+.role-admin .nav :is(a, button):hover, .role-seller .nav :is(a, button):hover { background: var(--rail-hover); color: white; }
+.role-admin .nav :is(a, button).active, .role-seller .nav :is(a, button).active { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent-strong); }
+.role-admin .nav :is(a, button).active svg, .role-seller .nav :is(a, button).active svg { color: var(--accent); }
+.role-admin .nav-foot, .role-seller .nav-foot { color: var(--rail-muted); border-color: var(--rail-line); }
+.role-customer .nav :is(a, button).active, .food-mobile-nav a[aria-current=page] { background: var(--accent-soft); border-color: var(--line-strong); color: var(--accent); }
+
+/* Bảng tin và cửa hàng: nhấn mạnh ảnh, giá và thông tin nhận hàng. */
+.food-hero { border-color: var(--line-strong); background: var(--accent-soft); }
+.food-hero-kicker { color: var(--muted); }
+.food-hero h2 { color: var(--accent-strong); }
+.food-hero p { color: var(--muted); }
+.food-hero-art { background: var(--accent-soft); }
+.daily-catalog-heading { background: var(--accent-soft); border-color: var(--line-strong); }
+.daily-catalog-heading p { color: var(--muted); }
+.daily-category-filter button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.daily-round-heading { border-bottom-color: var(--line-strong); }
+.daily-round-heading h2 { color: var(--accent-strong); }
+.daily-round-pickup, .role-customer .feed-post .daily-round-pickup { background: var(--accent-wash); border-left-color: var(--focus); }
+.daily-product { border-color: var(--line); background: #fff; }
+.daily-product-image-main { background: var(--accent-wash); }
+.daily-product-info .stock-note { background: var(--success-soft); color: var(--success); font-size: 12px; }
+.daily-product-info h2 { color: var(--ink); }
+.food-product-price strong, .daily-product-buy > strong { color: var(--accent-hover); }
+.role-customer .feed-post { border-color: var(--line); box-shadow: 0 4px 16px #16223a0d; }
+.feed-avatar, .comment-avatar { background: var(--accent-soft); color: var(--accent-hover); }
+.feed-author strong, .feed-products-heading { color: var(--accent-strong); }
+.role-customer .feed-offers li { border-color: var(--line); background: var(--accent-wash); }
+.post-comments { background: var(--page); border-top-color: var(--line); }
+.post-comment-bubble { background: var(--accent-soft); }
+.post-text-toggle { color: var(--accent); }
+
+/* Các khu vực thao tác nhanh và đọc dữ liệu trong quản trị. */
+.role-admin main table thead th, .role-seller main table thead th { background: var(--accent-wash); color: var(--muted); }
+.role-admin main table tbody tr:nth-child(even) td, .role-seller main table tbody tr:nth-child(even) td,
+.food-stock-row:nth-child(even) { background: var(--page); }
+.role-admin main table tbody tr:hover td, .role-seller main table tbody tr:hover td,
+.role-admin main table tbody tr:focus-within td, .role-seller main table tbody tr:focus-within td,
+.food-stock-row:hover, .food-stock-row:focus-within { background: var(--accent-wash); }
+.role-admin main table tbody tr:hover td:first-child, .role-seller main table tbody tr:hover td:first-child,
+.role-admin main table tbody tr:focus-within td:first-child, .role-seller main table tbody tr:focus-within td:first-child,
+.food-stock-row:hover, .food-stock-row:focus-within { box-shadow: inset 3px 0 var(--focus); }
+.role-admin main table tbody td strong, .role-seller main table tbody td strong { color: var(--accent-strong); }
+.order-queue-toolbar, .customer-filters { background: var(--accent-wash); border: 1px solid var(--line); border-radius: 10px; }
+.order-queue-row[data-selected=true] td { background: var(--accent-soft); }
+.menu-settings { background: var(--accent-wash); border-color: var(--line); }
+.menu-form-disclosure[open] > summary, .menu-editor-head, .order-detail-pane .panel-head { background: var(--accent-soft); }
+.menu-product.selected, .receipt-picker-item.selected, .request-row.selected { background: var(--accent-soft) !important; border-color: var(--focus) !important; }
+.menu-history-post { border-top: 3px solid var(--focus); }
+.menu-history-post-head h3 { color: var(--accent-strong); }
+.food-stock-list, .order-queue-list, .overview-panel { border-color: var(--line); }
+.food-stock-row-actions button { white-space: normal; }
+.overview-panel-heading { background: var(--surface); }
+.overview-chart-bar, .overview-status-track span { background: var(--focus); }
+.empty { border-radius: 10px; background: var(--page); }
+.empty-symbol { background: var(--accent-soft); color: var(--accent); }
+.request-detail, .request-form { border-color: var(--line); }
+.request-row.selected { box-shadow: inset 3px 0 var(--focus); }
+.chat-sidebar { background: var(--accent-wash); }
+.business-totals, .cart-drawer .summary-line { background: var(--accent-wash); }
+.auth-intro { background: var(--accent-soft); border-right-color: var(--line); }
+.auth-intro > p { color: var(--muted); }
+.auth-workflow { border-top-color: var(--line-strong); }
+.auth-workflow strong { color: var(--accent-strong); }
+
+/* Motion remains short, optional and never delays interaction. */
+@keyframes calm-appear { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .feed-post, .menu-history-post, .request-detail, .inline-create, .overview-kpi { animation: calm-appear 240ms ease-out both; }
+  button, .nav :is(a, button), .menu-form-disclosure summary, .request-row, .receipt-picker-item {
+    transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+  }
+  .daily-product { transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+  @media (hover: hover) and (pointer: fine) {
+    .daily-product:hover { transform: translateY(-2px); box-shadow: 0 7px 20px #16223a18; }
+    .menu-history-post:hover, .request-row:hover { border-color: var(--line-strong); }
+  }
+}
+@media (max-width: 760px) {
+  .food-mobile-nav { background: var(--surface); border-top-color: var(--line); }
+  .daily-product-info .stock-note { font-size: 11px; }
+  .order-queue-toolbar, .customer-filters { padding: 12px; }
+}
+
+/* Gợi ý: mỗi thẻ có khu vực ảnh, thông tin giá và thao tác riêng. */
+.role-customer .menu-promotion { padding: clamp(14px, 2vw, 20px); background: var(--offer-soft); border-color: var(--offer-line); }
+.role-customer .menu-promotion h2 { color: var(--offer-ink); font-size: 19px; }
+.role-customer .promotion-products { display: grid; grid-auto-flow: row; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; overflow: visible; padding: 0; }
+.role-customer .promotion-product { display: flex; flex-direction: column; align-items: stretch; min-width: 0; gap: 8px; padding: 10px; border: 1px solid var(--offer-line); border-radius: 10px; background: var(--surface); overflow-wrap: anywhere; }
+.role-customer .promotion-thumb { position: relative; display: grid; place-items: center; flex: none; width: 100%; height: 112px; overflow: hidden; border-radius: 7px; background: var(--accent-wash); color: var(--line-strong); }
+.role-customer .promotion-thumb > svg { width: 24px; height: 24px; }
+.role-customer .promotion-thumb > img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; padding: 5px; object-fit: contain; background: var(--accent-wash); }
+.role-customer .promotion-thumb .promotion-discount { position: absolute; z-index: 1; top: 6px; right: 6px; padding: 3px 6px; border-radius: 5px; background: var(--offer-ink); color: #fff; font-size: 11px; font-weight: 700; line-height: 1.3; }
+.role-customer .promotion-product .promotion-name { display: block; color: var(--ink); font-size: 14px; line-height: 1.4; }
+.role-customer .promotion-price { margin-top: auto; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.role-customer .promotion-price del { display: block; color: var(--muted); font-size: 12px; }
+.role-customer .promotion-price strong { color: var(--offer-ink); font-size: 16px; line-height: 1.25; }
+.role-customer .promotion-product button.primary { width: 100%; min-height: 38px; margin: 0; background: var(--accent); color: white; }
+.role-customer .promotion-product button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+@media (max-width: 1100px) { .role-customer .promotion-products { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+@media (max-width: 760px) {
+  .role-customer .promotion-products { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+  .role-customer .promotion-product { padding: 9px; gap: 7px; }
+  .role-customer .promotion-thumb { height: 100px; }
+  .role-customer .promotion-product .promotion-name { font-size: 13px; }
+  .role-customer .promotion-price strong { font-size: 15px; }
+}
+.post-reactions { padding: 14px 22px; border-top: 1px solid var(--line); background: #fff; }
+.post-reactions-heading { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 9px; color: var(--muted); font-size: 13px; }
+.post-reactions-heading span { color: var(--muted); }
+.post-reaction-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.post-reaction-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 38px; padding: 6px 10px; border-color: var(--line); background: var(--accent-wash); font-size: 12px; }
+.post-reaction-actions button[aria-pressed=true] { border-color: var(--focus); background: var(--accent-soft); color: var(--accent-hover); }
+.post-reaction-actions strong { color: inherit; }
+@media (max-width: 760px) { .post-reactions { padding: 12px 15px; } .post-reaction-actions { gap: 5px; } .post-reaction-actions button { padding-inline: 8px; } }
+
+/* Tương tác và thao tác trên lịch sử mở bán. */
+.menu-history-post { display: flex; flex-direction: column; }
+.menu-history-images { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%,100px),1fr)); gap: 8px; overflow: visible; }
+.menu-history-images img { width: 100%; height: 120px; object-fit: contain; background: var(--accent-wash); }
+.menu-social { margin: 2px 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--page); }
+.menu-social-counts { display: flex; flex-wrap: wrap; gap: 7px 14px; color: var(--muted); font-size: 13px; }
+.menu-social-counts span { white-space: nowrap; }
+.menu-social-toggle { margin-top: 9px; min-height: 36px; padding: 6px 10px; background: white; color: var(--accent); font-weight: 700; }
+.menu-social-comments { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; margin-top: 10px; }
+.menu-social-comments > p { margin: 0; font-size: 12px; }
+.menu-social-comment { padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px; background: white; }
+.menu-social-comment > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; }
+.menu-social-comment strong { color: var(--accent-strong); font-size: 13px; }
+.menu-social-comment time { color: var(--muted); font-size: 11px; }
+.menu-social-comment p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+.menu-social-unavailable { margin-block: 10px; font-size: 12px; }
+.menu-history-post .menu-round-actions { margin-top: auto; padding: 14px 0 0; border-top: 1px solid var(--line); gap: 8px; }
+.menu-history-post .menu-round-actions button { min-height: 40px; padding: 8px 12px; font-size: 13px; }
+.menu-history-post .menu-close-action { color: #9a352c; border-color: #e4b8ad; background: #fff8f6; }
+.menu-history-post .menu-close-action:hover:not(:disabled) { background: #fae9e4; border-color: #cc8b7f; }
+@media (max-width: 760px) { .menu-history-images { grid-template-columns: repeat(2,minmax(0,1fr)); } .menu-history-images img { height: 105px; } }
+.post-comment-thread { display: grid; gap: 8px; }
+.post-comment.is-reply { margin-left: 36px; }
+.post-comment-role { margin-left: 6px; color: var(--accent); font-size: 11px; font-weight: 700; }
+.post-comment-meta { display: flex; align-items: center; gap: 9px; margin: 3px 0 0 10px; }
+.post-comment-meta small { font-size: 11px; }
+.post-reply-link { min-height: 26px; padding: 2px 4px; border: 0; background: transparent; color: var(--accent); font-size: 12px; }
+.post-comment-form-wrap { margin-top: 12px; }
+.post-reply-target { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 0; font-size: 12px; }
+.post-reply-target button { min-height: 28px; padding: 3px 6px; font-size: 12px; }
+.menu-social .post-reactions, .menu-social .post-comments { padding: 10px 0; border: 0; background: transparent; }
+.menu-social .post-reactions { padding-top: 0; }
+.menu-social .post-comments { border-top: 1px solid var(--line); margin-top: 10px; }
+
+/* Cửa hàng và không gian làm việc: phân cấp đồng bộ, ưu tiên nội dung thật. */
+.app-header { background: var(--surface); box-shadow: 0 2px 12px #16223a08; }
+.brand-mark { border-radius: 10px 10px 10px 3px; }
+.brand-copy small { color: var(--muted); letter-spacing: .1px; }
+.page-heading { gap: 14px 22px; padding-bottom: 4px; }
+.page-heading h1 { line-height: 1.12; color: var(--accent-strong); }
+.page-heading p { max-width: 70ch; line-height: 1.55; }
+.breadcrumbs { margin-bottom: 8px; font-weight: 700; }
+.role-admin aside.nav, .role-seller aside.nav { background: var(--rail); }
+.nav :is(a, button) { border-radius: 8px; }
+.role-customer aside.nav { background: var(--surface); }
+.role-customer .nav :is(a, button).active { box-shadow: inset 3px 0 var(--accent); }
+.panel { border-radius: 11px; }
+.panel-head, .overview-panel-heading { background: var(--surface); }
+.panel-head h2, .overview-panel-heading h2 { color: var(--accent-strong); }
+
+/* Khu mua sắm: tiêu đề gọn, ảnh sản phẩm làm trọng tâm. */
+.role-customer .food-hero { min-height: 245px; border-radius: 15px; }
+.role-customer .food-hero-copy { padding: clamp(22px,3.8vw,48px); }
+.role-customer .food-hero-art { background: var(--accent-soft); }
+.role-customer .food-hero-art img { max-height: 220px; }
+.role-customer .daily-catalog-heading { border-left: 5px solid var(--focus); background: var(--accent-soft); }
+.role-customer .daily-catalog-tools { padding-block: 16px; border-bottom: 1px solid var(--line); }
+.role-customer .daily-category-filter { gap: 8px; }
+.role-customer .daily-product { border-radius: 10px; padding: 10px; }
+.role-customer .daily-product-image-main { border-radius: 8px; background: var(--accent-wash); }
+.role-customer .daily-product-info h2 { font-size: 15px; font-weight: 700; }
+.role-customer .daily-product-buy { border-top-color: var(--line); }
+.role-customer .daily-product-buy button { min-height: 42px; }
+.role-customer .daily-round-heading { padding: 12px 0; margin-top: 16px; }
+.role-customer .feed-post { border-radius: 11px; }
+.role-customer .feed-post-heading { background: var(--surface); }
+.feed-post-copy h2 { color: var(--accent-strong); }
+.feed-products-heading { padding-top: 15px; }
+.role-customer .feed-offers li { background: var(--accent-wash); }
+.role-customer .post-comments { background: var(--page); }
+.cart-drawer .summary-line, .checkout-inline .checkout-order-summary { border: 1px solid var(--line); }
+.cart-drawer .modal-head { background: var(--page); }
+
+/* Quản trị: bộ lọc, dòng đang chọn và bảng có phân cấp rõ ràng. */
+.role-admin main, .role-seller main { background: var(--page); }
+.role-admin main table thead th, .role-seller main table thead th { letter-spacing: .45px; font-weight: 700; }
+.role-admin main table tbody td, .role-seller main table tbody td { border-bottom-color: var(--line); }
+.order-queue-toolbar { padding: 16px; }
+.order-queue-list, .order-detail-pane, .overview-panel { box-shadow: 0 2px 8px #16223a08; }
+.order-detail-pane .panel-head { border-left: 4px solid var(--focus); }
+.business-order .row-heading > div > strong { color: var(--accent-strong); }
+.business-totals { padding: 14px; border: 1px solid var(--line); }
+.menu-history-heading h2 { color: var(--accent-strong); }
+.menu-round-filters button[aria-pressed=true], .menu-product-toolbar button[aria-pressed=true] { border-color: var(--focus); background: var(--accent-soft); color: var(--accent-hover); }
+.menu-history-post { border-color: var(--line); border-top: 3px solid var(--focus); }
+.menu-form-disclosure summary { border-radius: 7px; }
+.menu-form-disclosure[open] { border-color: var(--line-strong); }
+.menu-settings { background: var(--accent-wash); }
+.food-stock-tabs, .tabs { gap: 7px; }
+.food-stock-tabs button[aria-pressed=true] { background: var(--accent); color: white; }
+.food-stock-list { border-color: var(--line); }
+.receipt-picker { background: var(--accent-wash); }
+.receipt-picker-item { border-color: var(--line); }
+.request-row.selected { border-color: var(--focus); }
+.overview-kpi { border-radius: 10px; }
+.overview-panel-heading { padding-block: 18px; }
+.overview-chart-readout strong, .overview-sales-detail dd { color: var(--accent-strong); }
+.chat-sidebar { background: var(--accent-wash); }
+.chat-composer { background: var(--surface); }
+.empty { border: 1px dashed var(--line); background: var(--surface); }
+.empty h2 { color: var(--accent-strong); }
+.modal { border: 1px solid var(--line); border-radius: 12px; }
+.modal-head { border-bottom-color: var(--line); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .overview-panel, .menu-history-post, .request-row, .food-stock-row { transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
+  .post-reaction-actions button { transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease; }
+  .post-comment.is-reply { animation: calm-appear 180ms ease-out; }
+}
+@media (max-width: 760px) {
+  .role-customer .food-hero { min-height: 180px; grid-template-columns: minmax(0,1fr) 90px; }
+  .role-customer .food-hero-copy { padding: 20px 16px; }
+  .role-customer .food-hero-art { padding: 8px; }
+  .role-customer .daily-catalog-heading { padding: 16px; }
+  .role-customer .daily-product { padding: 8px; }
+  .role-customer .daily-product-info h2 { font-size: 14px; }
+  .post-comment.is-reply { margin-left: 22px; }
+  .food-stock-tabs { gap: 6px; }
+}
+
+/* Navigation and forms share the same treatment across all roles. */
+.app-header { box-shadow: none; }
+.nav-label, .nav-group-title, .nav-foot { color: var(--muted); }
+.nav :is(a, button), .nav :is(a, button) svg { color: var(--muted); }
+.nav :is(a, button):hover { background: var(--accent-wash); color: var(--accent); }
+.nav :is(a, button).active { border-color: var(--line); }
+.role-shipper .nav :is(a, button).active { box-shadow: inset 3px 0 var(--accent); }
+.role-admin .nav :focus-visible, .role-seller .nav :focus-visible {
+  outline-color: var(--rail-text);
+  outline-offset: 1px;
+}
+label, .field > label { color: var(--ink); }
+input::placeholder, textarea::placeholder { color: var(--muted); }
+input:hover, select:hover, textarea:hover { border-color: var(--focus); }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.notice:not(.warn):not(.error):not(.demo-notice) {
+  background: var(--accent-wash);
+  border-color: var(--line);
+  color: var(--accent-strong);
+}
+.business-dialog, .modal:not(.inline-modal) {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
+}
+.business-scrim, .modal-backdrop, .nav-scrim { background-color: #16223a70; }
+.table-scroll { scrollbar-color: var(--line-strong) var(--page); }
+
+/* Storefront: product photography and visible purchase controls. */
+.role-customer .food-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, .55fr);
+  min-height: 230px;
+  background: var(--rail);
+  border-color: var(--rail);
+}
+.role-customer .food-hero h2 { color: var(--rail-text); }
+.role-customer .food-hero :is(.food-hero-kicker, p) { color: var(--rail-muted); }
+.role-customer .food-hero button.primary {
+  background: var(--surface);
+  border-color: var(--surface);
+  color: var(--accent);
+}
+.role-customer .food-hero button.primary:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+.role-customer .daily-catalog-heading { border-left: 4px solid var(--accent); }
+.role-customer .daily-product-info h2 { color: var(--ink); }
+.role-customer .daily-products .daily-product-image-main {
+  background: var(--page);
+  border-color: var(--line);
+}
+.role-customer .food-product-price small,
+.role-customer .feed-offers .feed-discount {
+  color: var(--offer-ink);
+  background: var(--offer-soft);
+}
+.role-customer .feed-offers li { border-radius: var(--radius-sm); }
+.role-customer .menu-promotion {
+  background: var(--surface);
+  border-color: var(--line);
+  border-top: 3px solid var(--offer-ink);
+}
+.role-customer .promotion-product { border-color: var(--line); }
+.role-customer .promotion-thumb .promotion-discount { color: white; }
+
+.checkout-inline .modal-head, .cart-drawer .modal-head { background: var(--accent-wash); }
+.checkout-inline .modal-body:has(.form) { gap: var(--space-5); }
+.checkout-inline .form { padding: clamp(12px, 2.5vw, 24px); }
+.checkout-review {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--page);
+}
+.checkout-review .summary-line { margin: 0; padding: var(--space-2) 0; }
+.checkout-review .checkout-grand-total {
+  border-block: 1px solid var(--line);
+  color: var(--accent-strong);
+  font-size: 16px;
+}
+.checkout-review .check { padding-block: var(--space-2); }
+.checkout-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; }
+.checkout-actions button { min-height: 44px; }
+.checkout-actions .primary { flex: 1 1 180px; }
+
+/* Operations and delivery keep status and next action together. */
+.order-queue-toolbar, .customer-filters { background: var(--surface); }
+.order-detail-pane .panel-head { border-left-color: var(--accent); }
+.order-queue-row[data-selected=true] td,
+.order-queue-row[data-selected=true]:hover td,
+.order-queue-row[data-selected=true]:focus-within td { background: var(--accent-soft); }
+.order-queue-row[data-selected=true] td:first-child,
+.order-queue-row[data-selected=true]:hover td:first-child { box-shadow: inset 3px 0 var(--accent); }
+.menu-history-post { border-top-color: var(--accent); }
+.food-stock-tabs button[aria-pressed=true] { border-color: var(--accent); }
+.overview-chart-bar, .overview-status-track span { background: var(--focus); }
+.overview-chart-column[aria-pressed=true] .overview-chart-bar { background: var(--accent); }
+.role-customer .business-order, .role-shipper .business-order {
+  padding: clamp(14px, 2vw, 20px);
+  border-color: var(--line);
+  border-left: 3px solid var(--accent);
+}
+.role-shipper .order-card-heading strong { color: var(--accent-strong); }
+.role-shipper .order-help { border-color: var(--accent); }
+.role-shipper .business-totals { background: var(--accent-wash); }
+.role-shipper .business-actions .primary { min-height: 44px; }
+.auth-intro { background: var(--rail); border-color: var(--rail); }
+.auth-intro h1, .auth-intro > .brand { color: var(--rail-text); }
+.auth-intro > :is(p, .muted), .auth-workflow small { color: var(--rail-muted); }
+.auth-intro .brand-mark { background: var(--accent-soft); color: var(--accent); }
+.auth-workflow { border-color: var(--rail-line); }
+.auth-workflow strong { color: var(--rail-text); }
+
+@media (min-width: 761px) and (max-width: 1000px) {
+  .shell:not(.nav-collapsed) { grid-template-columns: 210px minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+  .role-customer .food-hero { min-height: 180px; grid-template-columns: minmax(0, 1fr) minmax(74px, 23%); }
+  .food-mobile-nav a, .role-customer .daily-product-buy .primary,
+  .role-customer .promotion-product button.primary, .header-meta > button { min-height: 44px; }
+  .checkout-review { padding: var(--space-3); }
+  .checkout-actions button { flex-basis: 100%; }
+  .order-queue-row[data-selected=true] { background: var(--accent-soft); }
+  .order-queue-row[data-selected=true] td:first-child,
+  .order-queue-row[data-selected=true]:hover td:first-child { box-shadow: none; }
+  .role-shipper .business-actions button { flex: 1 1 160px; }
+}

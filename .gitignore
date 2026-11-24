@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 runtime/*
 !runtime/README.md
+/.agents/skills/
 evidence/
 *.pyc
 *.log

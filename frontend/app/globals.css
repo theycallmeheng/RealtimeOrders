@@ -15,13 +15,6 @@
 .product-cell > div {
   min-width: 0;
 }
-:root {
-  --accent: #0f766e;
-  --ink: #17252a;
-  --muted: #64748b;
-  --line: #dbe2e8;
-  --page: #f7f8fa;
-}
 .business-order { margin: 16px 0; }
 .business-lines > div, .business-totals, .business-assign { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .business-lines > div { justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }

@@ -291,6 +291,16 @@ Cài lần đầu cần Internet để tải gói Python và npm. Khi hoàn tấ
 
 Các bảng chính sau seed gồm `customer_groups`, `products`, `product_images`, `product_stock`, `stock_receipts`, `stock_receipt_items`, `stock_ledger`, `offer_prices`, `delivery_policies`, `pickup_slots` và `system_settings`. Mật khẩu tài khoản mẫu không cố định; nếu tệp đăng nhập demo bị mất sau khi seed thành công thì không chạy seed để khôi phục, vì seed cố ý không ghi đè database đang có dữ liệu.
 
+### Làm mới giao diện với UI/UX Pro Max
+
+Bộ quy chuẩn xanh chàm của dự án nằm trong [hệ thống thiết kế RealtimeOrders](design-system/realtimeorders/MASTER.md). Khi cần dùng công cụ gợi ý thiết kế với Codex, chạy lệnh sau **từ thư mục gốc dự án**:
+
+```powershell
+npm.cmd exec --yes --package=ui-ux-pro-max-cli@2.15.0 -- uipro init --ai codex --offline
+```
+
+Lệnh dùng npm để lấy gói cố định phiên bản và cài bộ hướng dẫn vào `.agents/skills/` của checkout hiện tại. Trên macOS/Linux dùng `npm` thay `npm.cmd`. Mở lại phiên Codex nếu chưa thấy skill. Đây là công cụ phát triển giao diện, chỉ cần cài trên máy chỉnh sửa giao diện.
+
 ### Khởi động server
 
 ```powershell

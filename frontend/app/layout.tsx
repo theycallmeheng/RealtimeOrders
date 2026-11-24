@@ -11,7 +11,7 @@ import "./product-requests.css";
 import "./food-mart.css";
 import "./visual-theme.css";
 import "./store-refresh.css";
-import "./seafoam-theme.css";
+import "./indigo-theme.css";
 config.autoAddCss = false;
 export const metadata: Metadata = {
   title: "RealtimeOrders · Đặt hàng trong ngày",

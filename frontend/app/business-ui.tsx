@@ -156,7 +156,12 @@ function BusinessOrders(props: BusinessProps) {
                 const code = order.id.slice(0, 8).toUpperCase();
                 return (
                   <tr className="order-queue-row" data-order-id={order.id} data-selected={selectedId === order.id} key={order.id}>
-                    <td className="order-queue-code"><strong>#{code}</strong>{order.legacy_store_order && <small>Đơn lịch sử</small>}<small>{time(order.created_at)}</small><small>{order.items[0]?.product_name_snapshot}{order.items.length > 1 ? ` và ${order.items.length - 1} món khác` : ""}</small></td>
+                    <td className="order-queue-code">
+                      <strong>#{code}</strong>
+                      {Boolean(order.legacy_store_order) && <small>Đơn lịch sử</small>}
+                      <small>{time(order.created_at)}</small>
+                      <small>{order.items[0]?.product_name_snapshot}{order.items.length > 1 ? ` và ${order.items.length - 1} món khác` : ""}</small>
+                    </td>
                     <td data-label="Người nhận"><strong>{order.address_snapshot?.recipient_name || "—"}</strong><small>{order.delivery_method === "COLLECTIVE" ? "Nhận tập trung" : "Giao riêng"}</small></td>
                     <td data-label="Trạng thái"><Badge value={order.status} /></td>
                     <td data-label="Tổng tiền" className="money">{cash(order.total)}</td>

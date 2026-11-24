@@ -4512,66 +4512,68 @@ function DailyCatalog({ mode }: { mode: "catalog" | "checkout" }) {
                         onChange={(e) => setNote(e.target.value)}
                       />
                     </Field>
-                    <div className="summary-line">
-                      <span>Phí giao</span>
-                      <strong>
-                        {fee === undefined ? "Chưa tính" : money(fee)}
-                      </strong>
-                    </div>
-                    <div className="summary-line">
-                      <strong>VAT</strong><strong>{checkoutConfig ? money(vatAmount) : "Đang tải…"}</strong>
-                    </div>
-                    <div className="summary-line">
-                      <strong>Tổng thanh toán</strong>
-                      <strong>
-                        {fee === undefined
-                          ? "Chưa tính"
-                          : money(subtotal + vatAmount + BigInt(String(fee)))}
-                      </strong>
-                    </div>
-                    {deliveryMethod === "INDIVIDUAL" && policy &&
-                      subtotal < BigInt(String(policy.minimum_subtotal)) && (
-                        <p className="notice warn">
-                          Tiền hàng tối thiểu cho cách giao này:{" "}
-                          {money(policy.minimum_subtotal)}.
-                        </p>
-                      )}
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={confirmed}
-                        onChange={(e) => setConfirmed(e.target.checked)}
-                      />
-                      Tôi đã kiểm tra món, địa chỉ, VAT, phí giao và cách thanh toán.
-                    </label>
-                    {!confirmed && <p className="muted" role="status">Vui lòng tích xác nhận phía trên để đặt hàng. Khi thay đổi cách thanh toán, bạn cần xác nhận lại.</p>}
-                    <div className="actions">
-                      <button
-                        onClick={() => {
-                          setView("cart");
-                          goTo("catalog");
-                        }}
-                      >
-                        Quay lại giỏ
-                      </button>
-                      <button
-                        className="primary"
-                        disabled={
-                          !online ||
-                          busy ||
-                          stale ||
-                          invalidQuantity ||
-                          !checkoutConfig ||
-                          !confirmed ||
-                          (deliveryMethod === "INDIVIDUAL" &&
-                            (!chosenAddress || !policy || subtotal < BigInt(String(policy?.minimum_subtotal ?? 0)) ||
-                              !quote || expired || quoteStale)) ||
-                          (deliveryMethod === "COLLECTIVE" && !slot)
-                        }
-                        onClick={submit}
-                      >
-                        Đặt hàng · Chờ duyệt
-                      </button>
+                    <div className="checkout-review">
+                      <div className="summary-line">
+                        <span>Phí giao</span>
+                        <strong>
+                          {fee === undefined ? "Chưa tính" : money(fee)}
+                        </strong>
+                      </div>
+                      <div className="summary-line">
+                        <strong>VAT</strong><strong>{checkoutConfig ? money(vatAmount) : "Đang tải…"}</strong>
+                      </div>
+                      <div className="summary-line checkout-grand-total">
+                        <strong>Tổng thanh toán</strong>
+                        <strong>
+                          {fee === undefined
+                            ? "Chưa tính"
+                            : money(subtotal + vatAmount + BigInt(String(fee)))}
+                        </strong>
+                      </div>
+                      {deliveryMethod === "INDIVIDUAL" && policy &&
+                        subtotal < BigInt(String(policy.minimum_subtotal)) && (
+                          <p className="notice warn">
+                            Tiền hàng tối thiểu cho cách giao này:{" "}
+                            {money(policy.minimum_subtotal)}.
+                          </p>
+                        )}
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={confirmed}
+                          onChange={(e) => setConfirmed(e.target.checked)}
+                        />
+                        Tôi đã kiểm tra món, địa chỉ, VAT, phí giao và cách thanh toán.
+                      </label>
+                      {!confirmed && <p className="muted" role="status">Vui lòng tích xác nhận phía trên để đặt hàng. Khi thay đổi cách thanh toán, bạn cần xác nhận lại.</p>}
+                      <div className="actions checkout-actions">
+                        <button
+                          onClick={() => {
+                            setView("cart");
+                            goTo("catalog");
+                          }}
+                        >
+                          Quay lại giỏ
+                        </button>
+                        <button
+                          className="primary"
+                          disabled={
+                            !online ||
+                            busy ||
+                            stale ||
+                            invalidQuantity ||
+                            !checkoutConfig ||
+                            !confirmed ||
+                            (deliveryMethod === "INDIVIDUAL" &&
+                              (!chosenAddress || !policy || subtotal < BigInt(String(policy?.minimum_subtotal ?? 0)) ||
+                                !quote || expired || quoteStale)) ||
+                            (deliveryMethod === "COLLECTIVE" && !slot)
+                          }
+                          onClick={submit}
+                        >
+                          Đặt hàng · Chờ duyệt
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

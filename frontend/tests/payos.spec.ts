@@ -2,7 +2,10 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 const origin = process.env.APP_ORIGIN ?? "https://localhost:3443";
-const account = JSON.parse(fs.readFileSync(path.resolve("../runtime/demo-accounts.local.json"),"utf8")).accounts[1];
+const account = JSON.parse(fs.readFileSync(
+  process.env.FOOD_MART_FIXTURE ?? path.resolve("../runtime/demo-accounts.local.json"),
+  "utf8",
+)).accounts[1];
 // This QR encodes test text only. No provider request or bank transfer is made.
 const testQR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMYAAADGAQAAAACh4MLwAAABXklEQVR4nO1YQW6EMAwck9zDD/qU8LOqPwtP6Q/CsZLRVE5gT91qi7rUUolQRLBQRuOxMyDE12Md7gSAK4KLAxzjAGRXXAYyyVBtEUj1oapAsiKwAHNHeDaCbyKLROBDpnXMAESmB945NRIN5KRP3+dIhBVIb/FH7zw3Em1KxNIXr7qA/enwq/sMByOriIyGJ1REzCJyNoI7g/sAoKncluoDW6jQdqOJrFlT8dPf1peCVEQkvE9xk6CXnBppdhzkUBGqtTg/OUWyi7Vpr80+corGW1aY5GBKM7H54Y3WdUkWy6mVRvbEGzbqEs2QtE6iPrAFy2PpbaTLzw82tjwi7eatlYO6wcaNLisEV9iw+1410nIvVfWBLVipWstVWIX2Sz35XhqB8yqCRdz53mXqXdeOCWfY1tE8ecSsi6gfbKm331lG+6KJyD58L251GtiNZXFTC3L9q8HfZ2H4N5FPE1wUvO2pThYAAAAASUVORK5CYII=";
 for (const width of [1366, 390]) {
